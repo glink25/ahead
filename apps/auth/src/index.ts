@@ -1,5 +1,5 @@
 import { corsHeaders, preflightResponse } from './cors.js'
-import { decryptState, encryptState } from './state.js'
+import { decryptState, encryptState, type PendingGitHubToken } from './state.js'
 
 export interface Env {
   GITHUB_CLIENT_ID: string
@@ -25,6 +25,11 @@ interface InstallationsResponse {
   total_count: number
   installations: unknown[]
 }
+
+/** Short TTL for the initial OAuth round-trip. */
+const OAUTH_STATE_TTL_MS = 5 * 60 * 1000
+/** Longer TTL so the user can finish App installation before Setup URL returns. */
+const INSTALL_STATE_TTL_MS = 30 * 60 * 1000
 
 function jsonResponse(
   request: Request,
@@ -92,7 +97,20 @@ async function hasAppInstallation(accessToken: string, env: Env): Promise<boolea
   return body.total_count > 0 && Array.isArray(body.installations) && body.installations.length > 0
 }
 
-function redirectWithAuthorizedToken(redirectUri: string, payload: GitHubTokenPayload): Response {
+function toPendingToken(payload: GitHubTokenPayload): PendingGitHubToken {
+  return {
+    access_token: payload.access_token!,
+    ...(payload.refresh_token ? { refresh_token: payload.refresh_token } : {}),
+    ...(payload.expires_in === undefined ? {} : { expires_in: payload.expires_in }),
+    ...(payload.refresh_token_expires_in === undefined
+      ? {}
+      : { refresh_token_expires_in: payload.refresh_token_expires_in }),
+    ...(payload.scope ? { scope: payload.scope } : {}),
+    ...(payload.token_type ? { token_type: payload.token_type } : {}),
+  }
+}
+
+function redirectWithAuthorizedToken(redirectUri: string, payload: GitHubTokenPayload | PendingGitHubToken): Response {
   const location = new URL(redirectUri)
   location.searchParams.set('github_authorized', JSON.stringify(payload))
   return new Response(null, {
@@ -114,7 +132,7 @@ async function login(request: Request, env: Env): Promise<Response> {
     return new Response('GITHUB_APP_SLUG is not configured', { status: 500 })
   }
   const state = await encryptState(
-    { redirect_uri: redirectUri, exp: Date.now() + 5 * 60 * 1000 },
+    { redirect_uri: redirectUri, exp: Date.now() + OAUTH_STATE_TTL_MS },
     env.STATE_SECRET,
   )
   const callbackUrl = `${requestUrl.origin}/api/github/callback`
@@ -126,37 +144,79 @@ async function login(request: Request, env: Env): Promise<Response> {
   return Response.redirect(githubUrl.toString(), 302)
 }
 
+async function handleOAuthCodeCallback(
+  requestUrl: URL,
+  code: string,
+  encryptedState: string,
+  env: Env,
+): Promise<Response> {
+  const state = await decryptState(encryptedState, env.STATE_SECRET)
+  if (!isAllowedRedirect(state.redirect_uri, env.REDIRECT_URI_ALLOWLIST)) {
+    return new Response('Invalid redirect_uri', { status: 400 })
+  }
+
+  const params = new URLSearchParams({ code })
+  params.set('redirect_uri', `${requestUrl.origin}/api/github/callback`)
+  const payload = await exchangeToken(params, env)
+
+  if (!(await hasAppInstallation(payload.access_token!, env))) {
+    const installState = await encryptState(
+      {
+        redirect_uri: state.redirect_uri,
+        exp: Date.now() + INSTALL_STATE_TTL_MS,
+        pending_token: toPendingToken(payload),
+      },
+      env.STATE_SECRET,
+    )
+    const installUrl = new URL(`https://github.com/apps/${env.GITHUB_APP_SLUG}/installations/new`)
+    installUrl.searchParams.set('state', installState)
+    return new Response(null, {
+      status: 302,
+      headers: {
+        Location: installUrl.toString(),
+        'Cache-Control': 'no-store',
+      },
+    })
+  }
+
+  return redirectWithAuthorizedToken(state.redirect_uri, payload)
+}
+
+async function handleSetupCallback(encryptedState: string, env: Env): Promise<Response> {
+  const state = await decryptState(encryptedState, env.STATE_SECRET)
+  if (!isAllowedRedirect(state.redirect_uri, env.REDIRECT_URI_ALLOWLIST)) {
+    return new Response('Invalid redirect_uri', { status: 400 })
+  }
+  if (!state.pending_token?.access_token) {
+    return new Response('Missing pending_token for installation return', { status: 400 })
+  }
+  // Trust encrypted pending_token, not the spoofable installation_id query param.
+  return redirectWithAuthorizedToken(state.redirect_uri, state.pending_token)
+}
+
 async function callback(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url)
   const code = url.searchParams.get('code')
   const encryptedState = url.searchParams.get('state')
-  if (!code || !encryptedState) return new Response('Missing code or state', { status: 400 })
+  const installationId = url.searchParams.get('installation_id')
+  const setupAction = url.searchParams.get('setup_action')
+
   if (!env.GITHUB_APP_SLUG) {
     return new Response('GITHUB_APP_SLUG is not configured', { status: 500 })
   }
+  if (!encryptedState) {
+    return new Response('Missing state', { status: 400 })
+  }
 
   try {
-    const state = await decryptState(encryptedState, env.STATE_SECRET)
-    if (!isAllowedRedirect(state.redirect_uri, env.REDIRECT_URI_ALLOWLIST)) {
-      return new Response('Invalid redirect_uri', { status: 400 })
+    // App Setup URL return: installation_id + setup_action + state (no OAuth code).
+    if (!code && installationId && setupAction) {
+      return await handleSetupCallback(encryptedState, env)
     }
-    const params = new URLSearchParams({ code })
-    params.set('redirect_uri', `${url.origin}/api/github/callback`)
-    const payload = await exchangeToken(params, env)
-
-    if (!(await hasAppInstallation(payload.access_token!, env))) {
-      const installUrl = new URL(`https://github.com/apps/${env.GITHUB_APP_SLUG}/installations/new`)
-      installUrl.searchParams.set('state', encryptedState)
-      return new Response(null, {
-        status: 302,
-        headers: {
-          Location: installUrl.toString(),
-          'Cache-Control': 'no-store',
-        },
-      })
+    if (!code) {
+      return new Response('Missing code or state', { status: 400 })
     }
-
-    return redirectWithAuthorizedToken(state.redirect_uri, payload)
+    return await handleOAuthCodeCallback(url, code, encryptedState, env)
   } catch {
     return new Response('GitHub OAuth callback failed', { status: 400 })
   }

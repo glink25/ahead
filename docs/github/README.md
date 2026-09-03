@@ -9,7 +9,7 @@
 | classic PAT | `PersonalAccessTokenProvider` | IndexedDB（`github-pat`） |
 | OAuth（GitHub App User authorization） | `GitHubOAuthProvider` + `apps/auth` | IndexedDB（`github-oauth`）；Auth 仅中转 code→token / refresh，并引导安装 App |
 
-两者均通过 `getCredential()` 注入 Octokit；业务层不感知 token 来源。未配置 Auth Worker 时，UI 仅展示 PAT。不使用 GitHub App **installation token** 建仓，但 OAuth 回调会检查用户是否已安装 App；未安装则先跳转安装页。
+两者均通过 `getCredential()` 注入 Octokit；业务层不感知 token 来源。未配置 Auth Worker 时，UI 仅展示 PAT。不使用 GitHub App **installation token** 建仓，但 OAuth 回调会检查用户是否已安装 App；未安装则先跳转安装页。安装完成后 GitHub 打回 **Auth Setup URL**（与 Callback 相同的后端 API），由服务端把已密封的 token 经 `github_authorized` 带回前端落盘。
 
 自托管时自行部署 `apps/auth`（Cloudflare Worker），并用环境变量配置 Auth 基址、App slug 与前端 Origin 白名单。
 

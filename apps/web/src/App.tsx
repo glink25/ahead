@@ -300,7 +300,7 @@ function LoginPage() {
     <Card className="mx-auto max-w-lg">
       <h1 className="text-2xl font-bold">登录 Ahead</h1>
       <p className="mt-2 text-sm text-slate-600">
-        PAT 与 GitHub OAuth 凭证均保存在此设备的 IndexedDB 中。Auth 服务仅负责授权跳转、App 安装引导与令牌刷新；首次授权时若尚未安装 GitHub App，会先进入安装页，装完后请再点一次 OAuth 登录。
+        PAT 与 GitHub OAuth 凭证均保存在此设备的 IndexedDB 中。Auth 服务负责授权跳转、App 安装引导与令牌刷新；若尚未安装 GitHub App，会先进入安装页，安装完成后由 Auth 自动把 token 带回本页落盘。
       </p>
       <form className="mt-6" onSubmit={loginWithPat}>
         <label className="block text-sm">GitHub Personal Access Token<Input className="mt-1" type="password" autoComplete="off" value={token} onChange={(event) => setToken(event.target.value)} /></label>

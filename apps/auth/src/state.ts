@@ -40,9 +40,20 @@ export async function decryptJson<T>(value: string, secret: string): Promise<T> 
   return JSON.parse(decoder.decode(decrypted)) as T
 }
 
+export interface PendingGitHubToken {
+  access_token: string
+  refresh_token?: string
+  expires_in?: number
+  refresh_token_expires_in?: number
+  scope?: string
+  token_type?: string
+}
+
 export interface OAuthState {
   redirect_uri: string
   exp: number
+  /** Present only while diverting the user through App installation. */
+  pending_token?: PendingGitHubToken
 }
 
 export function encryptState(state: OAuthState, secret: string): Promise<string> {
@@ -57,5 +68,8 @@ export async function decryptState(
   const state = await decryptJson<OAuthState>(encrypted, secret)
   if (!state.redirect_uri || !Number.isFinite(state.exp)) throw new Error('Invalid OAuth state')
   if (state.exp <= now) throw new Error('OAuth state has expired')
+  if (state.pending_token && !state.pending_token.access_token) {
+    throw new Error('Invalid OAuth pending_token')
+  }
   return state
 }
