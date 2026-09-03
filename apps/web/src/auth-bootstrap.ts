@@ -12,7 +12,7 @@ interface StoredOAuthReturn {
   url?: string
 }
 
-function readPendingOAuthReturnUrl(): string | null {
+function readLegacyOAuthReturnUrl(): string | null {
   const raw = localStorage.getItem(OAUTH_RETURN_STORAGE_KEY)
   if (!raw) return null
   localStorage.removeItem(OAUTH_RETURN_STORAGE_KEY)
@@ -21,9 +21,24 @@ function readPendingOAuthReturnUrl(): string | null {
     if (typeof parsed === 'string') return parsed
     return parsed.url ?? null
   } catch {
-    // Legacy plain URL string (if any) or corrupt JSON — try treating as href.
     return raw.includes('github_authorized=') ? raw : null
   }
+}
+
+/** Prefer the live URL (module-safe under CSP); fall back to legacy localStorage stash. */
+export function resolveOAuthReturnUrl(
+  href = globalThis.location?.href ?? '',
+): string | null {
+  if (href.includes('github_authorized=')) return href
+  return readLegacyOAuthReturnUrl()
+}
+
+export function clearOAuthReturnParams(href = globalThis.location?.href ?? ''): void {
+  if (!href.includes('github_authorized=') || !globalThis.history?.replaceState) return
+  const cleaned = new URL(href)
+  cleaned.searchParams.delete('github_authorized')
+  const next = `${cleaned.pathname}${cleaned.search}${cleaned.hash}`
+  globalThis.history.replaceState(null, '', next)
 }
 
 export async function bootstrapAuthSession(options: {
@@ -32,12 +47,14 @@ export async function bootstrapAuthSession(options: {
     consumeRedirect: (url: string) => Promise<AuthSession | null>
   }
 }): Promise<AuthBootstrapResult> {
-  const pendingUrl = readPendingOAuthReturnUrl()
+  const pendingUrl = resolveOAuthReturnUrl()
   if (pendingUrl) {
     try {
       const session = await options.oauthProvider.consumeRedirect(pendingUrl)
+      clearOAuthReturnParams(pendingUrl)
       if (session) return { session, error: null }
     } catch (error) {
+      clearOAuthReturnParams(pendingUrl)
       return {
         session: null,
         error: describeOAuthError(error),

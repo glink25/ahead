@@ -7,17 +7,10 @@
     <link rel="icon" href="/icon.svg" type="image/svg+xml" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <title>Ahead / 盼头</title>
-    <script>
-      // Align with Cent: stash the OAuth return URL, then hard-navigate to a clean /login
-      // so the address bar never keeps tokens and React boots without query params.
-      if (location.href.includes('github_authorized=')) {
-        localStorage.setItem('_ahead_oauth_res', JSON.stringify({ url: location.href }))
-        location.replace(location.origin + '/login')
-      }
-    </script>
   </head>
   <body>
     <div id="root"></div>
+    <!-- OAuth return is handled in the module bundle (CSP script-src 'self'). -->
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
