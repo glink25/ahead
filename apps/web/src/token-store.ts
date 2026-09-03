@@ -1,8 +1,10 @@
 import type { TokenStore } from '@ahead/core'
+import type { OAuthCredentialStore, StoredOAuthCredential } from '@ahead/github'
 
 const DB_NAME = 'ahead-auth'
 const STORE_NAME = 'credentials'
-const TOKEN_KEY = 'github-pat'
+const PAT_KEY = 'github-pat'
+const OAUTH_KEY = 'github-oauth'
 
 function openDatabase(): Promise<IDBDatabase> {
   return new Promise<IDBDatabase>((resolve, reject) => {
@@ -26,7 +28,18 @@ async function transact<T>(
 }
 
 export const indexedDbTokenStore: TokenStore = {
-  get: () => transact('readonly', (store) => store.get(TOKEN_KEY)).then((value) => value ?? null),
-  set: (token) => transact('readwrite', (store) => store.put(token, TOKEN_KEY)).then(() => undefined),
-  clear: () => transact('readwrite', (store) => store.delete(TOKEN_KEY)).then(() => undefined),
+  get: () => transact('readonly', (store) => store.get(PAT_KEY)).then((value) => value ?? null),
+  set: (token) => transact('readwrite', (store) => store.put(token, PAT_KEY)).then(() => undefined),
+  clear: () => transact('readwrite', (store) => store.delete(PAT_KEY)).then(() => undefined),
+}
+
+export const indexedDbOAuthCredentialStore: OAuthCredentialStore = {
+  get: async () => {
+    const value = await transact('readonly', (store) => store.get(OAUTH_KEY))
+    if (!value || typeof value !== 'object') return null
+    const record = value as StoredOAuthCredential
+    return record.accessToken ? record : null
+  },
+  set: (credential) => transact('readwrite', (store) => store.put(credential, OAUTH_KEY)).then(() => undefined),
+  clear: () => transact('readwrite', (store) => store.delete(OAUTH_KEY)).then(() => undefined),
 }

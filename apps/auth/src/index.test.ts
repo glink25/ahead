@@ -1,14 +1,23 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { handleRequest, type Env } from './index.js'
-import { encryptJson, encryptState } from './state.js'
+import { encryptState } from './state.js'
 
 const env: Env = {
   GITHUB_CLIENT_ID: 'Iv23litest',
   GITHUB_CLIENT_SECRET: 'secret',
+  GITHUB_APP_SLUG: 'ahead-days-for-all',
   STATE_SECRET: 'test-state-secret',
   REDIRECT_URI_ALLOWLIST: 'http://localhost:4455,https://ahead.linkai.work',
-  COOKIE_NAME: 'ahead_github_session',
   FRONTEND_ORIGIN: 'http://localhost:4455,https://ahead.linkai.work',
+}
+
+const tokenPayload = {
+  access_token: 'ghu_access',
+  refresh_token: 'ghr_refresh',
+  expires_in: 3_600,
+  refresh_token_expires_in: 86_400,
+  scope: 'repo',
+  token_type: 'bearer',
 }
 
 afterEach(() => {
@@ -40,22 +49,27 @@ describe('handleRequest OAuth flow', () => {
     expect(location.searchParams.get('state')).toBeTruthy()
   })
 
-  it('exchanges the callback code, sets the session cookie, and redirects home', async () => {
+  it('exchanges the callback code and redirects with github_authorized when App is installed', async () => {
     const state = await encryptState({
       redirect_uri: 'http://localhost:4455/login',
       exp: Date.now() + 60_000,
     }, env.STATE_SECRET)
-    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
-      access_token: 'ghu_access',
-      refresh_token: 'ghr_refresh',
-      expires_in: 3_600,
-      refresh_token_expires_in: 86_400,
-      scope: 'repo',
-      token_type: 'bearer',
-    }), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    })))
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes('login/oauth/access_token')) {
+        return new Response(JSON.stringify(tokenPayload), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      }
+      if (url.includes('/user/installations')) {
+        return new Response(JSON.stringify({ total_count: 1, installations: [{ id: 1 }] }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      }
+      throw new Error(`Unexpected fetch: ${url}`)
+    }))
 
     const response = await handleRequest(
       new Request(`https://auth.example/api/github/callback?code=abc&state=${encodeURIComponent(state)}`),
@@ -63,60 +77,81 @@ describe('handleRequest OAuth flow', () => {
     )
 
     expect(response.status).toBe(302)
-    expect(response.headers.get('Location')).toBe('http://localhost:4455/login')
-    const cookie = response.headers.get('Set-Cookie') ?? ''
-    expect(cookie).toContain(`${env.COOKIE_NAME}=`)
-    expect(cookie).toContain('HttpOnly')
-    expect(cookie).toContain('SameSite=Lax')
-    expect(cookie).toContain('Path=/api/github')
-    expect(globalThis.fetch).toHaveBeenCalledWith(
-      'https://github.com/login/oauth/access_token',
-      expect.objectContaining({ method: 'POST' }),
-    )
+    expect(response.headers.get('Set-Cookie')).toBeNull()
+    const location = new URL(response.headers.get('Location')!)
+    expect(location.origin + location.pathname).toBe('http://localhost:4455/login')
+    expect(JSON.parse(location.searchParams.get('github_authorized')!)).toEqual(tokenPayload)
   })
 
-  it('returns the access token when the session cookie is present', async () => {
-    const encryptedSession = await encryptJson({
-      accessToken: 'ghu_access',
-      scopes: ['repo'],
-      expiresAt: Date.now() + 60_000,
+  it('redirects to App installation when the user has not installed the App', async () => {
+    const state = await encryptState({
+      redirect_uri: 'http://localhost:4455/login',
+      exp: Date.now() + 60_000,
     }, env.STATE_SECRET)
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes('login/oauth/access_token')) {
+        return new Response(JSON.stringify(tokenPayload), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      }
+      if (url.includes('/user/installations')) {
+        return new Response(JSON.stringify({ total_count: 0, installations: [] }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      }
+      throw new Error(`Unexpected fetch: ${url}`)
+    }))
 
     const response = await handleRequest(
-      new Request('https://auth.example/api/github/token', {
+      new Request(`https://auth.example/api/github/callback?code=abc&state=${encodeURIComponent(state)}`),
+      env,
+    )
+
+    expect(response.status).toBe(302)
+    const location = new URL(response.headers.get('Location')!)
+    expect(location.origin + location.pathname).toBe(
+      `https://github.com/apps/${env.GITHUB_APP_SLUG}/installations/new`,
+    )
+    expect(location.searchParams.get('state')).toBe(state)
+    expect(response.headers.get('Set-Cookie')).toBeNull()
+  })
+
+  it('refreshes tokens via JSON body without cookies', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(tokenPayload), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    })))
+
+    const response = await handleRequest(
+      new Request('https://auth.example/api/github/refresh', {
         method: 'POST',
         headers: {
           Origin: 'http://localhost:4455',
-          Cookie: `${env.COOKIE_NAME}=${encodeURIComponent(encryptedSession)}`,
+          'Content-Type': 'application/json',
           Accept: 'application/json',
         },
+        body: JSON.stringify({ refreshToken: 'ghr_old' }),
       }),
       env,
     )
 
     expect(response.status).toBe(200)
     expect(response.headers.get('Access-Control-Allow-Origin')).toBe('http://localhost:4455')
-    expect(response.headers.get('Access-Control-Allow-Credentials')).toBe('true')
-    await expect(response.json()).resolves.toEqual({
-      accessToken: 'ghu_access',
-      expiresAt: expect.any(Number),
-      scopes: ['repo'],
-    })
+    await expect(response.json()).resolves.toEqual(tokenPayload)
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      'https://github.com/login/oauth/access_token',
+      expect.objectContaining({ method: 'POST' }),
+    )
   })
 
-  it('returns 401 when the session cookie is missing', async () => {
+  it('returns 404 for the retired cookie token endpoint', async () => {
     const response = await handleRequest(
-      new Request('https://auth.example/api/github/token', {
-        method: 'POST',
-        headers: {
-          Origin: 'http://localhost:4455',
-          Accept: 'application/json',
-        },
-      }),
+      new Request('https://auth.example/api/github/token', { method: 'POST' }),
       env,
     )
-
-    expect(response.status).toBe(401)
-    await expect(response.json()).resolves.toEqual({ error: 'unauthenticated' })
+    expect(response.status).toBe(404)
   })
 })

@@ -10,7 +10,7 @@ pnpm dev
 ```
 
 OAuth 需要同时启动 `pnpm dev:auth`，并把 `VITE_AUTH_BASE_URL` 设为
-`http://localhost:8787`（不要指向远程 Auth，否则跨站 Cookie 无法随 `/api/github/token`
-发送）。PAT 会写入浏览器 IndexedDB；OAuth 使用 Auth 域的 HttpOnly Cookie，不会写入
-localStorage / IndexedDB。当前 PWA 提供基础 Web App Manifest；如需离线缓存，
-后续可接入 service worker 或 `vite-plugin-pwa`。
+`http://localhost:8787`。PAT 与 OAuth 凭证均写入浏览器 IndexedDB；Auth Worker
+只负责授权跳转、App 安装引导与 refresh。页面刷新恢复登录态不依赖 Auth 是否在线。
+当前 PWA 提供基础 Web App Manifest；如需离线缓存，后续可接入 service worker 或
+`vite-plugin-pwa`。

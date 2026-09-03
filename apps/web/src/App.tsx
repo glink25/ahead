@@ -3,6 +3,7 @@ import { Link, NavLink, Route, Routes, useParams } from 'react-router'
 import { EventEditorState } from '@ahead/editor'
 import {
   describeOAuthError,
+  GitHubOAuthError,
   GitHubOAuthProvider,
   PersonalAccessTokenProvider,
 } from '@ahead/github'
@@ -10,12 +11,13 @@ import { assignBucket, type RecommendationBucket } from '@ahead/recommendation'
 import { Alert, Badge, Button, Card, Input, Spinner, TextArea } from '@ahead/ui'
 import { t } from './i18n'
 import { useActiveProfile, useAuthSession } from './stores'
-import { indexedDbTokenStore } from './token-store'
+import { indexedDbOAuthCredentialStore, indexedDbTokenStore } from './token-store'
 
 const patProvider = new PersonalAccessTokenProvider(indexedDbTokenStore)
 const oauthProvider = new GitHubOAuthProvider({
   authBaseUrl: import.meta.env.VITE_AUTH_BASE_URL,
   redirectUri: `${location.origin}/login`,
+  credentialStore: indexedDbOAuthCredentialStore,
 })
 
 const mockEvents = [
@@ -298,7 +300,7 @@ function LoginPage() {
     <Card className="mx-auto max-w-lg">
       <h1 className="text-2xl font-bold">登录 Ahead</h1>
       <p className="mt-2 text-sm text-slate-600">
-        PAT 仅保存在此设备的 IndexedDB 中。GitHub OAuth 使用 Auth 服务的 HttpOnly Cookie 恢复会话，access token 不会写入浏览器存储。
+        PAT 与 GitHub OAuth 凭证均保存在此设备的 IndexedDB 中。Auth 服务仅负责授权跳转、App 安装引导与令牌刷新；首次授权时若尚未安装 GitHub App，会先进入安装页，装完后请再点一次 OAuth 登录。
       </p>
       <form className="mt-6" onSubmit={loginWithPat}>
         <label className="block text-sm">GitHub Personal Access Token<Input className="mt-1" type="password" autoComplete="off" value={token} onChange={(event) => setToken(event.target.value)} /></label>
@@ -341,17 +343,37 @@ export function App() {
   const setRestoreError = useAuthSession((state) => state.setRestoreError)
   useEffect(() => {
     setRestoreError(null)
-    Promise.allSettled([patProvider.restore(), oauthProvider.restore()])
-      .then(([patResult, oauthResult]) => {
-        const pat = patResult.status === 'fulfilled' ? patResult.value : null
-        if (oauthResult.status === 'fulfilled') {
-          setSession(oauthResult.value ?? pat)
-          return
+    const bootstrap = async () => {
+      const pendingRedirect = sessionStorage.getItem('_ahead_oauth_res')
+      if (pendingRedirect) {
+        sessionStorage.removeItem('_ahead_oauth_res')
+        try {
+          const session = await oauthProvider.consumeRedirect(pendingRedirect)
+          if (session) {
+            setSession(session)
+            return
+          }
+        } catch (error) {
+          setRestoreError(describeOAuthError(error))
         }
+      }
+
+      const [patResult, oauthResult] = await Promise.allSettled([
+        patProvider.restore(),
+        oauthProvider.restore(),
+      ])
+      const pat = patResult.status === 'fulfilled' ? patResult.value : null
+      if (oauthResult.status === 'fulfilled') {
+        setSession(oauthResult.value ?? pat)
+        return
+      }
+      if (oauthResult.reason instanceof GitHubOAuthError && oauthResult.reason.kind === 'network') {
         setRestoreError(describeOAuthError(oauthResult.reason))
-        setSession(pat)
-      })
-      .finally(() => setLoading(false))
+      }
+      setSession(pat)
+    }
+
+    void bootstrap().finally(() => setLoading(false))
   }, [setLoading, setRestoreError, setSession])
 
   return (

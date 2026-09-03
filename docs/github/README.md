@@ -6,12 +6,12 @@
 
 | 方式 | Provider | Token 存储 |
 |---|---|---|
-| classic PAT | `PersonalAccessTokenProvider` | IndexedDB（独立 store） |
-| OAuth（GitHub App User authorization） | `GitHubOAuthProvider` + `apps/auth` | HttpOnly cookie + 内存短期 access token |
+| classic PAT | `PersonalAccessTokenProvider` | IndexedDB（`github-pat`） |
+| OAuth（GitHub App User authorization） | `GitHubOAuthProvider` + `apps/auth` | IndexedDB（`github-oauth`）；Auth 仅中转 code→token / refresh，并引导安装 App |
 
-两者均通过 `getCredential()` 注入 Octokit；业务层不感知 token 来源。未配置 Auth Worker 时，UI 仅展示 PAT。不使用 GitHub App installation token。
+两者均通过 `getCredential()` 注入 Octokit；业务层不感知 token 来源。未配置 Auth Worker 时，UI 仅展示 PAT。不使用 GitHub App **installation token** 建仓，但 OAuth 回调会检查用户是否已安装 App；未安装则先跳转安装页。
 
-自托管时自行部署 `apps/auth`（Cloudflare Worker），并用环境变量配置 Auth 基址与前端 Origin 白名单。
+自托管时自行部署 `apps/auth`（Cloudflare Worker），并用环境变量配置 Auth 基址、App slug 与前端 Origin 白名单。
 
 ## 匿名只读
 
@@ -21,7 +21,7 @@
 
 ```bash
 cp apps/auth/.env.example apps/auth/.dev.vars
-# 填入 GITHUB_CLIENT_ID / GITHUB_CLIENT_SECRET / STATE_SECRET / REDIRECT_URI_ALLOWLIST / FRONTEND_ORIGIN
+# 填入 GITHUB_CLIENT_ID / GITHUB_CLIENT_SECRET / GITHUB_APP_SLUG / STATE_SECRET / REDIRECT_URI_ALLOWLIST / FRONTEND_ORIGIN
 pnpm dev:auth
 ```
 
@@ -31,5 +31,7 @@ Web `.env`：
 VITE_AUTH_BASE_URL=http://localhost:8787
 VITE_GITHUB_MARKET_REPOSITORY=glink25/ahead
 ```
+
+刷新登录态只读 IndexedDB，不要求 Auth 常开；新登录与令牌刷新仍需 Auth。
 
 内部 Spike、威胁模型、发布清单见本地 `docs/.local/architecture/`（不入库）。

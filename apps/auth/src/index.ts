@@ -1,13 +1,12 @@
-import { clearSessionCookie, readCookie, sessionCookie } from './cookies.js'
 import { corsHeaders, preflightResponse } from './cors.js'
-import { decryptJson, decryptState, encryptJson, encryptState } from './state.js'
+import { decryptState, encryptState } from './state.js'
 
 export interface Env {
   GITHUB_CLIENT_ID: string
   GITHUB_CLIENT_SECRET: string
+  GITHUB_APP_SLUG: string
   STATE_SECRET: string
   REDIRECT_URI_ALLOWLIST: string
-  COOKIE_NAME: string
   FRONTEND_ORIGIN: string
 }
 
@@ -22,12 +21,9 @@ interface GitHubTokenPayload {
   error_description?: string
 }
 
-interface CookieSession {
-  accessToken: string
-  refreshToken?: string
-  expiresAt?: number
-  refreshTokenExpiresAt?: number
-  scopes: string[]
+interface InstallationsResponse {
+  total_count: number
+  installations: unknown[]
 }
 
 function jsonResponse(
@@ -43,7 +39,7 @@ function jsonResponse(
   return new Response(JSON.stringify(body), { status, headers })
 }
 
-function isAllowedRedirect(value: string, allowlist: string): boolean {
+export function isAllowedRedirect(value: string, allowlist: string): boolean {
   let candidate: URL
   try {
     candidate = new URL(value)
@@ -81,16 +77,31 @@ async function exchangeToken(params: URLSearchParams, env: Env): Promise<GitHubT
   return payload
 }
 
-function createCookieSession(payload: GitHubTokenPayload, now = Date.now()): CookieSession {
-  return {
-    accessToken: payload.access_token!,
-    ...(payload.refresh_token ? { refreshToken: payload.refresh_token } : {}),
-    ...(payload.expires_in ? { expiresAt: now + payload.expires_in * 1000 } : {}),
-    ...(payload.refresh_token_expires_in
-      ? { refreshTokenExpiresAt: now + payload.refresh_token_expires_in * 1000 }
-      : {}),
-    scopes: payload.scope?.split(',').map((scope) => scope.trim()).filter(Boolean) ?? [],
+async function hasAppInstallation(accessToken: string, env: Env): Promise<boolean> {
+  const response = await fetch('https://api.github.com/user/installations', {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      Accept: 'application/vnd.github+json',
+      'User-Agent': `${env.GITHUB_APP_SLUG} (Ahead Auth Worker)`,
+    },
+  })
+  if (!response.ok) {
+    throw new Error(`GitHub installations lookup failed with HTTP ${response.status}`)
   }
+  const body = await response.json() as InstallationsResponse
+  return body.total_count > 0 && Array.isArray(body.installations) && body.installations.length > 0
+}
+
+function redirectWithAuthorizedToken(redirectUri: string, payload: GitHubTokenPayload): Response {
+  const location = new URL(redirectUri)
+  location.searchParams.set('github_authorized', JSON.stringify(payload))
+  return new Response(null, {
+    status: 302,
+    headers: {
+      Location: location.toString(),
+      'Cache-Control': 'no-store',
+    },
+  })
 }
 
 async function login(request: Request, env: Env): Promise<Response> {
@@ -98,6 +109,9 @@ async function login(request: Request, env: Env): Promise<Response> {
   const redirectUri = requestUrl.searchParams.get('redirect_uri')
   if (!redirectUri || !isAllowedRedirect(redirectUri, env.REDIRECT_URI_ALLOWLIST)) {
     return new Response('Invalid redirect_uri', { status: 400 })
+  }
+  if (!env.GITHUB_APP_SLUG) {
+    return new Response('GITHUB_APP_SLUG is not configured', { status: 500 })
   }
   const state = await encryptState(
     { redirect_uri: redirectUri, exp: Date.now() + 5 * 60 * 1000 },
@@ -117,6 +131,9 @@ async function callback(request: Request, env: Env): Promise<Response> {
   const code = url.searchParams.get('code')
   const encryptedState = url.searchParams.get('state')
   if (!code || !encryptedState) return new Response('Missing code or state', { status: 400 })
+  if (!env.GITHUB_APP_SLUG) {
+    return new Response('GITHUB_APP_SLUG is not configured', { status: 500 })
+  }
 
   try {
     const state = await decryptState(encryptedState, env.STATE_SECRET)
@@ -126,85 +143,54 @@ async function callback(request: Request, env: Env): Promise<Response> {
     const params = new URLSearchParams({ code })
     params.set('redirect_uri', `${url.origin}/api/github/callback`)
     const payload = await exchangeToken(params, env)
-    const session = createCookieSession(payload)
-    const encryptedSession = await encryptJson(session, env.STATE_SECRET)
-    const maxAge = payload.refresh_token_expires_in ?? payload.expires_in
-    const headers = new Headers({
-      Location: state.redirect_uri,
-      'Cache-Control': 'no-store',
-    })
-    headers.append('Set-Cookie', sessionCookie(env.COOKIE_NAME, encryptedSession, maxAge))
-    return new Response(null, { status: 302, headers })
+
+    if (!(await hasAppInstallation(payload.access_token!, env))) {
+      const installUrl = new URL(`https://github.com/apps/${env.GITHUB_APP_SLUG}/installations/new`)
+      installUrl.searchParams.set('state', encryptedState)
+      return new Response(null, {
+        status: 302,
+        headers: {
+          Location: installUrl.toString(),
+          'Cache-Control': 'no-store',
+        },
+      })
+    }
+
+    return redirectWithAuthorizedToken(state.redirect_uri, payload)
   } catch {
     return new Response('GitHub OAuth callback failed', { status: 400 })
   }
 }
 
-async function token(request: Request, env: Env): Promise<Response> {
-  const encryptedSession = readCookie(request, env.COOKIE_NAME)
-  if (!encryptedSession) return jsonResponse(request, env, { error: 'unauthenticated' }, 401)
+async function refresh(request: Request, env: Env): Promise<Response> {
+  let body: { refreshToken?: string }
+  try {
+    body = await request.json() as { refreshToken?: string }
+  } catch {
+    return jsonResponse(request, env, { error: 'invalid_body' }, 400)
+  }
+  const refreshToken = body.refreshToken?.trim()
+  if (!refreshToken) {
+    return jsonResponse(request, env, { error: 'invalid_refresh_token' }, 400)
+  }
 
   try {
-    let session = await decryptJson<CookieSession>(encryptedSession, env.STATE_SECRET)
-    const now = Date.now()
-    let nextCookie: string | undefined
-    if (session.expiresAt !== undefined && session.expiresAt <= now + 30_000) {
-      if (!session.refreshToken || (
-        session.refreshTokenExpiresAt !== undefined && session.refreshTokenExpiresAt <= now
-      )) {
-        return jsonResponse(request, env, { error: 'session_expired' }, 401)
-      }
-      const payload = await exchangeToken(
-        new URLSearchParams({
-          grant_type: 'refresh_token',
-          refresh_token: session.refreshToken,
-        }),
-        env,
-      )
-      session = createCookieSession(payload, now)
-      nextCookie = sessionCookie(
-        env.COOKIE_NAME,
-        await encryptJson(session, env.STATE_SECRET),
-        payload.refresh_token_expires_in ?? payload.expires_in,
-      )
-    }
-
-    return jsonResponse(
-      request,
+    const payload = await exchangeToken(
+      new URLSearchParams({
+        grant_type: 'refresh_token',
+        refresh_token: refreshToken,
+      }),
       env,
-      {
-        accessToken: session.accessToken,
-        expiresAt: session.expiresAt,
-        scopes: session.scopes,
-      },
-      200,
-      {
-        'Cache-Control': 'no-store',
-        ...(nextCookie ? { 'Set-Cookie': nextCookie } : {}),
-      },
     )
-  } catch {
+    return jsonResponse(request, env, payload, 200, { 'Cache-Control': 'no-store' })
+  } catch (error) {
     return jsonResponse(
       request,
       env,
-      { error: 'invalid_session' },
+      { error: 'refresh_failed', message: error instanceof Error ? error.message : 'refresh failed' },
       401,
-      { 'Set-Cookie': clearSessionCookie(env.COOKIE_NAME) },
     )
   }
-}
-
-function logout(request: Request, env: Env): Response {
-  return jsonResponse(
-    request,
-    env,
-    { ok: true },
-    200,
-    {
-      'Cache-Control': 'no-store',
-      'Set-Cookie': clearSessionCookie(env.COOKIE_NAME),
-    },
-  )
 }
 
 export async function handleRequest(request: Request, env: Env): Promise<Response> {
@@ -217,11 +203,8 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
   if (url.pathname === '/api/github/callback' && request.method === 'GET') {
     return callback(request, env)
   }
-  if (url.pathname === '/api/github/token' && request.method === 'POST') {
-    return token(request, env)
-  }
-  if (url.pathname === '/api/github/logout' && request.method === 'POST') {
-    return logout(request, env)
+  if (url.pathname === '/api/github/refresh' && request.method === 'POST') {
+    return refresh(request, env)
   }
   return new Response('Not found', { status: 404 })
 }

@@ -1,15 +1,20 @@
 import type { AuthCredential, AuthProvider, AuthSession } from '@ahead/core'
 import { probeCapabilities } from './capabilities.js'
+import type { OAuthCredentialStore, StoredOAuthCredential } from './oauth-credential-store.js'
 
 type Fetch = typeof globalThis.fetch
 
 interface OAuthTokenResponse {
   accessToken?: string
   access_token?: string
+  refreshToken?: string
+  refresh_token?: string
   expiresAt?: number
   expires_at?: number
   expiresIn?: number
   expires_in?: number
+  refreshTokenExpiresIn?: number
+  refresh_token_expires_in?: number
   scopes?: string[]
   scope?: string
 }
@@ -23,6 +28,14 @@ export function resolveExpiresAt(
     return absolute < 10_000_000_000 ? absolute * 1000 : absolute
   }
   const seconds = response.expiresIn ?? response.expires_in
+  return seconds === undefined ? undefined : now + seconds * 1000
+}
+
+export function resolveRefreshTokenExpiresAt(
+  response: OAuthTokenResponse,
+  now = Date.now(),
+): number | undefined {
+  const seconds = response.refreshTokenExpiresIn ?? response.refresh_token_expires_in
   return seconds === undefined ? undefined : now + seconds * 1000
 }
 
@@ -60,22 +73,57 @@ export function isUnauthenticatedOAuthError(error: unknown): boolean {
 export function describeOAuthError(error: unknown): string {
   if (error instanceof GitHubOAuthError) {
     if (error.kind === 'network') {
-      return '无法连接 Auth 服务。请确认本地已启动 pnpm dev:auth，或检查浏览器是否拦截了 Auth API（CSP / CORS）。'
+      return '无法刷新 GitHub OAuth 令牌：Auth 服务不可达。请确认本地已启动 pnpm dev:auth，或检查 CSP / CORS。'
     }
     if (error.kind === 'http') {
-      return `GitHub OAuth 会话恢复失败（HTTP ${error.status ?? 'unknown'}）。`
+      return `GitHub OAuth 令牌刷新失败（HTTP ${error.status ?? 'unknown'}）。`
     }
     if (error.kind === 'invalid_response') {
       return error.message
     }
   }
   if (error instanceof Error && error.message) return error.message
-  return 'GitHub OAuth 会话恢复失败'
+  return 'GitHub OAuth 失败'
+}
+
+export function parseAuthorizedPayload(raw: string, now = Date.now()): StoredOAuthCredential {
+  let body: OAuthTokenResponse
+  try {
+    body = JSON.parse(raw) as OAuthTokenResponse
+  } catch (cause) {
+    throw new GitHubOAuthError('github_authorized payload is not valid JSON', {
+      kind: 'invalid_response',
+      cause,
+    })
+  }
+  const accessToken = body.accessToken ?? body.access_token
+  if (!accessToken) {
+    throw new GitHubOAuthError('github_authorized payload did not include an access token', {
+      kind: 'invalid_response',
+    })
+  }
+  const refreshToken = body.refreshToken ?? body.refresh_token
+  const scopes = body.scopes ?? body.scope?.split(/[,\s]+/).map((scope) => scope.trim()).filter(Boolean)
+  const expiresAt = resolveExpiresAt(body, now)
+  const refreshTokenExpiresAt = resolveRefreshTokenExpiresAt(body, now)
+  return {
+    accessToken,
+    ...(refreshToken ? { refreshToken } : {}),
+    ...(expiresAt === undefined ? {} : { expiresAt }),
+    ...(refreshTokenExpiresAt === undefined ? {} : { refreshTokenExpiresAt }),
+    ...(scopes?.length ? { scopes } : {}),
+  }
+}
+
+export function extractAuthorizedParam(url: string | URL): string | null {
+  const parsed = typeof url === 'string' ? new URL(url) : url
+  return parsed.searchParams.get('github_authorized')
 }
 
 export interface GitHubOAuthProviderOptions {
   authBaseUrl?: string
   redirectUri?: string
+  credentialStore: OAuthCredentialStore
   fetch?: Fetch
   navigate?: (url: string) => void
 }
@@ -86,6 +134,7 @@ export class GitHubOAuthProvider implements AuthProvider {
   readonly available: boolean
   private readonly authBaseUrl: string
   private readonly redirectUri: string
+  private readonly credentialStore: OAuthCredentialStore
   private readonly fetcher: Fetch
   private readonly navigate: (url: string) => void
   private credential: AuthCredential | null = null
@@ -93,6 +142,7 @@ export class GitHubOAuthProvider implements AuthProvider {
   constructor(options: GitHubOAuthProviderOptions) {
     this.authBaseUrl = options.authBaseUrl?.replace(/\/+$/, '') ?? ''
     this.redirectUri = options.redirectUri ?? globalThis.location?.href ?? ''
+    this.credentialStore = options.credentialStore
     this.fetcher = options.fetch ?? globalThis.fetch
     this.navigate = options.navigate ?? ((url) => globalThis.location.assign(url))
     this.available = this.authBaseUrl.length > 0
@@ -107,8 +157,21 @@ export class GitHubOAuthProvider implements AuthProvider {
     return new Promise<AuthSession>(() => undefined)
   }
 
+  async consumeRedirect(url: string | URL = globalThis.location?.href ?? ''): Promise<AuthSession | null> {
+    if (!url) return null
+    const authorized = extractAuthorizedParam(url)
+    if (!authorized) return null
+    const stored = parseAuthorizedPayload(authorized)
+    await this.persist(stored)
+    const probe = await probeCapabilities(async () => stored.accessToken)
+    return {
+      providerId: this.id,
+      identity: probe.identity,
+      capabilities: probe.capabilities,
+    }
+  }
+
   async restore(): Promise<AuthSession | null> {
-    if (!this.available) return null
     try {
       const credential = await this.getCredential()
       const probe = await probeCapabilities(async () => credential.accessToken)
@@ -120,6 +183,11 @@ export class GitHubOAuthProvider implements AuthProvider {
     } catch (error) {
       this.credential = null
       if (isUnauthenticatedOAuthError(error)) return null
+      // Stale local token that cannot be refreshed — clear and treat as logged out
+      if (error instanceof GitHubOAuthError && (error.kind === 'http' || error.kind === 'invalid_response')) {
+        await this.credentialStore.clear()
+        return null
+      }
       throw error instanceof Error ? error : new Error(String(error))
     }
   }
@@ -128,62 +196,95 @@ export class GitHubOAuthProvider implements AuthProvider {
     if (this.credential && !isCredentialExpired(this.credential.expiresAt)) {
       return this.credential
     }
+
+    const stored = await this.credentialStore.get()
+    if (!stored?.accessToken) {
+      throw new GitHubOAuthError('No GitHub OAuth credential is stored', {
+        kind: 'unauthenticated',
+      })
+    }
+
+    if (!isCredentialExpired(stored.expiresAt)) {
+      this.credential = toAuthCredential(stored)
+      return this.credential
+    }
+
+    if (!stored.refreshToken) {
+      await this.credentialStore.clear()
+      throw new GitHubOAuthError('GitHub OAuth credential expired without a refresh token', {
+        kind: 'unauthenticated',
+      })
+    }
+    if (
+      stored.refreshTokenExpiresAt !== undefined
+      && stored.refreshTokenExpiresAt <= Date.now()
+    ) {
+      await this.credentialStore.clear()
+      throw new GitHubOAuthError('GitHub OAuth refresh token expired', {
+        kind: 'unauthenticated',
+      })
+    }
+
+    const refreshed = await this.refreshCredential(stored.refreshToken)
+    await this.persist(refreshed)
+    return this.credential!
+  }
+
+  async logout(): Promise<void> {
+    this.credential = null
+    await this.credentialStore.clear()
+  }
+
+  private async refreshCredential(refreshToken: string): Promise<StoredOAuthCredential> {
     if (!this.available) {
       throw new Error('GitHub OAuth is not configured')
     }
 
     let response: Response
     try {
-      response = await this.fetcher(`${this.authBaseUrl}/api/github/token`, {
+      response = await this.fetcher(`${this.authBaseUrl}/api/github/refresh`, {
         method: 'POST',
-        credentials: 'include',
-        headers: { Accept: 'application/json' },
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ refreshToken }),
       })
     } catch (cause) {
-      throw new GitHubOAuthError('GitHub OAuth token request failed to reach the Auth service', {
+      throw new GitHubOAuthError('GitHub OAuth refresh request failed to reach the Auth service', {
         kind: 'network',
         cause,
       })
     }
+
     if (response.status === 401) {
-      throw new GitHubOAuthError('GitHub OAuth session is unauthenticated', {
+      throw new GitHubOAuthError('GitHub OAuth refresh was rejected', {
         kind: 'unauthenticated',
         status: 401,
       })
     }
     if (!response.ok) {
       throw new GitHubOAuthError(
-        `GitHub OAuth token request failed with HTTP ${response.status}`,
+        `GitHub OAuth refresh failed with HTTP ${response.status}`,
         { kind: 'http', status: response.status },
       )
     }
+
     const body = await response.json() as OAuthTokenResponse
-    const accessToken = body.accessToken ?? body.access_token
-    if (!accessToken) {
-      throw new GitHubOAuthError('GitHub OAuth token response did not include an access token', {
-        kind: 'invalid_response',
-      })
-    }
-    const scopes = body.scopes ?? body.scope?.split(',').map((scope) => scope.trim()).filter(Boolean)
-    const expiresAt = resolveExpiresAt(body)
-    this.credential = {
-      accessToken,
-      tokenType: 'github-oauth-user',
-      ...(expiresAt === undefined ? {} : { expiresAt }),
-      ...(scopes?.length ? { scopes } : {}),
-    }
-    return this.credential
+    return parseAuthorizedPayload(JSON.stringify(body))
   }
 
-  async logout(): Promise<void> {
-    this.credential = null
-    if (!this.available) return
-    const response = await this.fetcher(`${this.authBaseUrl}/api/github/logout`, {
-      method: 'POST',
-      credentials: 'include',
-    })
-    if (!response.ok) {
-      throw new Error(`GitHub OAuth logout failed with HTTP ${response.status}`)
-    }
+  private async persist(stored: StoredOAuthCredential): Promise<void> {
+    await this.credentialStore.set(stored)
+    this.credential = toAuthCredential(stored)
+  }
+}
+
+function toAuthCredential(stored: StoredOAuthCredential): AuthCredential {
+  return {
+    accessToken: stored.accessToken,
+    tokenType: 'github-oauth-user',
+    ...(stored.expiresAt === undefined ? {} : { expiresAt: stored.expiresAt }),
+    ...(stored.scopes?.length ? { scopes: stored.scopes } : {}),
   }
 }

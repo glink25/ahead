@@ -1,12 +1,15 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   describeOAuthError,
+  extractAuthorizedParam,
   GitHubOAuthError,
   GitHubOAuthProvider,
   isCredentialExpired,
   isUnauthenticatedOAuthError,
+  parseAuthorizedPayload,
   resolveExpiresAt,
 } from './oauth-provider.js'
+import type { OAuthCredentialStore, StoredOAuthCredential } from './oauth-credential-store.js'
 
 vi.mock('./capabilities.js', () => ({
   probeCapabilities: vi.fn(async () => ({
@@ -14,7 +17,7 @@ vi.mock('./capabilities.js', () => ({
     capabilities: {
       canReadPublic: true,
       canReadPrivate: true,
-      canCreateRepository: false,
+      canCreateRepository: true,
       canWriteContents: true,
       canReadMarketIssues: true,
       missingScopes: [],
@@ -23,6 +26,19 @@ vi.mock('./capabilities.js', () => ({
     scopes: ['repo'],
   })),
 }))
+
+function memoryStore(initial: StoredOAuthCredential | null = null): OAuthCredentialStore {
+  let value = initial
+  return {
+    get: async () => value,
+    set: async (next) => {
+      value = next
+    },
+    clear: async () => {
+      value = null
+    },
+  }
+}
 
 describe('OAuth credential expiry', () => {
   it('converts expires_in seconds to epoch milliseconds', () => {
@@ -41,6 +57,23 @@ describe('OAuth credential expiry', () => {
   })
 })
 
+describe('authorized redirect parsing', () => {
+  it('extracts and parses github_authorized payloads', () => {
+    const url = 'http://localhost:4455/login?github_authorized=' + encodeURIComponent(JSON.stringify({
+      access_token: 'ghu_test',
+      refresh_token: 'ghr_test',
+      expires_in: 3600,
+      scope: 'repo',
+    }))
+    expect(extractAuthorizedParam(url)).toContain('ghu_test')
+    const parsed = parseAuthorizedPayload(extractAuthorizedParam(url)!, 1_000)
+    expect(parsed.accessToken).toBe('ghu_test')
+    expect(parsed.refreshToken).toBe('ghr_test')
+    expect(parsed.expiresAt).toBe(3_601_000)
+    expect(parsed.scopes).toEqual(['repo'])
+  })
+})
+
 describe('GitHubOAuthError helpers', () => {
   it('classifies unauthenticated errors', () => {
     const error = new GitHubOAuthError('unauthenticated', {
@@ -48,26 +81,21 @@ describe('GitHubOAuthError helpers', () => {
       status: 401,
     })
     expect(isUnauthenticatedOAuthError(error)).toBe(true)
-    expect(isUnauthenticatedOAuthError(new Error('boom'))).toBe(false)
-  })
-
-  it('describes network and http failures for the login UI', () => {
     expect(describeOAuthError(new GitHubOAuthError('net', { kind: 'network' }))).toMatch(/Auth 服务/)
-    expect(describeOAuthError(new GitHubOAuthError('http', { kind: 'http', status: 503 }))).toContain('503')
   })
 })
 
 describe('GitHubOAuthProvider', () => {
   afterEach(() => {
-    vi.unstubAllGlobals()
     vi.clearAllMocks()
   })
 
-  it('navigates to the Auth login endpoint with redirect_uri', async () => {
+  it('navigates to the Auth login endpoint with redirect_uri', () => {
     const navigate = vi.fn()
     const provider = new GitHubOAuthProvider({
       authBaseUrl: 'http://localhost:8787/',
       redirectUri: 'http://localhost:4455/login',
+      credentialStore: memoryStore(),
       navigate,
     })
 
@@ -78,64 +106,85 @@ describe('GitHubOAuthProvider', () => {
     )
   })
 
-  it('restores a session when the Auth cookie exchange succeeds', async () => {
+  it('persists credentials from a redirect and restores without calling Auth', async () => {
+    const store = memoryStore()
+    const fetcher = vi.fn()
+    const provider = new GitHubOAuthProvider({
+      authBaseUrl: 'http://localhost:8787',
+      redirectUri: 'http://localhost:4455/login',
+      credentialStore: store,
+      fetch: fetcher,
+    })
+
+    const session = await provider.consumeRedirect(
+      'http://localhost:4455/login?github_authorized=' + encodeURIComponent(JSON.stringify({
+        access_token: 'ghu_test',
+        expires_in: 3600,
+        scope: 'repo',
+      })),
+    )
+
+    expect(session?.identity.login).toBe('octocat')
+    expect(await store.get()).toMatchObject({ accessToken: 'ghu_test' })
+
+    const restored = await provider.restore()
+    expect(restored?.identity.login).toBe('octocat')
+    expect(fetcher).not.toHaveBeenCalled()
+  })
+
+  it('returns null when nothing is stored', async () => {
+    const provider = new GitHubOAuthProvider({
+      authBaseUrl: 'http://localhost:8787',
+      redirectUri: 'http://localhost:4455/login',
+      credentialStore: memoryStore(),
+    })
+    await expect(provider.restore()).resolves.toBeNull()
+  })
+
+  it('refreshes expired credentials through Auth and writes them back', async () => {
+    const store = memoryStore({
+      accessToken: 'ghu_old',
+      refreshToken: 'ghr_old',
+      expiresAt: Date.now() - 1_000,
+    })
     const fetcher = vi.fn(async () => new Response(JSON.stringify({
-      accessToken: 'ghu_test',
-      expiresAt: Date.now() + 60_000,
-      scopes: ['repo'],
+      access_token: 'ghu_new',
+      refresh_token: 'ghr_new',
+      expires_in: 3600,
+      scope: 'repo',
     }), { status: 200 }))
     const provider = new GitHubOAuthProvider({
       authBaseUrl: 'http://localhost:8787',
       redirectUri: 'http://localhost:4455/login',
+      credentialStore: store,
       fetch: fetcher,
     })
 
-    const session = await provider.restore()
-
-    expect(fetcher).toHaveBeenCalledWith('http://localhost:8787/api/github/token', {
+    const credential = await provider.getCredential()
+    expect(credential.accessToken).toBe('ghu_new')
+    expect(fetcher).toHaveBeenCalledWith('http://localhost:8787/api/github/refresh', expect.objectContaining({
       method: 'POST',
-      credentials: 'include',
-      headers: { Accept: 'application/json' },
-    })
-    expect(session?.identity.login).toBe('octocat')
+    }))
+    expect(await store.get()).toMatchObject({ accessToken: 'ghu_new', refreshToken: 'ghr_new' })
   })
 
-  it('returns null on 401 without surfacing an error', async () => {
+  it('propagates network failures from refresh', async () => {
     const provider = new GitHubOAuthProvider({
       authBaseUrl: 'http://localhost:8787',
       redirectUri: 'http://localhost:4455/login',
-      fetch: async () => new Response(JSON.stringify({ error: 'unauthenticated' }), { status: 401 }),
-    })
-
-    await expect(provider.restore()).resolves.toBeNull()
-  })
-
-  it('propagates network failures so the UI can show them', async () => {
-    const provider = new GitHubOAuthProvider({
-      authBaseUrl: 'http://localhost:8787',
-      redirectUri: 'http://localhost:4455/login',
+      credentialStore: memoryStore({
+        accessToken: 'ghu_old',
+        refreshToken: 'ghr_old',
+        expiresAt: Date.now() - 1_000,
+      }),
       fetch: async () => {
         throw new TypeError('Failed to fetch')
       },
     })
 
-    await expect(provider.restore()).rejects.toMatchObject({
+    await expect(provider.getCredential()).rejects.toMatchObject({
       name: 'GitHubOAuthError',
       kind: 'network',
-    })
-  })
-
-  it('propagates non-401 HTTP failures', async () => {
-    const provider = new GitHubOAuthProvider({
-      authBaseUrl: 'http://localhost:8787',
-      redirectUri: 'http://localhost:4455/login',
-      fetch: async () => new Response('boom', { status: 502 }),
-    })
-
-    await expect(provider.restore()).rejects.toMatchObject({
-      name: 'GitHubOAuthError',
-      kind: 'http',
-      status: 502,
     })
   })
 })

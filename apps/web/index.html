@@ -10,6 +10,15 @@
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      // Stash OAuth redirect payload and strip it from the address bar before React boots.
+      if (location.search.includes('github_authorized=')) {
+        sessionStorage.setItem('_ahead_oauth_res', location.href)
+        var cleaned = new URL(location.href)
+        cleaned.searchParams.delete('github_authorized')
+        history.replaceState(null, '', cleaned.pathname + cleaned.search + cleaned.hash)
+      }
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
