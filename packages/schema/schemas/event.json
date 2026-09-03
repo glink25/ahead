@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/glink25/ahead/raw/main/schemas/v0.1/event.json",
+  "title": "Event",
+  "type": "object",
+  "required": ["id", "title", "schedule"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"
+    },
+    "title": { "$ref": "localized-text.json" },
+    "summary": { "$ref": "localized-text.json" },
+    "description": { "$ref": "localized-text.json" },
+    "schedule": { "$ref": "schedule-timeline.json" },
+    "duration": { "$ref": "duration.json" },
+    "recurrence": { "$ref": "recurrence.json" },
+    "tags": {
+      "type": "array",
+      "items": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$" },
+      "uniqueItems": true,
+      "maxItems": 64
+    },
+    "evidence": {
+      "type": "array",
+      "items": { "$ref": "evidence.json" },
+      "maxItems": 32
+    },
+    "media": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["path"],
+        "additionalProperties": false,
+        "properties": {
+          "path": { "type": "string", "minLength": 1, "maxLength": 512 },
+          "alt": { "$ref": "localized-text.json" },
+          "kind": { "type": "string", "enum": ["image", "video", "audio", "other"] }
+        }
+      },
+      "maxItems": 16
+    },
+    "status": {
+      "type": "string",
+      "enum": ["active", "cancelled", "archived"],
+      "default": "active"
+    },
+    "extensions": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": false
+}

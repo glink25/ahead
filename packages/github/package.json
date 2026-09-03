@@ -1,0 +1,33 @@
+{
+  "name": "@ahead/github",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@ahead/core": "workspace:*",
+    "@octokit/core": "^6.1.4",
+    "@octokit/plugin-paginate-rest": "^11.4.3",
+    "@octokit/plugin-retry": "^7.2.1",
+    "@octokit/plugin-throttling": "^9.3.2"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

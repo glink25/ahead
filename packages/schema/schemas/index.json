@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/glink25/ahead/raw/main/schemas/v0.1/index.json",
+  "title": "OEF v0.1 Schema Index",
+  "description": "Authority index for Open Event Feed schemas",
+  "type": "object",
+  "properties": {
+    "version": { "const": "0.1" },
+    "schemas": {
+      "type": "object",
+      "additionalProperties": { "type": "string", "format": "uri" }
+    }
+  }
+}

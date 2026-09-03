@@ -1,0 +1,39 @@
+oefVersion: "0.1"
+kind: event-feed
+id: ahead-i18n-demo
+name:
+  zh-CN: 多语言示例
+  en: Multilingual Demo
+description:
+  zh-CN: 演示 LocalizedText 与 BCP 47 fallback。
+  en: Demonstrates LocalizedText and BCP 47 fallback.
+primaryLanguage: zh-CN
+tags:
+  - id: demo
+    label:
+      zh-CN: 演示
+      en: Demo
+events:
+  - id: apple-event-2026
+    title:
+      zh-CN: 苹果秋季发布会
+      en: Apple Fall Event
+    summary:
+      en: Expected hardware announcements
+    schedule:
+      - id: rumored
+        value:
+          kind: month
+          year: 2026
+          month: 9
+        recordedAt: "2026-01-15T00:00:00Z"
+        confidence: rumored
+      - id: likely
+        value:
+          kind: exact
+          date: "2026-09-09"
+        recordedAt: "2026-06-01T00:00:00Z"
+        confidence: likely
+    tags:
+      - apple
+      - hardware

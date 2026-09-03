@@ -1,0 +1,18 @@
+oefVersion: "0.1"
+kind: user-data
+id: demo-user
+displayName:
+  zh-CN: 示例用户
+bio:
+  zh-CN: 这是一个应放在私有仓库中的个人资料示例。
+subscriptions:
+  - locator: github:example/ahead-feed
+    kind: event-feed
+    priority: 1
+favorites: []
+hidden: []
+pins: []
+settings:
+  locale: zh-CN
+  timezone: Asia/Shanghai
+  privacyRemoteImages: true

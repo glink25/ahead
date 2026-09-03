@@ -1,0 +1,8 @@
+{
+  "schema": "temporal-value",
+  "data": {
+    "kind": "month",
+    "year": 2026,
+    "month": 13
+  }
+}

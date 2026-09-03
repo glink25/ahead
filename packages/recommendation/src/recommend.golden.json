@@ -1,0 +1,19 @@
+{
+  "input": {
+    "now": "2026-09-03T00:00:00.000Z",
+    "events": [
+      { "id": "near", "date": "2026-09-06", "tags": ["games"] },
+      { "id": "month", "date": "2026-09-27", "tags": [] },
+      { "id": "far", "date": "2027-01-01", "tags": ["games"] },
+      { "id": "unknown", "date": null, "tags": [] }
+    ],
+    "favorites": ["far"],
+    "interests": { "games": 2 }
+  },
+  "output": [
+    { "eventId": "near", "score": 2, "bucket": "0-7d", "rank": 1 },
+    { "eventId": "month", "score": 0, "bucket": "7-30d", "rank": 2 },
+    { "eventId": "far", "score": 7, "bucket": "3-12m", "rank": 3 },
+    { "eventId": "unknown", "score": 0, "bucket": "unknown", "rank": 4 }
+  ]
+}

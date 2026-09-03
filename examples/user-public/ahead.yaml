@@ -1,0 +1,25 @@
+oefVersion: "0.1"
+kind: user-data
+id: alice-public
+displayName:
+  zh-CN: 爱丽丝的盼头
+  en: Alice's Ahead
+bio:
+  zh-CN: 公开分享我关注的游戏与节日。
+subscriptions:
+  - locator: github:alice/ahead-feed-games
+    priority: 2
+    kind: event-feed
+  - locator: github:ahead/feed-holidays-cn
+    priority: 1
+    kind: event-feed
+favorites:
+  - gta-vi
+  - spring-festival
+interests:
+  games: 0.9
+  holiday: 0.6
+settings:
+  locale: zh-CN
+  timezone: Asia/Shanghai
+  privacyRemoteImages: true

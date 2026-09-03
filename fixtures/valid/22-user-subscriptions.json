@@ -1,0 +1,38 @@
+{
+  "schema": "user-data",
+  "data": {
+    "oefVersion": "0.1",
+    "kind": "user-data",
+    "id": "bob",
+    "displayName": {
+      "en": "Bob"
+    },
+    "subscriptions": [
+      {
+        "locator": "github:alice/ahead-feed-games",
+        "priority": 2,
+        "kind": "event-feed"
+      },
+      {
+        "locator": "github:carol/ahead-user-public",
+        "priority": 0,
+        "kind": "user-data"
+      }
+    ],
+    "favorites": [
+      "gta-vi"
+    ],
+    "hidden": [
+      "spam-event"
+    ],
+    "interests": {
+      "games": 0.8,
+      "apple": 0.3
+    },
+    "settings": {
+      "locale": "zh-CN",
+      "timezone": "Asia/Shanghai",
+      "privacyRemoteImages": true
+    }
+  }
+}

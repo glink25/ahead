@@ -1,0 +1,9 @@
+{
+  "schema": "tag",
+  "data": {
+    "id": "games",
+    "label": {
+      "zh-CN": "游戏"
+    }
+  }
+}

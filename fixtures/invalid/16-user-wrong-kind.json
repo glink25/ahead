@@ -1,0 +1,11 @@
+{
+  "schema": "user-data",
+  "data": {
+    "oefVersion": "0.1",
+    "kind": "event-feed",
+    "id": "x",
+    "displayName": {
+      "en": "X"
+    }
+  }
+}

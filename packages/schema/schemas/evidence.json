@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/glink25/ahead/raw/main/schemas/v0.1/evidence.json",
+  "title": "Evidence",
+  "type": "object",
+  "required": ["kind", "value"],
+  "additionalProperties": false,
+  "properties": {
+    "kind": {
+      "type": "string",
+      "enum": ["url", "note", "media", "citation"]
+    },
+    "value": { "type": "string", "minLength": 1, "maxLength": 4096 },
+    "label": { "$ref": "localized-text.json" },
+    "fetchedAt": { "type": "string", "format": "date-time" }
+  }
+}

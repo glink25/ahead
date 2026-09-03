@@ -1,0 +1,10 @@
+{
+  "schema": "evidence",
+  "data": {
+    "kind": "url",
+    "value": "https://example.com/a",
+    "label": {
+      "en": "Source"
+    }
+  }
+}

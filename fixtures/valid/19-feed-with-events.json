@@ -1,0 +1,47 @@
+{
+  "schema": "event-feed",
+  "data": {
+    "oefVersion": "0.1",
+    "kind": "event-feed",
+    "id": "holidays-cn",
+    "name": {
+      "zh-CN": "中国法定节假日"
+    },
+    "tags": [
+      {
+        "id": "holiday",
+        "label": {
+          "zh-CN": "节日"
+        }
+      }
+    ],
+    "events": [
+      {
+        "id": "national-day",
+        "title": {
+          "zh-CN": "国庆节"
+        },
+        "schedule": [
+          {
+            "id": "s1",
+            "value": {
+              "kind": "exact",
+              "date": "2026-10-01"
+            },
+            "recordedAt": "2025-01-01T00:00:00Z",
+            "confidence": "confirmed"
+          }
+        ],
+        "recurrence": {
+          "freq": "yearly",
+          "byMonth": [
+            10
+          ],
+          "byMonthDay": [
+            1
+          ]
+        }
+      }
+    ]
+  }
+}

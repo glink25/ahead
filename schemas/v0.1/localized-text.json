@@ -1,0 +1,9 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/glink25/ahead/raw/main/schemas/v0.1/localized-text.json",
+  "title": "LocalizedText",
+  "description": "BCP 47 keyed text map with optional default",
+  "type": "object",
+  "additionalProperties": { "type": "string", "minLength": 1 },
+  "minProperties": 1
+}

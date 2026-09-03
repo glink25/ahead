@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/glink25/ahead/raw/main/schemas/v0.1/recurrence.json",
+  "title": "Recurrence",
+  "type": "object",
+  "required": ["freq"],
+  "additionalProperties": false,
+  "properties": {
+    "freq": {
+      "type": "string",
+      "enum": ["daily", "weekly", "monthly", "yearly", "custom"]
+    },
+    "interval": { "type": "integer", "minimum": 1, "default": 1 },
+    "byMonth": {
+      "type": "array",
+      "items": { "type": "integer", "minimum": 1, "maximum": 12 },
+      "uniqueItems": true
+    },
+    "byMonthDay": {
+      "type": "array",
+      "items": { "type": "integer", "minimum": -31, "maximum": 31 },
+      "uniqueItems": true
+    },
+    "count": { "type": "integer", "minimum": 1, "maximum": 500 },
+    "until": { "type": "string", "format": "date" },
+    "timezone": { "type": "string" }
+  }
+}

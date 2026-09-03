@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/glink25/ahead/raw/main/schemas/v0.1/temporal-value.json",
+  "title": "TemporalValue",
+  "oneOf": [
+    {
+      "title": "Exact",
+      "type": "object",
+      "required": ["kind", "date"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "const": "exact" },
+        "date": { "type": "string", "format": "date" }
+      }
+    },
+    {
+      "title": "DateTime",
+      "type": "object",
+      "required": ["kind", "dateTime"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "const": "datetime" },
+        "dateTime": { "type": "string", "format": "date-time" },
+        "timezone": { "type": "string", "minLength": 1 }
+      }
+    },
+    {
+      "title": "Month",
+      "type": "object",
+      "required": ["kind", "year", "month"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "const": "month" },
+        "year": { "type": "integer", "minimum": 1 },
+        "month": { "type": "integer", "minimum": 1, "maximum": 12 }
+      }
+    },
+    {
+      "title": "Quarter",
+      "type": "object",
+      "required": ["kind", "year", "quarter"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "const": "quarter" },
+        "year": { "type": "integer", "minimum": 1 },
+        "quarter": { "type": "integer", "minimum": 1, "maximum": 4 }
+      }
+    },
+    {
+      "title": "Year",
+      "type": "object",
+      "required": ["kind", "year"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "const": "year" },
+        "year": { "type": "integer", "minimum": 1 }
+      }
+    },
+    {
+      "title": "Range",
+      "type": "object",
+      "required": ["kind", "start", "end"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "const": "range" },
+        "start": { "$ref": "#" },
+        "end": { "$ref": "#" }
+      }
+    },
+    {
+      "title": "Unknown",
+      "type": "object",
+      "required": ["kind"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "const": "unknown" },
+        "note": { "$ref": "localized-text.json" }
+      }
+    }
+  ]
+}

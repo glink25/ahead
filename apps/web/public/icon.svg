@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="128" y2="128" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1D1C1C"/>
+      <stop offset="0.36" stop-color="#181717"/>
+      <stop offset="0.70" stop-color="#0B0B0B"/>
+      <stop offset="1" stop-color="#080808"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="128" height="128" fill="url(#bg)"/>
+
+  <!-- Bulb body -->
+  <path
+    d="M64 21
+       C48.54 21 36 33.54 36 49
+       C36 58.73 40.42 66.17 47.42 73.42
+       C50.26 76.36 52.64 79.37 54.67 82.38
+       C55.70 83.90 56.60 85 58.60 85
+       H69.40
+       C71.40 85 72.30 83.90 73.33 82.38
+       C75.36 79.37 77.74 76.36 80.58 73.42
+       C87.58 66.17 92 58.73 92 49
+       C92 33.54 79.46 21 64 21Z"
+    fill="#FA114F"/>
+
+  <!-- Contact bars -->
+  <rect x="54" y="90" width="20" height="6" rx="3" fill="#92E82A"/>
+  <rect x="54" y="101" width="20" height="6" rx="3" fill="#1EEAEF"/>
+</svg>

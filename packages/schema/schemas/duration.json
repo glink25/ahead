@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/glink25/ahead/raw/main/schemas/v0.1/duration.json",
+  "title": "Duration",
+  "description": "How long an event lasts after each occurrence start. Orthogonal to schedule (when) and recurrence (how often).",
+  "type": "object",
+  "required": ["amount", "unit"],
+  "additionalProperties": false,
+  "properties": {
+    "amount": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 100000
+    },
+    "unit": {
+      "type": "string",
+      "enum": ["minutes", "hours", "days", "weeks"]
+    }
+  }
+}

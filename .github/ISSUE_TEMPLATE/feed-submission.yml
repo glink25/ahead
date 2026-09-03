@@ -1,0 +1,28 @@
+name: 提交公开事件源
+description: 将一个 GitHub 仓库中的 ahead.yaml 提交到市场
+title: "[Feed] "
+labels: ["type:event-feed"]
+body:
+  - type: input
+    id: locator
+    attributes:
+      label: Locator
+      description: 公开仓库定位符，例如 github:owner/repository
+      placeholder: github:owner/repository
+    validations:
+      required: true
+  - type: input
+    id: manifest
+    attributes:
+      label: Manifest path
+      description: manifest 在仓库中的相对路径
+      value: ahead.yaml
+    validations:
+      required: true
+  - type: checkboxes
+    id: confirmation
+    attributes:
+      label: 确认
+      options:
+        - label: 仓库与 manifest 均可公开访问，且我有权提交。
+          required: true

@@ -1,0 +1,40 @@
+oefVersion: "0.1"
+kind: event-feed
+id: ahead-minimal
+name:
+  zh-CN: 最小示例事件源
+description:
+  zh-CN: 用于快速体验 Ahead 的公开事件源。
+primaryLanguage: zh-CN
+events:
+  - id: autumn-equinox-2026
+    title:
+      zh-CN: 2026 年秋分
+    schedule:
+      - id: official-date
+        value:
+          kind: exact
+          date: "2026-09-23"
+        recordedAt: "2026-09-03T00:00:00Z"
+        confidence: confirmed
+    tags:
+      - seasonal
+  - id: national-day-holiday
+    title:
+      zh-CN: 国庆假期
+    schedule:
+      - id: start
+        value:
+          kind: exact
+          date: "2026-10-01"
+        recordedAt: "2025-01-01T00:00:00Z"
+        confidence: confirmed
+    duration:
+      amount: 7
+      unit: days
+    recurrence:
+      freq: yearly
+      byMonth: [10]
+      byMonthDay: [1]
+    tags:
+      - holiday

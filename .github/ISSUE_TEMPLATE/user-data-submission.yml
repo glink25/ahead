@@ -1,0 +1,27 @@
+name: 提交用户数据源
+description: 提交可公开访问的 OEF user-data manifest
+title: "[User Data] "
+labels: ["type:user-data"]
+body:
+  - type: input
+    id: locator
+    attributes:
+      label: Locator
+      description: GitHub 仓库定位符，例如 github:owner/repository
+      placeholder: github:owner/repository
+    validations:
+      required: true
+  - type: input
+    id: manifest
+    attributes:
+      label: Manifest path
+      value: ahead.yaml
+    validations:
+      required: true
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: 隐私确认
+      options:
+        - label: 我确认该文件不包含 token、私人备注或其他敏感信息。
+          required: true

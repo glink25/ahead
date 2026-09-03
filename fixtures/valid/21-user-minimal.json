@@ -1,0 +1,12 @@
+{
+  "schema": "user-data",
+  "data": {
+    "oefVersion": "0.1",
+    "kind": "user-data",
+    "id": "alice",
+    "displayName": {
+      "zh-CN": "爱丽丝",
+      "en": "Alice"
+    }
+  }
+}

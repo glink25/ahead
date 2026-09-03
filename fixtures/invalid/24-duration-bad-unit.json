@@ -1,0 +1,7 @@
+{
+  "schema": "duration",
+  "data": {
+    "amount": 3,
+    "unit": "years"
+  }
+}

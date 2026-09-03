@@ -1,0 +1,24 @@
+{
+  "schema": "event",
+  "data": {
+    "id": "ext-demo",
+    "title": {
+      "en": "Ext"
+    },
+    "schedule": [
+      {
+        "id": "s1",
+        "value": {
+          "kind": "exact",
+          "date": "2026-05-01"
+        },
+        "recordedAt": "2025-01-01T00:00:00Z"
+      }
+    ],
+    "extensions": {
+      "x-ahead-demo": {
+        "foo": 1
+      }
+    }
+  }
+}

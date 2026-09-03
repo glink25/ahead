@@ -1,0 +1,17 @@
+{
+  "schema": "user-data",
+  "data": {
+    "oefVersion": "0.1",
+    "kind": "user-data",
+    "id": "x",
+    "displayName": {
+      "en": "X"
+    },
+    "subscriptions": [
+      {
+        "locator": "github:a/b",
+        "priority": 9
+      }
+    ]
+  }
+}

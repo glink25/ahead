@@ -1,0 +1,33 @@
+{
+  "schema": "event",
+  "data": {
+    "id": "national-day-holiday",
+    "title": {
+      "zh-CN": "国庆假期"
+    },
+    "schedule": [
+      {
+        "id": "s1",
+        "value": {
+          "kind": "exact",
+          "date": "2026-10-01"
+        },
+        "recordedAt": "2025-01-01T00:00:00Z",
+        "confidence": "confirmed"
+      }
+    ],
+    "duration": {
+      "amount": 7,
+      "unit": "days"
+    },
+    "recurrence": {
+      "freq": "yearly",
+      "byMonth": [
+        10
+      ],
+      "byMonthDay": [
+        1
+      ]
+    }
+  }
+}

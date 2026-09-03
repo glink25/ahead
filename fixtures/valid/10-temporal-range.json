@@ -1,0 +1,14 @@
+{
+  "schema": "temporal-value",
+  "data": {
+    "kind": "range",
+    "start": {
+      "kind": "exact",
+      "date": "2026-01-01"
+    },
+    "end": {
+      "kind": "exact",
+      "date": "2026-01-07"
+    }
+  }
+}

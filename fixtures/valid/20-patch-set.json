@@ -1,0 +1,14 @@
+{
+  "schema": "patch",
+  "data": {
+    "eventId": "gta-vi",
+    "ops": [
+      {
+        "op": "set",
+        "path": "/title/zh-CN",
+        "value": "侠盗猎车手6"
+      }
+    ],
+    "updatedAt": "2025-06-01T00:00:00Z"
+  }
+}

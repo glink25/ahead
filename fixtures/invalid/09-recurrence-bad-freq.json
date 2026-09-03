@@ -1,0 +1,6 @@
+{
+  "schema": "recurrence",
+  "data": {
+    "freq": "hourly"
+  }
+}

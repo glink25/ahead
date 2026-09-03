@@ -1,0 +1,13 @@
+{
+  "schema": "recurrence",
+  "data": {
+    "freq": "yearly",
+    "interval": 1,
+    "byMonth": [
+      1
+    ],
+    "byMonthDay": [
+      1
+    ]
+  }
+}

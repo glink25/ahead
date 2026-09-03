@@ -1,0 +1,12 @@
+{
+  "schema": "event-feed",
+  "data": {
+    "oefVersion": "0.1",
+    "kind": "event-feed",
+    "id": "x",
+    "name": {
+      "en": "X"
+    },
+    "extra": 1
+  }
+}

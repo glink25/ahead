@@ -1,0 +1,12 @@
+{
+  "schema": "user-data",
+  "data": {
+    "oefVersion": "0.1",
+    "kind": "user-data",
+    "id": "x",
+    "displayName": {
+      "en": "X"
+    },
+    "hackerField": true
+  }
+}

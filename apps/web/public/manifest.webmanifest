@@ -1,0 +1,17 @@
+{
+  "name": "Ahead / 盼头",
+  "short_name": "盼头",
+  "description": "把值得期待的日子放在眼前",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#0f172a",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

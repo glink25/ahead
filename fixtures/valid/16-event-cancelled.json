@@ -1,0 +1,20 @@
+{
+  "schema": "event",
+  "data": {
+    "id": "cancelled-demo",
+    "title": {
+      "en": "Cancelled Demo"
+    },
+    "status": "cancelled",
+    "schedule": [
+      {
+        "id": "s1",
+        "value": {
+          "kind": "unknown"
+        },
+        "recordedAt": "2025-01-01T00:00:00Z",
+        "confidence": "cancelled"
+      }
+    ]
+  }
+}

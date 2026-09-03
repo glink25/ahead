@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "types": ["vite/client"],
+    "baseUrl": ".",
+    "paths": {
+      "@ahead/editor": ["../../packages/editor/src/index.ts"],
+      "@ahead/recommendation": ["../../packages/recommendation/src/index.ts"],
+      "@ahead/ui": ["../../packages/ui/src/index.tsx"]
+    },
+    "noEmit": true
+  },
+  "include": ["src", "vite.config.ts"]
+}

@@ -1,0 +1,19 @@
+{
+  "schema": "event",
+  "data": {
+    "id": "BAD ID",
+    "title": {
+      "en": "X"
+    },
+    "schedule": [
+      {
+        "id": "s1",
+        "value": {
+          "kind": "exact",
+          "date": "2026-01-01"
+        },
+        "recordedAt": "2025-01-01T00:00:00Z"
+      }
+    ]
+  }
+}

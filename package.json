@@ -1,0 +1,25 @@
+{
+  "name": "ahead",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Ahead / 盼头 — open event feed client",
+  "license": "MIT",
+  "packageManager": "pnpm@9.15.0",
+  "scripts": {
+    "build": "pnpm -r --filter './packages/*' run build && pnpm --filter @ahead/web run build",
+    "dev": "pnpm --filter @ahead/web run dev",
+    "dev:auth": "pnpm --filter @ahead/auth run dev",
+    "test": "pnpm -r run test",
+    "typecheck": "pnpm -r run typecheck",
+    "lint": "pnpm -r run lint --if-present",
+    "generate:schema": "pnpm --filter @ahead/schema run generate",
+    "market:triage": "pnpm exec tsx scripts/market-triage.ts",
+    "bench:recommend": "pnpm exec tsx scripts/bench-recommend.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

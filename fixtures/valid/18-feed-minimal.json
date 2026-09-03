@@ -1,0 +1,14 @@
+{
+  "schema": "event-feed",
+  "data": {
+    "oefVersion": "0.1",
+    "kind": "event-feed",
+    "id": "apple-events",
+    "name": {
+      "en": "Apple Events",
+      "zh-CN": "苹果活动"
+    },
+    "primaryLanguage": "zh-CN",
+    "events": []
+  }
+}

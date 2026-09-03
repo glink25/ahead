@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/glink25/ahead/raw/main/schemas/v0.1/user-data.json",
+  "title": "UserData",
+  "type": "object",
+  "required": ["oefVersion", "kind", "id", "displayName"],
+  "properties": {
+    "oefVersion": { "const": "0.1" },
+    "kind": { "const": "user-data" },
+    "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$" },
+    "displayName": { "$ref": "localized-text.json" },
+    "bio": { "$ref": "localized-text.json" },
+    "subscriptions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["locator"],
+        "additionalProperties": false,
+        "properties": {
+          "locator": {
+            "type": "string",
+            "pattern": "^github:[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"
+          },
+          "priority": {
+            "type": "integer",
+            "minimum": -3,
+            "maximum": 3,
+            "default": 0
+          },
+          "kind": {
+            "type": "string",
+            "enum": ["event-feed", "user-data"]
+          }
+        }
+      },
+      "maxItems": 512
+    },
+    "favorites": {
+      "type": "array",
+      "items": { "type": "string" },
+      "uniqueItems": true,
+      "maxItems": 2048
+    },
+    "hidden": {
+      "type": "array",
+      "items": { "type": "string" },
+      "uniqueItems": true,
+      "maxItems": 2048
+    },
+    "pins": {
+      "type": "array",
+      "items": { "type": "string" },
+      "uniqueItems": true,
+      "maxItems": 64
+    },
+    "notes": {
+      "type": "object",
+      "additionalProperties": { "type": "string", "maxLength": 4096 }
+    },
+    "patches": {
+      "type": "array",
+      "items": { "$ref": "patch.json" },
+      "maxItems": 2048
+    },
+    "interests": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "number",
+        "minimum": -1,
+        "maximum": 1
+      }
+    },
+    "settings": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "locale": { "type": "string" },
+        "timezone": { "type": "string" },
+        "privacyRemoteImages": { "type": "boolean" }
+      }
+    },
+    "extensions": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": false
+}

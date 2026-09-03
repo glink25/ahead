@@ -1,0 +1,20 @@
+{
+  "schema": "event",
+  "data": {
+    "id": "spring-festival",
+    "title": {
+      "zh-CN": "春节"
+    },
+    "schedule": [
+      {
+        "id": "s1",
+        "value": {
+          "kind": "exact",
+          "date": "2026-02-17"
+        },
+        "recordedAt": "2025-01-01T00:00:00Z",
+        "confidence": "confirmed"
+      }
+    ]
+  }
+}

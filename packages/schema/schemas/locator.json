@@ -1,0 +1,8 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/glink25/ahead/raw/main/schemas/v0.1/locator.json",
+  "title": "ResourceLocator",
+  "type": "string",
+  "pattern": "^[a-z][a-z0-9+.-]*:.+$",
+  "examples": ["github:alice/ahead-feed-games"]
+}

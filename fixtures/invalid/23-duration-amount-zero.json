@@ -1,0 +1,7 @@
+{
+  "schema": "duration",
+  "data": {
+    "amount": 0,
+    "unit": "days"
+  }
+}
