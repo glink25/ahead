@@ -10,7 +10,8 @@ pnpm dev
 ```
 
 OAuth 需要同时启动 `pnpm dev:auth`，并把 `VITE_AUTH_BASE_URL` 设为
-`http://localhost:8787`。PAT 与 OAuth 凭证均写入浏览器 IndexedDB；Auth Worker
-只负责授权跳转、App 安装引导与 refresh。页面刷新恢复登录态不依赖 Auth 是否在线。
-当前 PWA 提供基础 Web App Manifest；如需离线缓存，后续可接入 service worker 或
-`vite-plugin-pwa`。
+`http://localhost:8787`。授权成功后 Auth 会带着 `github_authorized` 回到 `/login`；
+页面会暂存该参数、硬跳转到干净 URL，再写入 IndexedDB 并进入已登录态。PAT 与 OAuth
+凭证均写在本机 IndexedDB；刷新恢复登录不依赖 Auth 是否在线。开发时 Vite 已 alias
+到 packages 源码，改 `@ahead/github` 无需先 build。当前 PWA 提供基础 Web App
+Manifest；如需离线缓存，后续可接入 service worker 或 `vite-plugin-pwa`。

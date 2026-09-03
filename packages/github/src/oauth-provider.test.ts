@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { probeCapabilities } from './capabilities.js'
 import {
   describeOAuthError,
   extractAuthorizedParam,
@@ -87,6 +88,20 @@ describe('GitHubOAuthError helpers', () => {
 
 describe('GitHubOAuthProvider', () => {
   afterEach(() => {
+    vi.mocked(probeCapabilities).mockReset()
+    vi.mocked(probeCapabilities).mockResolvedValue({
+      identity: { login: 'octocat', id: 1 },
+      capabilities: {
+        canReadPublic: true,
+        canReadPrivate: true,
+        canCreateRepository: true,
+        canWriteContents: true,
+        canReadMarketIssues: true,
+        missingScopes: [],
+        diagnostics: [],
+      },
+      scopes: ['repo'],
+    })
     vi.clearAllMocks()
   })
 
@@ -130,6 +145,28 @@ describe('GitHubOAuthProvider', () => {
     const restored = await provider.restore()
     expect(restored?.identity.login).toBe('octocat')
     expect(fetcher).not.toHaveBeenCalled()
+  })
+
+  it('keeps stored credentials when profile probe fails after redirect', async () => {
+    vi.mocked(probeCapabilities).mockRejectedValueOnce(new Error('GitHub /user failed'))
+    const store = memoryStore()
+    const provider = new GitHubOAuthProvider({
+      authBaseUrl: 'http://localhost:8787',
+      redirectUri: 'http://localhost:4455/login',
+      credentialStore: store,
+    })
+
+    const session = await provider.consumeRedirect(
+      'http://localhost:4455/login?github_authorized=' + encodeURIComponent(JSON.stringify({
+        access_token: 'ghu_kept',
+        expires_in: 3600,
+        scope: 'repo',
+      })),
+    )
+
+    expect(await store.get()).toMatchObject({ accessToken: 'ghu_kept' })
+    expect(session?.providerId).toBe('github-oauth')
+    expect(session?.identity.login).toBe('github-user')
   })
 
   it('returns null when nothing is stored', async () => {

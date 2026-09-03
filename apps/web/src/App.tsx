@@ -1,14 +1,10 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
-import { Link, NavLink, Route, Routes, useParams } from 'react-router'
+import { Link, Navigate, NavLink, Route, Routes, useParams } from 'react-router'
 import { EventEditorState } from '@ahead/editor'
-import {
-  describeOAuthError,
-  GitHubOAuthError,
-  GitHubOAuthProvider,
-  PersonalAccessTokenProvider,
-} from '@ahead/github'
+import { GitHubOAuthProvider, PersonalAccessTokenProvider } from '@ahead/github'
 import { assignBucket, type RecommendationBucket } from '@ahead/recommendation'
 import { Alert, Badge, Button, Card, Input, Spinner, TextArea } from '@ahead/ui'
+import { bootstrapAuthSession } from './auth-bootstrap'
 import { t } from './i18n'
 import { useActiveProfile, useAuthSession } from './stores'
 import { indexedDbOAuthCredentialStore, indexedDbTokenStore } from './token-store'
@@ -280,6 +276,8 @@ function StudioPage() {
 function LoginPage() {
   const [token, setToken] = useState('')
   const [error, setError] = useState('')
+  const session = useAuthSession((state) => state.session)
+  const loading = useAuthSession((state) => state.loading)
   const setSession = useAuthSession((state) => state.setSession)
   const restoreError = useAuthSession((state) => state.restoreError)
   const setRestoreError = useAuthSession((state) => state.setRestoreError)
@@ -294,6 +292,19 @@ function LoginPage() {
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : '登录失败')
     }
+  }
+
+  if (loading) {
+    return (
+      <Card className="mx-auto flex max-w-lg flex-col items-center gap-3 py-12">
+        <Spinner />
+        <p className="text-sm text-slate-600">正在恢复登录态…</p>
+      </Card>
+    )
+  }
+
+  if (session) {
+    return <Navigate to="/" replace />
   }
 
   return (
@@ -343,37 +354,12 @@ export function App() {
   const setRestoreError = useAuthSession((state) => state.setRestoreError)
   useEffect(() => {
     setRestoreError(null)
-    const bootstrap = async () => {
-      const pendingRedirect = sessionStorage.getItem('_ahead_oauth_res')
-      if (pendingRedirect) {
-        sessionStorage.removeItem('_ahead_oauth_res')
-        try {
-          const session = await oauthProvider.consumeRedirect(pendingRedirect)
-          if (session) {
-            setSession(session)
-            return
-          }
-        } catch (error) {
-          setRestoreError(describeOAuthError(error))
-        }
-      }
-
-      const [patResult, oauthResult] = await Promise.allSettled([
-        patProvider.restore(),
-        oauthProvider.restore(),
-      ])
-      const pat = patResult.status === 'fulfilled' ? patResult.value : null
-      if (oauthResult.status === 'fulfilled') {
-        setSession(oauthResult.value ?? pat)
-        return
-      }
-      if (oauthResult.reason instanceof GitHubOAuthError && oauthResult.reason.kind === 'network') {
-        setRestoreError(describeOAuthError(oauthResult.reason))
-      }
-      setSession(pat)
-    }
-
-    void bootstrap().finally(() => setLoading(false))
+    void bootstrapAuthSession({ patProvider, oauthProvider })
+      .then(({ session, error }) => {
+        setSession(session)
+        setRestoreError(error)
+      })
+      .finally(() => setLoading(false))
   }, [setLoading, setRestoreError, setSession])
 
   return (

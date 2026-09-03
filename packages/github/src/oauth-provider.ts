@@ -1,4 +1,5 @@
 import type { AuthCredential, AuthProvider, AuthSession } from '@ahead/core'
+import { deriveCapabilitiesFromScopes } from '@ahead/core'
 import { probeCapabilities } from './capabilities.js'
 import type { OAuthCredentialStore, StoredOAuthCredential } from './oauth-credential-store.js'
 
@@ -163,11 +164,24 @@ export class GitHubOAuthProvider implements AuthProvider {
     if (!authorized) return null
     const stored = parseAuthorizedPayload(authorized)
     await this.persist(stored)
-    const probe = await probeCapabilities(async () => stored.accessToken)
-    return {
-      providerId: this.id,
-      identity: probe.identity,
-      capabilities: probe.capabilities,
+
+    try {
+      const probe = await probeCapabilities(async () => stored.accessToken)
+      return {
+        providerId: this.id,
+        identity: probe.identity,
+        capabilities: probe.capabilities,
+      }
+    } catch {
+      // Persistence already succeeded — do not discard the credential if /user probing fails.
+      return {
+        providerId: this.id,
+        identity: {
+          login: 'github-user',
+          id: 0,
+        },
+        capabilities: deriveCapabilitiesFromScopes(stored.scopes ?? []),
+      }
     }
   }
 
