@@ -1,7 +1,11 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import { Link, NavLink, Route, Routes, useParams } from 'react-router'
 import { EventEditorState } from '@ahead/editor'
-import { GitHubOAuthProvider, PersonalAccessTokenProvider } from '@ahead/github'
+import {
+  describeOAuthError,
+  GitHubOAuthProvider,
+  PersonalAccessTokenProvider,
+} from '@ahead/github'
 import { assignBucket, type RecommendationBucket } from '@ahead/recommendation'
 import { Alert, Badge, Button, Card, Input, Spinner, TextArea } from '@ahead/ui'
 import { t } from './i18n'
@@ -275,10 +279,14 @@ function LoginPage() {
   const [token, setToken] = useState('')
   const [error, setError] = useState('')
   const setSession = useAuthSession((state) => state.setSession)
+  const restoreError = useAuthSession((state) => state.restoreError)
+  const setRestoreError = useAuthSession((state) => state.setRestoreError)
+  const displayError = error || restoreError
 
   const loginWithPat = async (event: FormEvent) => {
     event.preventDefault()
     setError('')
+    setRestoreError(null)
     try {
       setSession(await patProvider.authenticate({ token }))
     } catch (reason) {
@@ -289,13 +297,15 @@ function LoginPage() {
   return (
     <Card className="mx-auto max-w-lg">
       <h1 className="text-2xl font-bold">登录 Ahead</h1>
-      <p className="mt-2 text-sm text-slate-600">令牌仅保存在此设备的 IndexedDB 中。</p>
+      <p className="mt-2 text-sm text-slate-600">
+        PAT 仅保存在此设备的 IndexedDB 中。GitHub OAuth 使用 Auth 服务的 HttpOnly Cookie 恢复会话，access token 不会写入浏览器存储。
+      </p>
       <form className="mt-6" onSubmit={loginWithPat}>
         <label className="block text-sm">GitHub Personal Access Token<Input className="mt-1" type="password" autoComplete="off" value={token} onChange={(event) => setToken(event.target.value)} /></label>
         <Button className="mt-4 w-full" type="submit">使用 PAT 登录</Button>
       </form>
       {oauthProvider.available && <Button className="mt-3 w-full bg-white text-slate-950 ring-1 ring-slate-300 hover:bg-slate-50" onClick={() => void oauthProvider.authenticate()}>使用 GitHub OAuth</Button>}
-      {error && <Alert className="mt-4" tone="error">{error}</Alert>}
+      {displayError && <Alert className="mt-4" tone="error">{displayError}</Alert>}
     </Card>
   )
 }
@@ -328,11 +338,21 @@ function EventPage() {
 export function App() {
   const setSession = useAuthSession((state) => state.setSession)
   const setLoading = useAuthSession((state) => state.setLoading)
+  const setRestoreError = useAuthSession((state) => state.setRestoreError)
   useEffect(() => {
-    Promise.all([patProvider.restore(), oauthProvider.restore()])
-      .then(([pat, oauth]) => setSession(oauth ?? pat))
+    setRestoreError(null)
+    Promise.allSettled([patProvider.restore(), oauthProvider.restore()])
+      .then(([patResult, oauthResult]) => {
+        const pat = patResult.status === 'fulfilled' ? patResult.value : null
+        if (oauthResult.status === 'fulfilled') {
+          setSession(oauthResult.value ?? pat)
+          return
+        }
+        setRestoreError(describeOAuthError(oauthResult.reason))
+        setSession(pat)
+      })
       .finally(() => setLoading(false))
-  }, [setLoading, setSession])
+  }, [setLoading, setRestoreError, setSession])
 
   return (
     <Shell>

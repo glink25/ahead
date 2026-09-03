@@ -9,6 +9,8 @@ pnpm install
 pnpm dev
 ```
 
-OAuth 需要同时启动 `pnpm dev:auth` 并配置 `VITE_AUTH_BASE_URL`。PAT 会写入浏览器
-IndexedDB，不会写入 localStorage。当前 PWA 提供基础 Web App Manifest；如需离线缓存，
+OAuth 需要同时启动 `pnpm dev:auth`，并把 `VITE_AUTH_BASE_URL` 设为
+`http://localhost:8787`（不要指向远程 Auth，否则跨站 Cookie 无法随 `/api/github/token`
+发送）。PAT 会写入浏览器 IndexedDB；OAuth 使用 Auth 域的 HttpOnly Cookie，不会写入
+localStorage / IndexedDB。当前 PWA 提供基础 Web App Manifest；如需离线缓存，
 后续可接入 service worker 或 `vite-plugin-pwa`。

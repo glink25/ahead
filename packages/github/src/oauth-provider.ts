@@ -34,6 +34,45 @@ export function isCredentialExpired(
   return expiresAt !== undefined && expiresAt <= now + skewMs
 }
 
+export class GitHubOAuthError extends Error {
+  readonly status?: number
+  readonly kind: 'unauthenticated' | 'http' | 'network' | 'invalid_response'
+
+  constructor(
+    message: string,
+    options: {
+      kind: GitHubOAuthError['kind']
+      status?: number
+      cause?: unknown
+    },
+  ) {
+    super(message, options.cause === undefined ? undefined : { cause: options.cause })
+    this.name = 'GitHubOAuthError'
+    this.kind = options.kind
+    if (options.status !== undefined) this.status = options.status
+  }
+}
+
+export function isUnauthenticatedOAuthError(error: unknown): boolean {
+  return error instanceof GitHubOAuthError && error.kind === 'unauthenticated'
+}
+
+export function describeOAuthError(error: unknown): string {
+  if (error instanceof GitHubOAuthError) {
+    if (error.kind === 'network') {
+      return '无法连接 Auth 服务。请确认本地已启动 pnpm dev:auth，或检查浏览器是否拦截了 Auth API（CSP / CORS）。'
+    }
+    if (error.kind === 'http') {
+      return `GitHub OAuth 会话恢复失败（HTTP ${error.status ?? 'unknown'}）。`
+    }
+    if (error.kind === 'invalid_response') {
+      return error.message
+    }
+  }
+  if (error instanceof Error && error.message) return error.message
+  return 'GitHub OAuth 会话恢复失败'
+}
+
 export interface GitHubOAuthProviderOptions {
   authBaseUrl?: string
   redirectUri?: string
@@ -78,9 +117,10 @@ export class GitHubOAuthProvider implements AuthProvider {
         identity: probe.identity,
         capabilities: probe.capabilities,
       }
-    } catch {
+    } catch (error) {
       this.credential = null
-      return null
+      if (isUnauthenticatedOAuthError(error)) return null
+      throw error instanceof Error ? error : new Error(String(error))
     }
   }
 
@@ -92,18 +132,37 @@ export class GitHubOAuthProvider implements AuthProvider {
       throw new Error('GitHub OAuth is not configured')
     }
 
-    const response = await this.fetcher(`${this.authBaseUrl}/api/github/token`, {
-      method: 'POST',
-      credentials: 'include',
-      headers: { Accept: 'application/json' },
-    })
+    let response: Response
+    try {
+      response = await this.fetcher(`${this.authBaseUrl}/api/github/token`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { Accept: 'application/json' },
+      })
+    } catch (cause) {
+      throw new GitHubOAuthError('GitHub OAuth token request failed to reach the Auth service', {
+        kind: 'network',
+        cause,
+      })
+    }
+    if (response.status === 401) {
+      throw new GitHubOAuthError('GitHub OAuth session is unauthenticated', {
+        kind: 'unauthenticated',
+        status: 401,
+      })
+    }
     if (!response.ok) {
-      throw new Error(`GitHub OAuth token request failed with HTTP ${response.status}`)
+      throw new GitHubOAuthError(
+        `GitHub OAuth token request failed with HTTP ${response.status}`,
+        { kind: 'http', status: response.status },
+      )
     }
     const body = await response.json() as OAuthTokenResponse
     const accessToken = body.accessToken ?? body.access_token
     if (!accessToken) {
-      throw new Error('GitHub OAuth token response did not include an access token')
+      throw new GitHubOAuthError('GitHub OAuth token response did not include an access token', {
+        kind: 'invalid_response',
+      })
     }
     const scopes = body.scopes ?? body.scope?.split(',').map((scope) => scope.trim()).filter(Boolean)
     const expiresAt = resolveExpiresAt(body)
