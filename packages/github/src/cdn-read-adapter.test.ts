@@ -8,6 +8,19 @@ import {
 const locator = { scheme: 'github', owner: 'ahead-org', repo: 'events' }
 
 describe('CDN read adapter', () => {
+  it('shares repository inspection and never resolves an already pinned SHA', async () => {
+    const sha = 'a'.repeat(40)
+    const fetcher = vi.fn().mockResolvedValueOnce(new Response(JSON.stringify({ default_branch: 'trunk', private: false })))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ sha })))
+      .mockResolvedValueOnce(new Response('feed'))
+    const adapter = new CdnReadAdapter(fetcher)
+    const snapshots = await Promise.all([adapter.inspect(locator), adapter.inspect(locator)])
+    expect(snapshots[0]).toEqual(snapshots[1])
+    expect(fetcher).toHaveBeenCalledTimes(2)
+    await adapter.readFile(locator, 'feeds/games.yaml', { ref: sha })
+    expect(fetcher).toHaveBeenCalledTimes(3)
+    expect(fetcher.mock.calls[2]?.[0]).toContain('@' + sha)
+  })
   it('builds immutable, path-safe URLs', () => {
     expect(buildJsDelivrUrl(locator, 'abc123', 'feeds/中文 feed.yaml')).toBe(
       'https://cdn.jsdelivr.net/gh/ahead-org/events@abc123/feeds/%E4%B8%AD%E6%96%87%20feed.yaml',

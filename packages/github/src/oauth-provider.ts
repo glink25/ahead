@@ -144,7 +144,7 @@ export class GitHubOAuthProvider implements AuthProvider {
     this.authBaseUrl = options.authBaseUrl?.replace(/\/+$/, '') ?? ''
     this.redirectUri = options.redirectUri ?? globalThis.location?.href ?? ''
     this.credentialStore = options.credentialStore
-    this.fetcher = options.fetch ?? globalThis.fetch
+    this.fetcher = options.fetch ?? globalThis.fetch.bind(globalThis)
     this.navigate = options.navigate ?? ((url) => globalThis.location.assign(url))
     this.available = this.authBaseUrl.length > 0
   }

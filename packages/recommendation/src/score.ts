@@ -1,5 +1,6 @@
 import type { TemporalValue } from '@ahead/schema'
 import {
+  expandRecurrence,
   resolveOccurrenceEnd,
   selectCurrentSchedule,
   type ResolvedEvent,
@@ -44,6 +45,12 @@ export function eventInterval(
   if (!schedule) return undefined
   const start = temporalDate(schedule.value)
   if (!start || !Number.isFinite(start.getTime())) return undefined
+  if (event.recurrence) {
+    const horizon = new Date(clock)
+    horizon.setUTCFullYear(horizon.getUTCFullYear() + 100)
+    const next = expandRecurrence(event, { from: clock, to: horizon, max: 1 })[0]
+    if (next) return { start: new Date(next.start), end: next.end ? new Date(next.end) : undefined }
+  }
   const endIso = resolveOccurrenceEnd(start.toISOString(), event.duration, schedule.value.kind)
   return { start, end: endIso ? new Date(endIso) : undefined }
 }

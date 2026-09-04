@@ -32,10 +32,14 @@ async function json<T>(response: Response, description: string): Promise<T> {
 }
 
 export class CdnReadAdapter implements RepositoryAdapter {
-  constructor(private readonly fetcher: Fetch = globalThis.fetch) {}
+  private readonly pending = new Map<string, Promise<RepositorySnapshot>>()
+  constructor(private readonly fetcher: Fetch = (input, init) => globalThis.fetch(input, {
+    ...init, signal: init?.signal ?? AbortSignal.timeout(15_000),
+  })) {}
 
   async resolveHeadSha(locator: ResourceLocator, ref?: string): Promise<string> {
     const target = ref ?? locator.ref ?? 'HEAD'
+    if (/^[0-9a-f]{40}$/iu.test(target)) return target
     const base = `https://api.github.com/repos/${encodeURIComponent(locator.owner)}/${encodeURIComponent(locator.repo)}`
     const headers = { Accept: 'application/vnd.github+json' }
     const commitResponse = await this.fetcher(`${base}/commits/${encodeURIComponent(target)}`, {
@@ -51,7 +55,18 @@ export class CdnReadAdapter implements RepositoryAdapter {
     return data.object.sha
   }
 
-  async inspect(locator: ResourceLocator): Promise<RepositorySnapshot> {
+  inspect(locator: ResourceLocator): Promise<RepositorySnapshot> {
+    const key = `${locator.owner.toLowerCase()}/${locator.repo.toLowerCase()}@${locator.ref ?? 'HEAD'}`
+    let pending = this.pending.get(key)
+    if (!pending) {
+      pending = this.inspectRepository(locator)
+      this.pending.set(key, pending)
+      void pending.catch(() => this.pending.delete(key))
+    }
+    return pending
+  }
+
+  private async inspectRepository(locator: ResourceLocator): Promise<RepositorySnapshot> {
     const url = `https://api.github.com/repos/${encodeURIComponent(locator.owner)}/${encodeURIComponent(locator.repo)}`
     const repository = await json<{ default_branch: string; private: boolean }>(
       await this.fetcher(url, { headers: { Accept: 'application/vnd.github+json' } }),
@@ -72,8 +87,8 @@ export class CdnReadAdapter implements RepositoryAdapter {
     opts?: { ref?: string },
   ): Promise<VersionedFile> {
     const sha = await this.resolveHeadSha(locator, opts?.ref)
-    const cdnResponse = await this.fetcher(buildJsDelivrUrl(locator, sha, path))
-    const response = cdnResponse.ok
+    const cdnResponse = await this.fetcher(buildJsDelivrUrl(locator, sha, path)).catch(() => undefined)
+    const response = cdnResponse?.ok
       ? cdnResponse
       : await this.fetcher(buildRawGitHubUrl(locator, sha, path))
     if (!response.ok) {
@@ -86,10 +101,11 @@ export class CdnReadAdapter implements RepositoryAdapter {
   async readTree(locator: ResourceLocator, ref: string): Promise<TreeEntry[]> {
     const sha = await this.resolveHeadSha(locator, ref)
     const url = `https://api.github.com/repos/${encodeURIComponent(locator.owner)}/${encodeURIComponent(locator.repo)}/git/trees/${encodeURIComponent(sha)}?recursive=1`
-    const data = await json<{ tree: TreeEntry[] }>(
+    const data = await json<{ tree: TreeEntry[]; truncated?: boolean }>(
       await this.fetcher(url, { headers: { Accept: 'application/vnd.github+json' } }),
       'Read public GitHub tree',
     )
+    if (data.truncated) throw new Error('Repository tree truncated; narrow the feed or inline its events')
     return data.tree
   }
 

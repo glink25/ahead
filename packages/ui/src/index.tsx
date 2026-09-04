@@ -9,6 +9,16 @@ import {
 const cx = (...classes: Array<string | false | null | undefined>) =>
   classes.filter(Boolean).join(' ')
 
+/** Stateless display primitives; feed and profile state lives in the web features. */
+export function Poster(props: HTMLAttributes<HTMLElement>) { return <article {...props} /> }
+export function Countdown(props: HTMLAttributes<HTMLParagraphElement>) { return <p {...props} /> }
+export function TagChip(props: HTMLAttributes<HTMLSpanElement>) { return <span {...props} /> }
+export function SegmentedControl(props: HTMLAttributes<HTMLElement>) { return <nav {...props} /> }
+export const IconButton = forwardRef<HTMLButtonElement, ButtonHTMLAttributes<HTMLButtonElement>>(
+  ({ type = 'button', ...props }, ref) => <button ref={ref} type={type} {...props} />,
+)
+IconButton.displayName = 'IconButton'
+
 export const Button = forwardRef<HTMLButtonElement, ButtonHTMLAttributes<HTMLButtonElement>>(
   ({ className, type = 'button', ...props }, ref) => (
     <button

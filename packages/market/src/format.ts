@@ -7,12 +7,17 @@ export const MARKET_SOURCE_PATTERN = /<!--\s*ahead:source:(\{[\s\S]*?\})\s*-->/
 function isSourceMetadata(value: unknown): value is MarketSourceMetadata {
   if (!value || typeof value !== 'object') return false
   const candidate = value as Partial<MarketSourceMetadata>
+  const localized = (text: unknown) => text === undefined || (text !== null && typeof text === 'object' && !Array.isArray(text) && Object.values(text).every((entry) => typeof entry === 'string'))
   return (
     candidate.schema === 1 &&
     typeof candidate.locator === 'string' &&
     /^[a-z][a-z0-9+.-]*:.+$/u.test(candidate.locator) &&
     (candidate.manifestPath === undefined || typeof candidate.manifestPath === 'string') &&
-    (candidate.resourceType === 'event-feed' || candidate.resourceType === 'user-data')
+    (candidate.resourceType === 'event-feed' || candidate.resourceType === 'user-data') &&
+    localized(candidate.name) && localized(candidate.description) &&
+    (candidate.tags === undefined || (Array.isArray(candidate.tags) && candidate.tags.every((tag) => typeof tag === 'string'))) &&
+    (candidate.validatedSha === undefined || (typeof candidate.validatedSha === 'string' && /^[a-f0-9]{40}$/iu.test(candidate.validatedSha))) &&
+    (candidate.validatedAt === undefined || (typeof candidate.validatedAt === 'string' && Number.isFinite(Date.parse(candidate.validatedAt))))
   )
 }
 
@@ -43,5 +48,5 @@ export function serializeManifestBlock(manifest: string): string {
 }
 
 export function serializeSourceBlock(source: MarketSourceMetadata): string {
-  return `<!-- ahead:source:${JSON.stringify(source)} -->`
+  return `<!-- ahead:source:${JSON.stringify(source).replace(/</gu, '\\u003c').replace(/>/gu, '\\u003e')} -->`
 }

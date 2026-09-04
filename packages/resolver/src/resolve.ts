@@ -1,4 +1,5 @@
 import type { EventFeed, UserData } from '@ahead/schema'
+import { sourceKey } from '@ahead/protocol'
 import { ResourceGraph } from './graph.js'
 import { mergeEvents } from './merge.js'
 import { applyPatches } from './patch.js'
@@ -57,7 +58,7 @@ export function resolve(options: ResolveOptions): ResolvedProfile {
   for (const { sourceLocator, user } of users) {
     graph.addResource(sourceLocator, 'user')
     for (const subscription of user.subscriptions ?? []) {
-      graph.addEdge(sourceLocator, subscription.locator, subscription.kind ?? 'event-feed')
+      graph.addEdge(sourceLocator, sourceKey(subscription), subscription.kind ?? 'event-feed')
     }
   }
   graph.assertNoFeedEdges()
@@ -66,7 +67,7 @@ export function resolve(options: ResolveOptions): ResolvedProfile {
 
   const subscriptionPriorities = Object.fromEntries(
     (active.subscriptions ?? []).map((subscription) => [
-      subscription.locator,
+      sourceKey(subscription),
       subscription.priority ?? 0,
     ]),
   )

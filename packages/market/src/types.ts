@@ -5,6 +5,11 @@ export interface MarketSourceMetadata {
   locator: string
   manifestPath?: string
   resourceType: MarketResourceType
+  name?: Record<string, string>
+  description?: Record<string, string>
+  tags?: string[]
+  validatedSha?: string
+  validatedAt?: string
 }
 
 export interface MarketEntry {

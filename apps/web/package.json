@@ -7,13 +7,17 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "typecheck": "tsc -b --pretty false",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run src",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@ahead/core": "workspace:*",
     "@ahead/editor": "workspace:*",
     "@ahead/github": "workspace:*",
+    "@ahead/market": "workspace:*",
+    "@ahead/protocol": "workspace:*",
     "@ahead/recommendation": "workspace:*",
+    "@ahead/resolver": "workspace:*",
     "@ahead/schema": "workspace:*",
     "@ahead/ui": "workspace:*",
     "react": "^19.0.0",
@@ -22,6 +26,7 @@
     "zustand": "^5.0.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "@tailwindcss/vite": "^4.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",

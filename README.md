@@ -4,14 +4,15 @@
 
 > GitHub Repositories → Open Event Feed → Client-side Resolver → 盼头
 
-## 特性（v1 脚手架）
+## 特性
 
 - **OEF v0.1** 协议（JSON Schema 权威源 + fixtures）
 - **双登录**：GitHub PAT + OAuth（`apps/auth` Worker）
-- **匿名浏览**：公开 Market / Feed 可走 CDN 只读
+- **双 Tab**：发现海报流 / 我的时间轴与月历，匿名订阅、喜爱、隐藏与撤销
+- **真实数据**：公开 Market / Feed 走 CDN 只读，IndexedDB 缓存与离线数据回退
 - **Resolver / Recommendation**：确定性合并、时间桶推荐
 - **Studio**：Form / YAML 共用 schema 校验
-- **Market**：同仓库 Issues + triage 机器人
+- **Market**：轻量 Issues 注册表 + triage 机器人；内容从源仓库读取，同仓库多 manifest 独立订阅
 
 ## 快速开始
 
@@ -48,6 +49,8 @@ pnpm dev:auth
 pnpm test
 pnpm typecheck
 pnpm build
+pnpm --filter @ahead/web exec playwright install chromium
+pnpm test:e2e
 pnpm exec tsx scripts/bench-recommend.ts
 ```
 

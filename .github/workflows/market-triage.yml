@@ -4,6 +4,15 @@ on:
   issues:
     types: [opened, edited, reopened]
   workflow_dispatch:
+    inputs:
+      issue_number:
+        description: Issue number to validate
+        required: true
+        type: string
+
+concurrency:
+  group: market-triage-${{ github.event.issue.number || inputs.issue_number }}
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -11,6 +20,7 @@ permissions:
 
 jobs:
   validate:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.issue.labels.*.name, 'type:event-feed') || contains(github.event.issue.labels.*.name, 'type:user-data')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -24,7 +34,6 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm market:triage
         env:
-          ISSUE_BODY: ${{ github.event.issue.body }}
-          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_NUMBER: ${{ github.event.issue.number || inputs.issue_number }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -106,6 +106,7 @@ export interface Patch {
 
 export interface Subscription {
   locator: string
+  manifestPath?: string
   priority?: number
   kind?: 'event-feed' | 'user-data'
 }

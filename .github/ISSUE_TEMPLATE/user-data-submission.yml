@@ -3,6 +3,12 @@ description: 提交可公开访问的 OEF user-data manifest
 title: "[User Data] "
 labels: ["type:user-data"]
 body:
+  - type: dropdown
+    id: resource-type
+    attributes:
+      label: Resource type
+      options: [user-data]
+      default: 0
   - type: input
     id: locator
     attributes:

@@ -3,6 +3,12 @@ description: 将一个 GitHub 仓库中的 ahead.yaml 提交到市场
 title: "[Feed] "
 labels: ["type:event-feed"]
 body:
+  - type: dropdown
+    id: resource-type
+    attributes:
+      label: Resource type
+      options: [event-feed]
+      default: 0
   - type: input
     id: locator
     attributes:

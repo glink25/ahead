@@ -21,6 +21,11 @@
             "type": "string",
             "pattern": "^github:[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"
           },
+          "manifestPath": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^(?!/)(?!.*//)(?!.*?/$)(?!.*(?:^|/)[.]{1,2}(?:/|$))[^\\\\?#\\u0000-\\u001f]+$"
+          },
           "priority": {
             "type": "integer",
             "minimum": -3,
