@@ -1,58 +1,83 @@
-# OEF Protocol v0.1
+# Open Event Feed（OEF）v0.1
 
-Open Event Feed（OEF）是 Ahead 的数据协议。JSON Schema 位于 [`packages/schema/schemas`](../../packages/schema/schemas)，为唯一权威源。
+OEF 用 YAML 或 JSON 描述未来事件及个人关注的内容，Ahead 根据这些源数据计算时间轴、日历和推荐。
 
-**给大模型直接写合法事件流**：请使用完整提示词文档 → [`LLM_AUTHORING.md`](./LLM_AUTHORING.md)。
+## 格式入口
 
-## 对象
+编写事件流可从下方完整 `ahead.yaml` 示例开始。完整字段与约束以 [JSON Schema 源文件](../../packages/schema/schemas)为准，按所需对象读取对应文件及其 `$ref` 引用：
 
-| 对象 | 说明 |
-|---|---|
-| Event | 一件具体值得等待的事 |
-| EventFeed | 一组 Event（内容） |
-| UserData | 一个 Profile 对世界的视角 |
-| Patch | 用户对某 Event 字段的本地覆盖 |
-| LocalizedText | BCP 47 键文本映射 |
-| ScheduleTimeline | 日期演变历史；当前值由客户端解析 |
-| TemporalValue | exact / datetime / month / quarter / year / range / unknown |
-| Duration | 每次 Occurrence 开始之后持续多久（可选）；详见 [duration.md](./duration.md) |
-| Evidence | 支撑 schedule 的证据 |
-| Recurrence | 有界重复规则 |
-| Locator | `github:owner/repo`（v1） |
+- 事件流：[EventFeed](../../packages/schema/schemas/event-feed.json) → [Event](../../packages/schema/schemas/event.json) → [ScheduleTimeline](../../packages/schema/schemas/schedule-timeline.json)、[TemporalValue](../../packages/schema/schemas/temporal-value.json)。
+- 个人资料：[UserData](../../packages/schema/schemas/user-data.json)；持续与重复：[Duration](../../packages/schema/schemas/duration.json)、[Recurrence](../../packages/schema/schemas/recurrence.json)。
+- 程序接入：[TypeScript 类型](../../packages/schema/src/types.ts)、[校验器](../../packages/schema/src/index.ts)；边界样例见 [fixtures](../../fixtures)。
 
-## Duration vs Range
+Schema 是结构约束的权威源；TypeScript 类型用于程序接入，[schemas/v0.1](../../schemas/v0.1)是发布副本。
 
-| | `duration` | `TemporalValue.range` |
-|---|---|---|
-| 回答 | 持续多久 | 何时开始仍不确定 |
-| 例子 | 国庆连休 7 天 | 「大概 2027 年上半年」 |
-| 与 recurrence | 每次展开共用同一 duration | 不应用来表达多日活动 |
+## 核心语义
 
-```text
-Occurrence.start  ← schedule 锚点 + recurrence
-Occurrence.end    ← start + duration（无 duration 则无 end）
+- **Event** 是一件具体的事；**EventFeed** 汇集事件；**UserData** 保存个人订阅、收藏和偏好。
+- Feed 可以内嵌 `events`，或用 `eventsGlob` 引用同仓库文件，不组合其他 Feed。UserData 可以订阅事件流或其他用户资料；关注用户在 Ahead 中参考其公开收藏，不继承其订阅。
+- 标题等多语言文本使用语言代码到文本的映射，例如 `title: { zh-CN: 示例活动 }`。
+- `schedule` 保存开始时间及其变化记录；日期不确定时使用相应精度，不虚构精确日期。当前条目的选择顺序见 [schedule 实现](../../packages/resolver/src/schedule.ts)。
+- `duration` 表示每次开始后持续多久，`recurrence` 表示重复发生；`range` 表示开始时间的不确定窗口，不能用来表示活动持续区间。
+- 倒计时、推荐分和展开后的 Occurrence 属于计算结果，不写入源数据；自定义字段放在 Schema 允许的 `extensions` 中。
+
+真实事件的日期、置信度和证据应符合来源。节假日的放假与调休安排需按对应年份的可靠公告确认，不能用固定年度重复规则推断每年的实际假期。
+
+## 完整事件流示例
+
+以下为虚构活动，不代表真实安排。保存为仓库的 `ahead.yaml`；示例只使用内嵌事件，无需其他文件。
+
+```yaml
+oefVersion: "0.1"
+kind: event-feed
+id: demo-events
+name:
+  zh-CN: 示例活动
+events:
+  - id: autumn-reading-days
+    title:
+      zh-CN: 秋日阅读会（虚构）
+    schedule:
+      - id: announced
+        value:
+          kind: exact
+          date: "2027-10-01"
+        recordedAt: "2027-08-01T00:00:00Z"
+        confidence: confirmed
+    duration:
+      amount: 3
+      unit: days
 ```
 
-日历日约定：`unit: days|weeks` 且锚点为 date-only 时，`amount: N` 表示含首日共 N 个日历日；运行时 `end` 为排他边界（`start + N days` 的 00:00 UTC）。
+日期锚点配合 days / weeks 时，时长包含首日；此例覆盖 10 月 1–3 日，计算出的结束边界为 10 月 4 日 00:00 UTC，不包含该边界。datetime 或 minutes / hours 使用固定时长相加；模糊时间不计算精确结束时刻。计算与重复跨度限制见 [duration 实现](../../packages/resolver/src/duration.ts)，这些运行时限制不由 Schema 校验代替。
 
-`minutes` / `hours` 或 `datetime` 锚点：`end = start + amount × unit`。
+以下是可用于上述事件的局部片段，并非完整文件：
 
-模糊锚点（month/quarter/year/unknown/range）可携带 duration，但不计算精确 `end`。
+```yaml
+# 替换 schedule 条目的 value：只知道月份
+value: { kind: month, year: 2027, month: 10 }
+```
 
-若 `duration` 跨度 ≥ recurrence 间隔（Occurrence 会重叠），Resolver **硬拒绝**。
+```yaml
+# 添加到 Event：每年重复，共三次（虚构活动的固定安排）
+recurrence: { freq: yearly, count: 3 }
+```
 
-## 规则摘要
+## 个人资料示例
 
-1. 未知根字段拒绝；`extensions` 内未知键完整保留。
-2. Source ≠ Computed：倒计时、推荐分、Occurrence 不入库。
-3. Feed 不组合 Feed；资源边仅 `User → Feed` / `User → User`。
-4. 订阅可选 `priority: -3..3`，默认 `0`。
-5. Schedule 选择：可信度 → 精度 → 时间 → 稳定键。
+以下为完整 UserData，仓库地址为示意；替换成实际事件源后使用。省略 manifestPath 时读取 `ahead.yaml`，同仓库的其他清单可指定独立路径。
 
-## Fixtures
+```yaml
+oefVersion: "0.1"
+kind: user-data
+id: demo-profile
+displayName:
+  zh-CN: 我的盼头
+subscriptions:
+  - locator: github:example/events
+    kind: event-feed
+favorites:
+  - autumn-reading-days
+```
 
-`fixtures/valid` / `fixtures/invalid` 由 `@ahead/schema` 测试驱动。
-
-## 版本
-
-当前冻结目标：`oef-v0.1.0`（含 duration 字段；缺省时旧数据无 end）。
+协议校验只确认数据结构，不证明事件事实准确或远端仓库可访问。公开发布流程见 [Market](../market/README.md)，个人资料的保存与合并见[资料与同步](../profile-sync.md)。

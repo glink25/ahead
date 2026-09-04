@@ -1,20 +1,11 @@
-# Ahead 文档
+# 文档
 
-本目录区分两类文档：
-
-| 路径 | 是否开源入库 | 用途 |
-|---|---|---|
-| [`protocol/`](./protocol/) | 是 | OEF 协议说明、给人类与 AI 的写作规范 |
-| [`market/`](./market/) | 是 | 公开 Market（Issues 注册表）说明 |
-| [`github/`](./github/) | 是 | 认证与仓库访问的公开集成说明 |
-| **`.local/`** | **否**（已被 `.gitignore` 忽略） | 开发计划、产品手册草稿、Spike、威胁模型、发布清单、托管部署笔记等内部材料 |
-
-本地开发文档请放在 `docs/.local/`（例如 `PLAN.md`、`ahead产品&开发手册.md`、`architecture/`、`deploy/`）。该路径不会进入 Git。
-
-## 快速入口
-
-- 协议概览：[protocol/README.md](./protocol/README.md)
-- **给大模型的完整写作提示词**：[protocol/LLM_AUTHORING.md](./protocol/LLM_AUTHORING.md)
-- Duration 语义：[protocol/duration.md](./protocol/duration.md)
-- 机器权威源：[`packages/schema/schemas`](../packages/schema/schemas)
-- 合法/非法样例：[`fixtures/`](../fixtures/)
+| 文档 | 用途 |
+|---|---|
+| [OEF 协议](protocol/README.md) | 人与 AI 共用的协议语义、YAML 示例及 Schema 入口 |
+| [Web 开发](../apps/web/README.md) | 本地启动、配置与部署 |
+| [GitHub 集成](github/README.md) | 登录与仓库访问边界 |
+| [Market](market/README.md) | 发布、审核与下架事件源和公开资料 |
+| [资料与同步](profile-sync.md) | 本地保存、多资料隔离与同步冲突 |
+| [浏览器服务](../apps/web/src/services/README.md) | 公开源读取的调用边界 |
+| [核心链路验证](core-path-verification.md) | 自动化回归与真实账号验收 |

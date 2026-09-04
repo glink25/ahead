@@ -1,37 +1,23 @@
-# GitHub 集成（公开说明）
+# GitHub 集成
 
-面向贡献者与自托管用户：Ahead 如何用 GitHub 做存储与登录。
+GitHub 仓库保存事件和个人资料，仓库可见性决定公开或私密访问。登录支持 PAT 与 GitHub App 用户 OAuth；业务层通过统一凭证接口访问仓库。
 
-## 双认证
+## 登录与部署
 
-| 方式 | Provider | Token 存储 |
-|---|---|---|
-| classic PAT | `PersonalAccessTokenProvider` | IndexedDB（`github-pat`） |
-| OAuth（GitHub App User authorization） | `GitHubOAuthProvider` + `apps/auth` | IndexedDB（`github-oauth`）；Auth 仅中转 code→token / refresh，并引导安装 App |
+PAT 与 OAuth 凭证保存在本机 IndexedDB；刷新页面可从本机恢复登录。新 OAuth 登录和令牌刷新需要 `apps/auth` Worker，它负责授权交换、刷新及 App 安装引导。未配置 Auth 地址时只提供 PAT 登录。
 
-两者均通过 `getCredential()` 注入 Octokit；业务层不感知 token 来源。未配置 Auth Worker 时，UI 仅展示 PAT。不使用 GitHub App **installation token** 建仓，但 OAuth 回调会检查用户是否已安装 App；未安装则先跳转安装页。安装完成后 GitHub 打回 **Auth Setup URL**（与 Callback 相同的后端 API），由服务端把已密封的 token 经 `github_authorized` 带回前端落盘。
-
-自托管时自行部署 `apps/auth`（Cloudflare Worker），并用环境变量配置 Auth 基址、App slug 与前端 Origin 白名单。
-
-## 匿名只读
-
-公开仓库优先 `CdnReadAdapter`：`cdn.jsdelivr.net/gh/{owner}/{repo}@{commitSha}/...`（用不可变 SHA，避免分支缓存延迟）。
-
-## 本地 Auth Worker
+本地启用 OAuth，在仓库根目录执行：
 
 ```bash
 cp apps/auth/.env.example apps/auth/.dev.vars
-# 填入 GITHUB_CLIENT_ID / GITHUB_CLIENT_SECRET / GITHUB_APP_SLUG / STATE_SECRET / REDIRECT_URI_ALLOWLIST / FRONTEND_ORIGIN
+# 按文件注释填写 GitHub App 和授权配置
 pnpm dev:auth
 ```
 
-Web `.env`：
+Web 的 Auth 地址见 [Web 环境模板](../../apps/web/.env.example)，App 凭证与允许的前端 Origin 见 [Auth 环境模板](../../apps/auth/.env.example)。自托管时部署 Worker，并按实际前后端地址设置 GitHub App 回调及允许的 Origin；回调与安装流程见 [Auth 实现](../../apps/auth/src/index.ts)。
 
-```bash
-VITE_AUTH_BASE_URL=http://localhost:8787
-VITE_GITHUB_MARKET_REPOSITORY=glink25/ahead
-```
+## 访问边界
 
-刷新登录态只读 IndexedDB，不要求 Auth 常开；新登录与令牌刷新仍需 Auth。
+公开内容可通过固定 commit SHA 的 CDN 地址读取；GitHub API 凭证只发送到 GitHub API 域名。认证和私密同步不使用公开内容缓存，具体策略见[浏览器服务](../../apps/web/src/services/README.md)。
 
-内部 Spike、威胁模型、发布清单见本地 `docs/.local/architecture/`（不入库）。
+接口与实现入口：[认证类型](../../packages/core/src/auth/types.ts)、[仓库接口](../../packages/core/src/repository/types.ts)、[GitHub 适配层](../../packages/github/src/index.ts)。个人资料的仓库关联及冲突处理见[同步说明](../profile-sync.md)。

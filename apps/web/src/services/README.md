@@ -1,26 +1,18 @@
-# Browser-side market API
+# 浏览器公开源服务
 
-UI and stores use `marketApi()` from `market.ts`. This is an in-process business API, not an HTTP server. Do not call GitHub, manage ETags, or open feed caches from a UI component.
+页面和 store 通过 [marketApi()](market.ts)读取市场与公开源。服务负责解析、校验、版本固定、缓存和请求调度，UI 不直接管理 GitHub 请求或源缓存。
 
-```ts
-const api = marketApi()
-for await (const event of api.market.stream({ cursor, signal })) {
-  // Merge feed/user updates by sourceLocator; append listings by sourceKey.
-  // Save progress.cursor for pause/resume within this service session.
-}
-```
+接口与事件类型直接查看 [MarketApi](market-api.ts)，传输与限流实现查看 [PublicReadClient](public-read-client.ts)。
 
-- `market.snapshot()` returns previously seen market listings without networking.
-- `sources.snapshot(sources)` yields validated locally cached feeds/profiles.
-- `relatedSources(profile)` resolves subscriptions plus known sources containing favorite/pinned event IDs, using local data only.
-- `sources.read({ sources, signal, refresh })` streams explicit public source reads.
-- `market.stream({ cursor, signal, refresh })` streams discovery. Stop consumption using the signal when discovery is hidden. Resume using the last cursor; re-delivery is allowed and must be merged idempotently.
-- Omit the cursor to start a new traversal. `refresh: true` revalidates mutable data while retaining immutable content. A cursor is in-memory and scoped to one service identity, not a portable bookmark.
-- `listings` updates during traversal are cumulative but not authoritative for removals until `progress.complete`. A cached snapshot may include delisted sources until a complete traversal reconciles it.
-- A normal source error does not stop other sources. A page failure or rate limit ends the stream. Errors remain visible even if cached content is available. An explicit retry resumes an interrupted traversal; a completed traversal with source errors can be restarted to retry those sources.
+## 消费约定
 
-The service owns parsing, SHA-pinned feed expansion, persistence and cache policy. `PublicReadClient` is its internal transport: 10-minute mutable TTL, ETag revalidation, immutable SHA caching, request coalescing, serial GitHub requests at least one second apart, and at most four content requests. Signal cancellation detaches a reader; shared requests remain alive for other readers. Queued requests with no readers are discarded.
+- 快照可先展示本地内容；流式更新按源身份幂等合并，取消消费使用 AbortSignal。
+- 游标仅属于当前服务会话，用于暂停和恢复；不能作为持久书签。重新开始遍历可重新交付已见数据。
+- 目录增量在遍历完成前不能用于判定下架；缓存目录可能暂时包含旧条目。
+- 单源失败不阻断其他源；分页失败或限流会结束读取。即使存在缓存也保留错误状态，重试由调用方显式发起。
 
-API tokens are supplied by the application auth provider only for the GitHub API origin. HTTP response caches and limiter state are identity-scoped. Read-through access to the old public-only feed stores preserves offline data from existing installations; new writes use the scoped stores. No private-sync or write requests use this cache.
+## 缓存与认证边界
 
-The limiter is local to this client instance. It cannot coordinate other browser tabs, devices, applications, or users behind the same anonymous IP. Rate-limit responses block further network API requests until their recovery time and are not retried automatically. A fresh cache hit is still usable during that interval.
+可变资源重新验证，固定 SHA 内容复用缓存。共享请求的取消只分离当前读者，其他读者可继续使用。TTL、并发及请求间隔以传输实现为准。
+
+GitHub API 的凭证由应用认证层提供，只发送到 API 域名；响应缓存与限流状态按身份隔离，私密同步和写请求不走此缓存。限流协调仅限当前客户端实例，不能跨标签页或设备；限流期间已有新鲜缓存仍可读取。
