@@ -155,6 +155,7 @@ test('guest event saves, edits, deletes and restores without a login', async ({
 test('login selects profiles, auto-syncs standard manifests and keeps public/private data separate', async ({
   page,
 }) => {
+  test.setTimeout(60000) // Includes two throttled repository provisioning/sync cycles.
   const repos = await github(page)
   await page.goto('/mine')
   await save(page, '访客事件')
