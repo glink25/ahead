@@ -9,7 +9,7 @@
     "build": "pnpm -r --filter './packages/*' run build && pnpm --filter @ahead/web run build",
     "dev": "pnpm --filter @ahead/web run dev",
     "dev:auth": "pnpm --filter @ahead/auth run dev",
-    "test": "pnpm -r run test && pnpm exec vitest run scripts/market-triage.test.ts",
+    "test": "pnpm -r --filter './packages/*' run build && pnpm -r run test && pnpm exec vitest run scripts/market-triage.test.ts",
     "test:e2e": "pnpm --filter @ahead/web test:e2e",
     "typecheck": "pnpm -r run typecheck",
     "lint": "pnpm -r run lint --if-present",

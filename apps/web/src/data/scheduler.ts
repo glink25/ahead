@@ -106,12 +106,14 @@ async function ensureRepository(
   return target
 }
 async function synchronize(id: string, auth: AuthSession, generation: number) {
-  const adapter = authenticatedAdapter(auth)
-  const current = (await database.query()).spaces[id]
-  if (!current || current.account !== accountId(auth) || current.paused) return
   const valid = () => {
     if (generation !== epoch) throw new Error('SYNC_SESSION_CHANGED')
   }
+  // commitFiles makes several HTTP requests. Guard each credential acquisition,
+  // not only entry into the adapter, so account switching stops the rest.
+  const adapter = authenticatedAdapter(auth, valid)
+  const current = (await database.query()).spaces[id]
+  if (!current || current.account !== accountId(auth) || current.paused) return
   const guarded: RepositoryAdapter = {
     inspect: async (...args) => {
       valid()

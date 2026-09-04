@@ -48,7 +48,7 @@ export async function loadMarketListings(options: LoadMarketOptions): Promise<Ma
   query.set('page', String(page))
   const response = await fetcher(
     `https://api.github.com/repos/${options.repository}/issues?${query}`,
-    { headers: { Accept: 'application/vnd.github+json' } },
+    { headers: { Accept: 'application/vnd.github+json' }, cache: 'no-store' },
   )
   if (!response.ok) {
     throw new Error(`读取市场失败：HTTP ${response.status}`)

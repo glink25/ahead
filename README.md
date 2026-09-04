@@ -45,6 +45,8 @@ pnpm dev:auth
 
 ## 验证
 
+真实双帐号验收、结果证据与链路约定见 [核心链路验证](docs/core-path-verification.md)。
+
 ```bash
 pnpm test
 pnpm typecheck

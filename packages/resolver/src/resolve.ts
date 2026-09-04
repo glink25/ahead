@@ -101,10 +101,18 @@ export function resolve(options: ResolveOptions): ResolvedProfile {
   })
 
   const remoteFavorites: Record<string, number> = {}
-  for (const { user } of users) {
-    if (user.id === active.id) continue
+  const followedUsers = new Map(
+    (active.subscriptions ?? []).filter((s) => s.kind === 'user-data').map((s) => [sourceKey(s), s]),
+  )
+  const counted = new Set<string>()
+  for (const { user, sourceLocator } of users) {
+    const subscription = followedUsers.get(sourceLocator)
+    if (user === active || !subscription || counted.has(sourceLocator)) continue
+    counted.add(sourceLocator)
+    // The UI's seven frequency levels scale a vote from half to twice normal.
+    const weight = 2 ** ((subscription.priority ?? 0) / 3)
     for (const id of new Set(user.favorites ?? [])) {
-      remoteFavorites[id] = (remoteFavorites[id] ?? 0) + 1
+      remoteFavorites[id] = (remoteFavorites[id] ?? 0) + weight
     }
   }
 

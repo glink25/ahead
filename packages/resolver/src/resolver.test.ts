@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { sourceKey } from '@ahead/protocol'
 import type { Event, EventFeed, Patch, UserData } from '@ahead/schema'
 import {
   ResourceGraph,
@@ -186,4 +187,23 @@ describe('resolver', () => {
     }
     expect(resolve(input)).toEqual(resolve(input))
   })
+})
+
+it('counts only explicitly followed sources, including profiles with the same document id, and honors frequency', () => {
+  const source = { locator: 'github:friend/profile', kind: 'user-data' as const }
+  const active: UserData = { oefVersion: '0.1', kind: 'user-data', id: 'shared-id', displayName: { en: 'Me' }, subscriptions: [source] }
+  const friend: UserData = { ...active, displayName: { en: 'Friend' }, subscriptions: [], favorites: ['event:one', 'event:one'] }
+  const remote = { user: friend, sourceLocator: 'github:friend/profile#ahead.yaml' }
+  // Use protocol normalization; the repository path is the source identity.
+  const key = sourceKey(source)
+  remote.sourceLocator = key
+  const options = { feeds: [], users: [active, remote, remote, { user: { ...friend, id: 'stranger' }, sourceLocator: 'stranger' }], activeProfile: active }
+  expect(resolve(options).remoteFavorites).toEqual({ 'event:one': 1 })
+  active.subscriptions![0]!.priority = -3
+  expect(resolve(options).remoteFavorites['event:one']).toBe(0.5)
+  active.subscriptions![0]!.priority = 3
+  expect(resolve(options).remoteFavorites['event:one']).toBe(2)
+  active.subscriptions = []
+  expect(resolve(options).remoteFavorites).toEqual({})
+  expect(resolve(options).favorites).toEqual([])
 })

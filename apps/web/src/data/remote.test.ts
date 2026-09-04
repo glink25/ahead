@@ -136,3 +136,18 @@ it('refuses visibility changes and malformed content without writing', async () 
   ).rejects.toThrow('格式')
   expect(broken.commits()).toBe(0)
 })
+it('keeps shared feed identity stable across collaborator-local profile ids', async () => {
+  const r = remote()
+  r.files.clear()
+  const alice = newDatabase().spaces.guest!
+  alice.id = 'alice-local'; alice.name = 'Shared calendar'
+  const first = await syncDocument(r.adapter, target, 'event-feed', alice, true)
+  const initial = JSON.parse(r.files.get('.ahead/ahead.yaml.sync.json')!).projection
+  const bob = newDatabase().spaces.guest!
+  bob.id = 'bob-local'; bob.name = 'Different local name'
+  bob.records = await syncDocument(r.adapter, target, 'event-feed', bob)
+  const next = JSON.parse(r.files.get('.ahead/ahead.yaml.sync.json')!).projection
+  expect(next).toEqual(initial)
+  expect(r.commits()).toBe(1)
+  expect(bob.records).toEqual(first)
+})

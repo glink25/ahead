@@ -7,6 +7,7 @@ import {
 } from '../data/local'
 import { materializeProfile, PERSONAL_FEED } from '../data/model'
 import { create } from 'zustand'
+import { publicReadFetch } from '../lib/auth'
 import { CdnReadAdapter } from '@ahead/github'
 import { parseLocator, parseYaml, sourceKey } from '@ahead/protocol'
 import {
@@ -32,6 +33,7 @@ import { RepoCache } from '../lib/repo-cache'
 const storage = createIdbStore('ahead-local-profile', 'data')
 const cache = new RepoCache()
 let initializing: Promise<void> | undefined
+let refreshRequested = false
 const repository =
   import.meta.env.VITE_GITHUB_MARKET_REPOSITORY || 'glink25/ahead'
 interface FeedStore {
@@ -76,6 +78,7 @@ export const useFeedStore = create<FeedStore>((set, get) => {
           profile: materializeProfile(initial.spaces[initial.active]!.records),
         })
         let previousActive = initial.active
+        let previousSubscriptions = JSON.stringify(get().profile.subscriptions)
         database.subscribe((db) => {
           const changedProfile = previousActive !== db.active
           previousActive = db.active
@@ -85,7 +88,10 @@ export const useFeedStore = create<FeedStore>((set, get) => {
               profile: materializeProfile(space.records),
               ...(changedProfile ? { undoProfile: undefined, users: [] } : {}),
             })
-          if (changedProfile) void get().refresh()
+          const subscriptions = JSON.stringify(get().profile.subscriptions)
+          const changedSubscriptions = subscriptions !== previousSubscriptions
+          previousSubscriptions = subscriptions
+          if (changedProfile || changedSubscriptions) void get().refresh()
         })
         // Warm start does not wait for any network request.
         const listings =
@@ -116,7 +122,11 @@ export const useFeedStore = create<FeedStore>((set, get) => {
       return initializing
     },
     async refresh() {
-      if (get().loading) return
+      if (get().loading) {
+        refreshRequested = true
+        return
+      }
+      refreshRequested = false
       const profileId = activeSpace()?.id
       const profileSnapshot = get().profile
       const personalFeed = profileSnapshot.extensions?.[PERSONAL_FEED] as
@@ -130,8 +140,9 @@ export const useFeedStore = create<FeedStore>((set, get) => {
       }))
       try {
         let listings: MarketListing[]
+        const fetcher = publicReadFetch()
         try {
-          listings = await loadMarketListings({ repository })
+          listings = await loadMarketListings({ repository, fetcher })
           await storage.set('market:' + repository, listings).catch(() => {})
         } catch (error) {
           listings =
@@ -175,7 +186,7 @@ export const useFeedStore = create<FeedStore>((set, get) => {
           }
         }
         await storage.set('known', [...sources.values()]).catch(() => {})
-        const adapter = new CdnReadAdapter()
+        const adapter = new CdnReadAdapter(fetcher)
         const users: { user: UserData; sourceLocator: string }[] = []
         // Only explicitly followed public profiles contribute recommendation signals.
         for (const source of (profileSnapshot.subscriptions ?? []).filter(
@@ -265,7 +276,7 @@ export const useFeedStore = create<FeedStore>((set, get) => {
         set((s) => ({ errors: [...s.errors, String(error)] }))
       } finally {
         set({ loading: false })
-        if (activeSpace()?.id !== profileId) void get().refresh()
+        if (refreshRequested || activeSpace()?.id !== profileId) void get().refresh()
       }
     },
     act(action) {

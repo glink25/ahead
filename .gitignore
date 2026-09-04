@@ -8,6 +8,7 @@ docs/.local/
 coverage/
 playwright-report/
 test-results/
+artifacts/verification/
 .env
 .env.*
 !.env.example

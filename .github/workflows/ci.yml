@@ -23,3 +23,4 @@ jobs:
       - run: pnpm build
       - run: pnpm --filter @ahead/web exec playwright install --with-deps chromium
       - run: pnpm test:e2e
+      - run: pnpm --filter @ahead/web test:offline

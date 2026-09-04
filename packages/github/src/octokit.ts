@@ -9,6 +9,12 @@ export type AheadOctokit = InstanceType<typeof Octokit>
 
 export function createOctokit(getAccessToken: () => Promise<string>): AheadOctokit {
   const octokit = new AheadOctokit({
+    request: {
+      // Branch heads and permissions are mutable. A cached pre-write response
+      // can make a newly synced manifest appear missing after a reload.
+      fetch: (input: RequestInfo | URL, init?: RequestInit) =>
+        globalThis.fetch(input, { ...init, cache: 'no-store' }),
+    },
     throttle: {
       onRateLimit: (_retryAfter, _options, _octokit, retryCount) => retryCount < 1,
       onSecondaryRateLimit: () => false,

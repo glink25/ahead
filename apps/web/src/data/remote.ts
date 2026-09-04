@@ -148,6 +148,21 @@ export async function syncDocument(
       ),
     )
     const merged = mergeRecords(remote.records, local)
+    if (kind === 'event-feed') {
+      // Generated metadata belongs to the shared feed, not the device's local
+      // profile id. Persist it so a collaborator cannot rename the feed on sync.
+      const seed = remote.document ?? eventFeed(space, merged)
+      for (const change of documentChanges(seed).filter((c) => c.collection === 'feed')) {
+        const key = recordKey(change.collection, change.key)
+        merged[key] ??= {
+          ...change,
+          deleted: false,
+          operation: 'feed-metadata:' + key,
+          revision: { time: 0, counter: 0, device: '' },
+          history: [],
+        }
+      }
+    }
     const document =
       kind === 'user-data'
         ? materializeProfile(merged)

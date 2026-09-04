@@ -44,13 +44,14 @@ export class CdnReadAdapter implements RepositoryAdapter {
     const headers = { Accept: 'application/vnd.github+json' }
     const commitResponse = await this.fetcher(`${base}/commits/${encodeURIComponent(target)}`, {
       headers,
+      cache: 'no-store',
     })
     if (commitResponse.ok) {
       return (await commitResponse.json() as { sha: string }).sha
     }
 
     const gitRef = `heads/${target}`
-    const refResponse = await this.fetcher(`${base}/git/ref/${encodePath(gitRef)}`, { headers })
+    const refResponse = await this.fetcher(`${base}/git/ref/${encodePath(gitRef)}`, { headers, cache: 'no-store' })
     const data = await json<{ object: { sha: string } }>(refResponse, 'Resolve GitHub ref')
     return data.object.sha
   }
@@ -69,7 +70,7 @@ export class CdnReadAdapter implements RepositoryAdapter {
   private async inspectRepository(locator: ResourceLocator): Promise<RepositorySnapshot> {
     const url = `https://api.github.com/repos/${encodeURIComponent(locator.owner)}/${encodeURIComponent(locator.repo)}`
     const repository = await json<{ default_branch: string; private: boolean }>(
-      await this.fetcher(url, { headers: { Accept: 'application/vnd.github+json' } }),
+      await this.fetcher(url, { headers: { Accept: 'application/vnd.github+json' }, cache: 'no-store' }),
       'Inspect GitHub repository',
     )
     const headSha = await this.resolveHeadSha(locator, locator.ref ?? repository.default_branch)
