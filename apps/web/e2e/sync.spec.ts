@@ -218,6 +218,14 @@ test('login selects profiles, auto-syncs standard manifests and keeps public/pri
   await page.getByRole('button', { name: /私人生活/ }).click()
   await expect(page.locator('.timeline-row')).toContainText('访客事件')
   await expect(page.locator('.timeline-row')).not.toContainText('公开事件')
+  const registryCredentials: boolean[] = []
+  page.on('request', request => {
+    if (request.url().includes('api.github.com/') && request.url().includes('/issues?'))
+      registryCredentials.push(Boolean(request.headers().authorization))
+  })
+  await page.reload()
+  await expect.poll(() => registryCredentials.length).toBeGreaterThan(0)
+  expect(registryCredentials.every(Boolean)).toBe(true)
 })
 
 test('two tabs preserve concurrent local event writes', async ({

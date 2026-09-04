@@ -8,6 +8,7 @@ import {
 import { materializeProfile, PERSONAL_FEED } from '../data/model'
 import { create } from 'zustand'
 import { publicReadFetch } from '../lib/auth'
+import { useAuthSession } from '../stores'
 import { CdnReadAdapter } from '@ahead/github'
 import { parseLocator, parseYaml, sourceKey } from '@ahead/protocol'
 import {
@@ -78,6 +79,11 @@ export const useFeedStore = create<FeedStore>((set, get) => {
           profile: materializeProfile(initial.spaces[initial.active]!.records),
         })
         let previousActive = initial.active
+        useAuthSession.subscribe((current, previous) => {
+          if (!current.loading && (
+            previous.loading || current.session?.identity.id !== previous.session?.identity.id
+          )) void get().refresh()
+        })
         let previousSubscriptions = JSON.stringify(get().profile.subscriptions)
         database.subscribe((db) => {
           const changedProfile = previousActive !== db.active
@@ -122,6 +128,12 @@ export const useFeedStore = create<FeedStore>((set, get) => {
       return initializing
     },
     async refresh() {
+      // Restoring IndexedDB credentials is asynchronous. Starting before it
+      // finishes would spend anonymous quota even for a signed-in visitor.
+      if (useAuthSession.getState().loading) {
+        refreshRequested = true
+        return
+      }
       if (get().loading) {
         refreshRequested = true
         return

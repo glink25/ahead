@@ -62,6 +62,9 @@ async function save(p, title) {
 }
 async function connect(p, target) {
   await p.goto(baseURL + '/profiles')
+  await expect(p.locator('.profiles-view > .muted')).toContainText('@')
+  const known = p.locator('.profile-list article').filter({ hasText: target.owner + '/' + target.repo }).getByRole('button').first()
+  if (await known.count()) { await known.click(); await expect(p).toHaveURL(/mine/, { timeout: 30000 }); return }
   await p.locator('summary').filter({ hasText: '通过仓库地址添加' }).click()
   await p.getByPlaceholder('github:owner/ahead-user-main').fill(`github:${target.owner}/${target.repo}`)
   await p.getByRole('button', { name: '添加并使用' }).click()
@@ -79,6 +82,7 @@ try {
     console.log(`${account}: authenticating and creating test profile`)
     assert.equal((await api(account, '/user')).login, account)
     const context = await browser.newContext(); const page = await context.newPage(); page.setDefaultTimeout(30000); pages.push(page)
+    page.on('response', async response => { if (response.status() !== 403) return; try { report.networkErrors ??= []; report.networkErrors.push({ path: new URL(response.url()).pathname, authenticated: Boolean(response.request().headers().authorization), message: (await response.json()).message, remaining: response.headers()['x-ratelimit-remaining'] }); flush() } catch {} })
     await login(page, account)
     const existing = report.resources.find(r => r.account === account)
     if (existing) await connect(page, existing.profile)
@@ -159,17 +163,23 @@ try {
   }
   // Publish through the actual registry workflow, never synthesize approved data.
   report.issues = []
+  const existingIssues = await api('glink25', '/repos/glink25/ahead/issues?state=open&per_page=100')
+  const registrations = []
   for (const resource of report.resources) {
     for (const [kind, target] of [['event-feed', resource.feed], ['user-data', resource.profile]]) {
-      const issue = await api('glink25', '/repos/glink25/ahead/issues', 'POST', {
-        title: `[Verification] ${kind} ${resource.account} ${run}`,
+      const title = `[Verification] ${kind} ${resource.account} ${run}`
+      const issue = existingIssues.find(i => i.title === title) || await api('glink25', '/repos/glink25/ahead/issues', 'POST', {
+        title,
         labels: ['type:' + kind],
         body: `### Resource type\n\n${kind}\n\n### Locator\n\ngithub:${target.owner}/${target.repo}\n\n### Manifest path\n\n${target.path}\n\nTemporary end-to-end verification using test-only data.`,
       })
       report.issues.push(issue.number); flush()
-      await expect.poll(async () => (await api('glink25', `/repos/glink25/ahead/issues/${issue.number}`)).labels.map(l => l.name), { timeout: 180000, intervals: [5000] }).toContain('approved')
-      record(`Market triage approved ${resource.account} ${kind}`, { issue: issue.html_url })
+      registrations.push({ issue, account: resource.account, kind })
     }
+  }
+  for (const { issue, account, kind } of registrations) {
+    await expect.poll(async () => (await api('glink25', `/repos/glink25/ahead/issues/${issue.number}`)).labels.map(l => l.name), { timeout: 180000, intervals: [5000] }).toContain('approved')
+    record(`Market triage approved ${account} ${kind}`, { issue: issue.html_url })
   }
   // Return each account to its own profile before testing consumer behavior.
   await connect(b, report.resources[1].profile); await synced(b)
@@ -179,11 +189,13 @@ try {
     const event = feed.events[0]
     await consumer.goto(baseURL + '/events/' + encodeURIComponent(event.id))
     await expect(consumer.getByRole('heading', { name: Object.values(event.title)[0], exact: true })).toBeVisible({ timeout: 60000 })
-    await consumer.getByRole('button', { name: '订阅频道', exact: true }).click()
+    if (await consumer.getByRole('button', { name: '订阅频道', exact: true }).isVisible()) await consumer.getByRole('button', { name: '订阅频道', exact: true }).click()
+    await expect(consumer.getByRole('button', { name: '已订阅', exact: true })).toBeVisible()
     await consumer.goto(baseURL + '/following')
     const channel = consumer.locator('.following-card').filter({ hasText: resource.feed.repo })
     await expect(channel).toHaveCount(1)
     await channel.getByRole('combobox').selectOption('2')
+    await expect.poll(async () => Object.values((await active(consumer)).records).find(r => r.collection === 'subscriptions' && r.value?.locator?.endsWith(resource.feed.repo))?.value?.priority).toBe(2)
     const available = consumer.locator('.following-card').filter({ hasText: `链路验证 ${resource.account} ${run}` }).filter({ has: consumer.getByRole('button', { name: '关注', exact: true }) })
     await available.getByRole('button', { name: '关注', exact: true }).click()
     await expect(consumer.getByRole('button', { name: '取消关注', exact: true })).toHaveCount(1)
@@ -192,12 +204,19 @@ try {
     assert(profile.subscriptions.some(s => s.kind === 'user-data' && s.locator.endsWith(resource.profile.repo)))
     assert(profile.subscriptions.some(s => s.kind === 'event-feed' && s.locator.endsWith(resource.feed.repo) && s.priority === 2))
     record(`${accounts[index]} subscribes to ${resource.account} feed and follows public profile; preferences reach GitHub`)
+    await consumer.screenshot({ path: `${out}/${accounts[index]}-following.png`, fullPage: true })
+    await save(publisher, `发布更新 ${resource.account} ${trial}`); await synced(publisher)
+    await consumer.goto(baseURL + '/mine')
+    await expect(consumer.locator('.timeline-row').filter({ hasText: `发布更新 ${resource.account} ${trial}` })).toHaveCount(1, { timeout: 60000 })
+    record(`${accounts[index]} receives a new publisher commit without re-registering the source`)
     await consumer.goto(baseURL + '/events/' + encodeURIComponent(event.id))
-    await expect(consumer.getByRole('button', { name: '喜爱', exact: true })).toBeVisible()
-    await consumer.getByRole('button', { name: '喜爱', exact: true }).click(); await synced(consumer)
+    if (await consumer.getByRole('button', { name: '喜爱', exact: true }).isVisible()) await consumer.getByRole('button', { name: '喜爱', exact: true }).click()
+    await expect(consumer.getByRole('button', { name: '取消喜爱', exact: true })).toBeVisible(); await synced(consumer)
     await consumer.goto(baseURL + '/following')
     await consumer.getByRole('button', { name: '取消关注', exact: true }).click()
+    await expect(consumer.getByRole('button', { name: '取消关注', exact: true })).toHaveCount(0)
     await consumer.locator('.following-card').filter({ hasText: resource.feed.repo }).getByRole('button', { name: '取消订阅' }).click()
+    await expect(consumer.locator('.following-card').filter({ hasText: resource.feed.repo })).toHaveCount(0)
     await synced(consumer)
     const removed = await document(accounts[index], report.resources[index].profile)
     assert(!removed.subscriptions.some(s => s.locator.endsWith(resource.profile.repo) || s.locator.endsWith(resource.feed.repo)))
@@ -217,7 +236,12 @@ try {
 } catch (error) {
   report.status = 'failed'; report.error = String(error)
   for (let i=0;i<pages.length;i++) {
-    try { const s = await active(pages[i]); report[`state${i}`] = { status: s.status, error: s.error, remote: s.remote, feed: s.feed, pending: s.pending.length }; } catch {}
+    try { const s = await active(pages[i]); report[`state${i}`] = { status: s.status, error: s.error, remote: s.remote, feed: s.feed, pending: s.pending.length };
+      report[`page${i}`] = await pages[i].locator('body').innerText();
+      await pages[i].getByRole('link', { name: '设置', exact: true }).click();
+      await pages[i].locator('#diagnostics summary').click();
+      report[`diagnostics${i}`] = await pages[i].locator('.profile-view').innerText();
+    } catch {}
   }
   flush(); console.error(report.error); process.exitCode = 1
 } finally { await browser.close() }

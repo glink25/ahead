@@ -43,3 +43,11 @@ describe('repository feed loader', () => {
     await expect(fetchFeed({ locator: 'github:a/b', manifestPath: '../token', adapter: adapter(feed()) })).rejects.toThrow('Invalid manifest path')
   })
 })
+it('refuses private repositories before reading or populating the public cache', async () => {
+  const api = adapter(feed())
+  vi.mocked(api.inspect).mockResolvedValue({ locator, headSha: sha, defaultBranch: 'main', private: true })
+  const cache = new RepoCache(memory())
+  await expect(fetchFeed({ locator: 'github:a/b', adapter: api, cache })).rejects.toThrow('私有仓库')
+  expect(api.readFile).not.toHaveBeenCalled()
+  expect(await cache.readAny('github:a/b#ahead.yaml', 'ahead.yaml')).toBeUndefined()
+})
