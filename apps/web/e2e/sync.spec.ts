@@ -220,17 +220,33 @@ test('login selects profiles, auto-syncs standard manifests and keeps public/pri
   await expect(page.locator('.timeline-row')).toContainText('访客事件')
   await expect(page.locator('.timeline-row')).not.toContainText('公开事件')
   const registryCredentials: boolean[] = []
-  page.on('request', request => {
-    if (request.url().includes('api.github.com/') && request.url().includes('/issues?'))
+  page.on('request', (request) => {
+    if (
+      request.url().includes('api.github.com/') &&
+      request.url().includes('/issues?')
+    )
       registryCredentials.push(Boolean(request.headers().authorization))
   })
   let release!: () => void
-  const restoring = new Promise<void>(resolve => { release = resolve })
-  await page.route('https://api.github.com/user', async route => { await restoring; await route.fallback() })
+  const restoring = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  await page.route('https://api.github.com/user', async (route) => {
+    await restoring
+    await route.fallback()
+  })
   await page.reload()
   await expect(page.getByRole('status')).toHaveText('正在恢复账户…')
-  await expect(page.getByRole('link', { name: '新建事件', exact: true })).toHaveCount(0)
+  await expect(
+    page.getByRole('link', { name: '新建事件', exact: true }),
+  ).toHaveCount(0)
+  expect(registryCredentials).toHaveLength(0)
   release()
+  await expect(
+    page.getByRole('status', { name: '' }).filter({ hasText: '正在恢复账户' }),
+  ).toHaveCount(0)
+  // Discovery is now demand-activated; hidden profile pages do not scan the market.
+  await page.goto('/discover')
   await expect.poll(() => registryCredentials.length).toBeGreaterThan(0)
   expect(registryCredentials.every(Boolean)).toBe(true)
 })

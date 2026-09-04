@@ -1,4 +1,8 @@
-import { APPROVED_LABEL, parseMarketIssueBody, type MarketEntry } from '@ahead/market'
+import {
+  APPROVED_LABEL,
+  parseMarketIssueBody,
+  type MarketEntry,
+} from '@ahead/market'
 import { sourceKey } from '@ahead/protocol'
 
 /** A market listing plus the presentation metadata carried by its Issue. */
@@ -22,6 +26,7 @@ export interface LoadMarketOptions {
   repository: string
   fetcher?: typeof globalThis.fetch
   perPage?: number
+  page?: number
 }
 
 function labelNames(labels: GitHubIssue['labels']): string[] {
@@ -35,16 +40,26 @@ function labelNames(labels: GitHubIssue['labels']): string[] {
  *
  * Issues are a lightweight registry, not a copy of repository content.
  */
-export async function loadMarketListings(options: LoadMarketOptions): Promise<MarketListing[]> {
-  const fetcher: typeof globalThis.fetch = options.fetcher ?? ((input, init) => globalThis.fetch(input, { ...init, signal: init?.signal ?? AbortSignal.timeout(15_000) }))
+export async function loadMarketPage(
+  options: LoadMarketOptions,
+): Promise<{ listings: MarketListing[]; nextPage?: number }> {
+  const fetcher: typeof globalThis.fetch =
+    options.fetcher ??
+    ((input, init) =>
+      globalThis.fetch(input, {
+        ...init,
+        signal: init?.signal ?? AbortSignal.timeout(15_000),
+      }))
   const query = new URLSearchParams({
     state: 'open',
+    sort: 'created',
+    direction: 'desc',
     labels: APPROVED_LABEL,
-    per_page: String(options.perPage ?? 100),
+    per_page: String(options.perPage ?? 20),
   })
   const listings: MarketListing[] = []
   const seen = new Set<string>()
-  for (let page = 1; ; page += 1) {
+  const page = options.page ?? 1
   query.set('page', String(page))
   const response = await fetcher(
     `https://api.github.com/repos/${options.repository}/issues?${query}`,
@@ -61,7 +76,11 @@ export async function loadMarketListings(options: LoadMarketOptions): Promise<Ma
     if (!entry) continue
     if (!labelNames(issue.labels).includes(APPROVED_LABEL)) continue
     let key: string
-    try { key = sourceKey(entry.source) } catch { continue }
+    try {
+      key = sourceKey(entry.source)
+    } catch {
+      continue
+    }
     if (seen.has(key)) continue
     seen.add(key)
     listings.push({
@@ -72,7 +91,26 @@ export async function loadMarketListings(options: LoadMarketOptions): Promise<Ma
       labels: labelNames(issue.labels),
     })
   }
-  if (!response.headers.get('link')?.includes('rel="next"')) break
+  return {
+    listings,
+    nextPage: response.headers.get('link')?.includes('rel="next"')
+      ? page + 1
+      : undefined,
   }
-  return listings
+}
+
+/** Batch helper for tooling; the application consumes pages through MarketApi. */
+export async function loadMarketListings(
+  options: LoadMarketOptions,
+): Promise<MarketListing[]> {
+  const all = new Map<string, MarketListing>()
+  let page: number | undefined = 1
+  while (page) {
+    const result = await loadMarketPage({ ...options, page })
+    for (const listing of result.listings)
+      if (!all.has(sourceKey(listing.source)))
+        all.set(sourceKey(listing.source), listing)
+    page = result.nextPage
+  }
+  return [...all.values()]
 }

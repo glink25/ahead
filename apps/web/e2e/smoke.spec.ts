@@ -167,7 +167,12 @@ test('same repository feeds subscribe independently and cached events survive ne
     .first()
     .getByRole('button', { name: '订阅频道' })
     .click()
-  await expect(page.locator('.poster-slot').first().getByRole('button', { name: '已订阅', exact: true })).toBeVisible()
+  await expect(
+    page
+      .locator('.poster-slot')
+      .first()
+      .getByRole('button', { name: '已订阅', exact: true }),
+  ).toBeVisible()
   await page.goto('/following')
   await expect(page.locator('.following-card')).toHaveCount(1)
   await page.getByText('频道详情', { exact: true }).click()
@@ -179,6 +184,13 @@ test('same repository feeds subscribe independently and cached events survive ne
   await page.route('https://api.github.com/**', (route) => route.abort())
   await page.route('https://cdn.jsdelivr.net/**', (route) => route.abort())
   await page.reload()
+  await expect(page.locator('.timeline-row')).toHaveCount(2)
+  // Fresh cache avoids network reads; an explicit refresh still exposes failures.
+  await expect(page.locator('.error-strip')).toHaveCount(0)
+  await page.goto('/settings')
+  await page.getByRole('button', { name: /更新频道内容/ }).click()
+  await expect(page.locator('.loading-progress')).toHaveCount(0)
+  await page.getByRole('link', { name: '关闭页面' }).click()
   await expect(page.locator('.timeline-row')).toHaveCount(2)
   await expect(page.locator('.error-strip')).toBeVisible()
 })

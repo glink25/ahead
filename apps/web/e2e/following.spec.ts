@@ -19,6 +19,7 @@ test('following changes recommendations without inheriting events; unfollow remo
   await page.goto('/following')
   await page.getByRole('button', { name: '关注', exact: true }).click()
   await expect(page.getByRole('button', { name: '取消关注', exact: true })).toBeVisible()
+  await expect(page.locator('.loading-progress')).toHaveCount(0)
   await page.goto('/discover')
   await expect(page.locator('[data-index="0"] h1')).toHaveText('b-friend-favorite')
   await page.goto('/mine')

@@ -12,12 +12,27 @@ export function TabShell({ children }: { children: ReactNode }) {
   const [previousTab, setPreviousTab] = useState('/discover')
   const [mineUrl, setMineUrl] = useState('/mine')
   const { session } = useAuthSession()
-  const { loading, errors, undoProfile, undo, refresh } = useFeedStore()
+  const {
+    loading,
+    errors,
+    undoProfile,
+    undo,
+    retry,
+    loginSuggested,
+    marketStatus,
+    marketLoaded,
+  } = useFeedStore()
   const [showUndo, setShowUndo] = useState(false)
   const [dismissedErrors, setDismissedErrors] = useState<string[]>([])
   const storageError = errors.some((error) => /存储|保存|恢复本地/.test(error))
   useEffect(() => {
-    if (loading || storageError || !errors.length) return
+    if (
+      loading ||
+      storageError ||
+      !errors.length ||
+      errors.some((error) => /HTTP (403|429)|额度|访问受限/.test(error))
+    )
+      return
     const timer = setTimeout(() => setDismissedErrors(errors), 6000)
     return () => clearTimeout(timer)
   }, [errors, loading, storageError])
@@ -93,18 +108,36 @@ export function TabShell({ children }: { children: ReactNode }) {
       {loading && (
         <div className="loading-progress" role="status" aria-label="正在更新" />
       )}
+      {location.pathname === '/discover' && marketStatus !== 'idle' && (
+        <div className="market-progress" role="status" aria-live="polite">
+          {marketStatus === 'initial'
+            ? '正在读取首批内容…'
+            : marketStatus === 'appending'
+              ? `正在追加内容 · 已读取 ${marketLoaded} 个源`
+              : marketStatus === 'paused'
+                ? '已暂停追加'
+                : marketStatus === 'complete'
+                  ? `市场已加载 · ${marketLoaded} 个源`
+                  : '追加失败，可重试'}
+        </div>
+      )}
       {!!errors.length &&
         (tab || storageError) &&
         dismissedErrors !== errors && (
           <div className="error-strip" role="status">
             <span>
-              {storageError ? '部分更改未能保存到此设备' : '部分内容未能更新'}
+              {storageError
+                ? '部分更改未能保存到此设备'
+                : loginSuggested
+                  ? 'GitHub 访问受限，登录可提高请求额度'
+                  : '部分内容未能更新'}
             </span>
             {!storageError && (
-              <button disabled={loading} onClick={() => void refresh()}>
+              <button disabled={loading} onClick={() => void retry()}>
                 重试
               </button>
             )}
+            {loginSuggested && <Link to="/login">登录 GitHub</Link>}
             <Link to="/settings#diagnostics">详情</Link>
             <button
               aria-label="关闭提示"

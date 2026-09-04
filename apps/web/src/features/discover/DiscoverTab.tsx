@@ -5,11 +5,28 @@ import { PosterCard } from './PosterCard'
 
 export function DiscoverTab({ active = true }: { active?: boolean }) {
   const { discover } = useFeedView()
-  const { loading, refresh } = useFeedStore()
+  const { loading, refresh, marketStatus, revision, setMarketActive } =
+    useFeedStore()
+  useEffect(() => {
+    const update = () =>
+      setMarketActive(active && document.visibilityState === 'visible')
+    update()
+    document.addEventListener('visibilitychange', update)
+    return () => {
+      document.removeEventListener('visibilitychange', update)
+      setMarketActive(false)
+    }
+  }, [active, setMarketActive])
   // Keep the current browsing session stable when a favorite changes ranking.
   const order = useRef<string[]>([])
   const browsing = useRef(false)
+  const previousRevision = useRef(revision)
   const events = useMemo(() => {
+    if (previousRevision.current !== revision) {
+      previousRevision.current = revision
+      order.current = []
+      browsing.current = false
+    }
     const map = new Map(discover.map((e) => [e.id, e]))
     const known = new Set(order.current)
     order.current = browsing.current
@@ -18,8 +35,9 @@ export function DiscoverTab({ active = true }: { active?: boolean }) {
           ...discover.filter((e) => !known.has(e.id)).map((e) => e.id),
         ]
       : discover.map((event) => event.id)
+    if (order.current.length) browsing.current = true
     return order.current.map((id) => map.get(id)!)
-  }, [discover])
+  }, [discover, revision])
   const container = useRef<HTMLDivElement>(null)
   const [height, setHeight] = useState(700)
   const [cursor, setCursor] = useState(0)
@@ -114,7 +132,13 @@ export function DiscoverTab({ active = true }: { active?: boolean }) {
     return (
       <div className="empty-view">
         <span className="empty-orbit">✧</span>
-        <h1>{loading ? '正在加载…' : '暂时没有事件'}</h1>
+        <h1>
+          {loading
+            ? '正在加载…'
+            : marketStatus === 'failed'
+              ? '市场加载失败'
+              : '暂时没有事件'}
+        </h1>
         <button onClick={() => void refresh()} disabled={loading}>
           重新加载
         </button>

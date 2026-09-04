@@ -46,3 +46,19 @@ describe('CDN read adapter', () => {
     )
   })
 })
+
+it('does not retry ref resolution through another API after a forbidden response', async () => {
+  const fetcher = vi.fn(async () => new Response('limited', { status: 403 }))
+  await expect(new CdnReadAdapter(fetcher).resolveHeadSha(locator)).rejects.toThrow('403')
+  expect(fetcher).toHaveBeenCalledTimes(1)
+})
+
+it('only coalesces pending inspections so the transport owns freshness', async () => {
+  const fetcher = vi.fn(async (input: RequestInfo | URL) => new Response(JSON.stringify(
+    String(input).includes('/commits/') ? { sha: 'a'.repeat(40) } : { private: false, default_branch: 'main' },
+  )))
+  const adapter = new CdnReadAdapter(fetcher)
+  await adapter.inspect(locator)
+  await adapter.inspect(locator)
+  expect(fetcher).toHaveBeenCalledTimes(4)
+})

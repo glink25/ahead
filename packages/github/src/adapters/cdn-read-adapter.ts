@@ -50,6 +50,9 @@ export class CdnReadAdapter implements RepositoryAdapter {
       return (await commitResponse.json() as { sha: string }).sha
     }
 
+    if (commitResponse.status !== 404 && commitResponse.status !== 422) {
+      await json(commitResponse, 'Resolve GitHub ref')
+    }
     const gitRef = `heads/${target}`
     const refResponse = await this.fetcher(`${base}/git/ref/${encodePath(gitRef)}`, { headers, cache: 'no-store' })
     const data = await json<{ object: { sha: string } }>(refResponse, 'Resolve GitHub ref')
@@ -62,7 +65,7 @@ export class CdnReadAdapter implements RepositoryAdapter {
     if (!pending) {
       pending = this.inspectRepository(locator)
       this.pending.set(key, pending)
-      void pending.catch(() => this.pending.delete(key))
+      void pending.then(() => this.pending.delete(key), () => this.pending.delete(key))
     }
     return pending
   }

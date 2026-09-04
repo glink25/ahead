@@ -163,7 +163,7 @@ export async function fetchFeed(options: FetchFeedOptions): Promise<LoadedFeed> 
   const locator = githubLocator(options.locator)
   const manifestPath = safePath(options.manifestPath ?? DEFAULT_MANIFEST_PATH)
 
-  const snapshot = await options.adapter.inspect({ ...locator, ref: options.ref })
+  const snapshot = await options.adapter.inspect({ ...locator, ref: options.ref ?? locator.ref })
   if (snapshot.private) throw new FeedLoadError('公开事件源不能读取私有仓库', sourceLocator)
   const headSha = snapshot.headSha
   const cached = await options.cache?.read(sourceLocator, manifestPath, headSha)

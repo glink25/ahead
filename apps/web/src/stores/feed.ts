@@ -7,36 +7,18 @@ import {
 } from '../data/local'
 import { materializeProfile, PERSONAL_FEED } from '../data/model'
 import { create } from 'zustand'
-import { publicReadFetch } from '../lib/auth'
 import { useAuthSession } from '../stores'
-import { CdnReadAdapter } from '@ahead/github'
-import { parseLocator, parseYaml, sourceKey } from '@ahead/protocol'
-import {
-  createValidator,
-  type Subscription,
-  type UserData,
-} from '@ahead/schema'
-import { createIdbStore } from '../lib/idb'
-import {
-  changeProfile,
-  emptyProfile,
-  type ProfileAction,
-} from '../lib/local-profile'
-import { loadMarketListings, type MarketListing } from '../lib/market'
-import {
-  assertEventFeed,
-  fetchFeed,
-  loadFeedFromListing,
-  type LoadedFeed,
-} from '../lib/feed-loader'
-import { RepoCache } from '../lib/repo-cache'
+import { sourceKey } from '@ahead/protocol'
+import type { Subscription, UserData } from '@ahead/schema'
+import { emptyProfile, type ProfileAction } from '../lib/local-profile'
+import type { MarketListing } from '../lib/market'
+import type { LoadedFeed } from '../lib/feed-loader'
+import { marketApi } from '../services/market'
+import type { ReadEvent } from '../services/market-api'
+import { isAbort } from '../services/public-read-client'
 
-const storage = createIdbStore('ahead-local-profile', 'data')
-const cache = new RepoCache()
-let initializing: Promise<void> | undefined
-let refreshRequested = false
-const repository =
-  import.meta.env.VITE_GITHUB_MARKET_REPOSITORY || 'glink25/ahead'
+export type MarketStatus =
+  'idle' | 'initial' | 'appending' | 'paused' | 'complete' | 'failed'
 interface FeedStore {
   profile: UserData
   feeds: LoadedFeed[]
@@ -45,24 +27,122 @@ interface FeedStore {
   loading: boolean
   ready: boolean
   errors: string[]
+  loginSuggested: boolean
+  marketStatus: MarketStatus
+  marketLoaded: number
+  marketActive: boolean
+  revision: number
   undoProfile?: UserData
   initialize(): Promise<void>
-  refresh(): Promise<void>
+  refresh(options?: { force?: boolean; restart?: boolean }): Promise<void>
+  retry(): Promise<void>
+  setMarketActive(active: boolean): void
   act(action: ProfileAction): void
   undo(): void
   replaceProfile(profile: UserData): void
 }
+let initializing: Promise<void> | undefined
+let marketController: AbortController | undefined
+let sourcesController: AbortController | undefined
+let cursor: string | undefined
+let generation = 0
+let forceMarket = false
+let freshListings: MarketListing[] = []
 const localWriteError = '保存失败，请检查浏览器存储权限后重试。'
-const validator = createValidator()
-function usableFeed(feed: unknown): boolean {
-  try {
-    assertEventFeed(feed, validator, 'cache')
-    return true
-  } catch {
-    return false
-  }
-}
+
 export const useFeedStore = create<FeedStore>((set, get) => {
+  const updateLoading = () =>
+    set({ loading: Boolean(marketController || sourcesController) })
+  const receive = (event: ReadEvent) => {
+    if (event.type === 'feed')
+      set((s) => ({
+        feeds: [
+          ...s.feeds.filter(
+            (f) => f.sourceLocator !== event.feed.sourceLocator,
+          ),
+          event.feed,
+        ],
+      }))
+    if (event.type === 'user')
+      set((s) => ({
+        users: [
+          ...s.users.filter((u) => u.sourceLocator !== event.sourceLocator),
+          { user: event.user, sourceLocator: event.sourceLocator },
+        ],
+      }))
+    if (event.type === 'error')
+      set((s) => ({
+        errors: [...new Set([...s.errors, event.message])],
+        loginSuggested:
+          s.loginSuggested || (event.limited && event.authenticated === false),
+      }))
+  }
+  const pump = async () => {
+    if (
+      marketController ||
+      !get().marketActive ||
+      !get().ready ||
+      useAuthSession.getState().loading ||
+      get().marketStatus === 'complete'
+    )
+      return
+    const controller = new AbortController(),
+      round = generation
+    marketController = controller
+    set({ marketStatus: get().feeds.length ? 'appending' : 'initial' })
+    updateLoading()
+    let failed = false
+    try {
+      const stream = marketApi().market.stream({
+        cursor,
+        refresh: forceMarket,
+        signal: controller.signal,
+      })
+      for await (const event of stream) {
+        if (controller.signal.aborted || round !== generation) break
+        if (event.type === 'listings') {
+          if (!event.cached) freshListings = event.listings
+          set((s) => ({
+            listings: [
+              ...new Map(
+                [...s.listings, ...event.listings].map((l) => [
+                  sourceKey(l.source),
+                  l,
+                ]),
+              ).values(),
+            ],
+          }))
+        } else if (event.type === 'progress') {
+          cursor = event.cursor
+          set({ marketLoaded: event.loaded })
+          if (event.complete)
+            set({ marketStatus: 'complete', listings: freshListings })
+        } else {
+          receive(event)
+          if (event.type === 'error') failed = true
+          if (event.type === 'feed') set({ marketStatus: 'appending' })
+        }
+      }
+      if (
+        round === generation &&
+        !controller.signal.aborted &&
+        get().marketStatus !== 'complete'
+      )
+        set({ marketStatus: failed ? 'failed' : 'paused' })
+    } catch (error) {
+      if (!isAbort(error) && round === generation) {
+        set((s) => ({
+          marketStatus: 'failed',
+          errors: [...s.errors, String(error)],
+        }))
+      }
+    } finally {
+      if (marketController === controller) {
+        marketController = undefined
+        updateLoading()
+      }
+    }
+  }
   return {
     profile: emptyProfile(),
     feeds: [],
@@ -71,20 +151,32 @@ export const useFeedStore = create<FeedStore>((set, get) => {
     loading: false,
     ready: false,
     errors: [],
+    loginSuggested: false,
+    marketStatus: 'idle',
+    marketLoaded: 0,
+    marketActive: false,
+    revision: 0,
     initialize() {
       initializing ??= (async () => {
         await initializeData()
         const initial = await database.query()
         set({
           profile: materializeProfile(initial.spaces[initial.active]!.records),
+          ready: true,
         })
         let previousActive = initial.active
-        useAuthSession.subscribe((current, previous) => {
-          if (!current.loading && (
-            previous.loading || current.session?.identity.id !== previous.session?.identity.id
-          )) void get().refresh()
-        })
         let previousSubscriptions = JSON.stringify(get().profile.subscriptions)
+        useAuthSession.subscribe((current, previous) => {
+          if (
+            !current.loading &&
+            (previous.loading ||
+              current.session?.identity.id !== previous.session?.identity.id ||
+              current.session?.providerId !== previous.session?.providerId)
+          ) {
+            set({ feeds: [], listings: [], users: [] })
+            void get().refresh({ force: false })
+          }
+        })
         database.subscribe((db) => {
           const changedProfile = previousActive !== db.active
           previousActive = db.active
@@ -97,198 +189,124 @@ export const useFeedStore = create<FeedStore>((set, get) => {
           const subscriptions = JSON.stringify(get().profile.subscriptions)
           const changedSubscriptions = subscriptions !== previousSubscriptions
           previousSubscriptions = subscriptions
-          if (changedProfile || changedSubscriptions) void get().refresh()
+          if (changedProfile || changedSubscriptions)
+            void get().refresh({ force: false, restart: changedProfile })
         })
-        // Warm start does not wait for any network request.
-        const listings =
-          (await storage
-            .get<MarketListing[]>('market:' + repository)
-            .catch(() => undefined)) ?? []
-        set({ listings })
-        const known =
-          (await storage.get<Subscription[]>('known').catch(() => undefined)) ??
-          []
-        const warm: LoadedFeed[] = []
-        for (const source of known) {
-          try {
-            const key = sourceKey(source),
-              path = source.manifestPath ?? 'ahead.yaml'
-            const stored = await cache.readAny(key, path)
-            const locator = parseLocator(source.locator)
-            if (stored && 'owner' in locator && usableFeed(stored.feed))
-              warm.push({ ...stored, locator })
-          } catch {
-            /* one corrupt cached entry must not block startup */
-          }
-        }
-        set({ feeds: warm })
-        set({ ready: true })
-        await get().refresh()
+        await get().refresh({ force: false })
       })()
       return initializing
     },
-    async refresh() {
-      // Restoring IndexedDB credentials is asynchronous. Starting before it
-      // finishes would spend anonymous quota even for a signed-in visitor.
-      if (useAuthSession.getState().loading) {
-        refreshRequested = true
-        return
-      }
-      if (get().loading) {
-        refreshRequested = true
-        return
-      }
-      refreshRequested = false
-      const profileId = activeSpace()?.id
-      const profileSnapshot = get().profile
-      const personalFeed = profileSnapshot.extensions?.[PERSONAL_FEED] as
-        Subscription | undefined
-      set((s) => ({
-        loading: true,
-        errors: s.errors.filter(
-          (error) =>
-            error === localWriteError || error.includes('无法恢复本地数据'),
-        ),
-      }))
-      try {
-        let listings: MarketListing[]
-        const fetcher = publicReadFetch()
-        try {
-          listings = await loadMarketListings({ repository, fetcher })
-          await storage.set('market:' + repository, listings).catch(() => {})
-        } catch (error) {
-          listings =
-            (await storage
-              .get<MarketListing[]>('market:' + repository)
-              .catch(() => undefined)) ?? []
-          set((s) => ({
-            errors: [
-              ...s.errors,
-              '市场刷新失败，显示上次缓存：' + String(error),
-            ],
-          }))
-        }
-        set({ listings })
-        // Known sources keep individual favorites available after delisting.
-        const known =
-          (await storage.get<Subscription[]>('known').catch(() => undefined)) ??
-          []
-        const sources = new Map<string, Subscription>()
-        for (const source of [
-          ...known,
-          ...listings.map((l) => ({
-            ...l.source,
-            kind: l.source.resourceType,
-          })),
-          ...(profileSnapshot.subscriptions ?? []),
-        ]) {
-          if (
-            source.kind === 'user-data' ||
-            (personalFeed && sourceKey(source) === sourceKey(personalFeed))
-          )
-            continue
-          try {
-            sources.set(sourceKey(source), {
-              locator: source.locator,
-              manifestPath: source.manifestPath,
-              kind: 'event-feed',
-            })
-          } catch {
-            /* invalid registry item */
-          }
-        }
-        await storage.set('known', [...sources.values()]).catch(() => {})
-        const adapter = new CdnReadAdapter(fetcher)
-        const users: { user: UserData; sourceLocator: string }[] = []
-        // Only explicitly followed public profiles contribute recommendation signals.
-        for (const source of (profileSnapshot.subscriptions ?? []).filter(
-          (s) => s.kind === 'user-data',
-        )) {
-          const key = sourceKey(source),
-            locator = parseLocator(source.locator)
-          if (!('owner' in locator)) continue
-          let user = await storage
-            .get<UserData>('user:' + key)
-            .catch(() => undefined)
-          try {
-            const snapshot = await adapter.inspect(locator)
-            if (snapshot.private) throw new Error('公开关注只支持公开用户资料')
-            const file = await adapter.readFile(
-              locator,
-              source.manifestPath ?? 'ahead.yaml',
-              { ref: snapshot.headSha },
-            )
-            const next = parseYaml<UserData>(file.content)
-            if (!validator.validate('user-data', next).ok)
-              throw new Error('用户资料校验失败')
-            user = next
-            await storage.set('user:' + key, next).catch(() => {})
-          } catch (error) {
-            set((s) => ({
-              errors: [
-                ...s.errors,
-                key + ' 用户资料刷新失败：' + String(error),
-              ],
-            }))
-          }
-          if (user && validator.validate('user-data', user).ok)
-            users.push({ user, sourceLocator: key })
-        }
-        if (activeSpace()?.id === profileId) set({ users })
-        const list = [...sources.values()]
-        const put = (feed: LoadedFeed) =>
-          set((s) => ({
-            feeds: [
-              ...s.feeds.filter((f) => f.sourceLocator !== feed.sourceLocator),
-              feed,
-            ],
-          }))
-        // Bounded concurrency, shared repository inspection, progressive rendering.
-        let cursor = 0
-        await Promise.all(
-          Array.from({ length: Math.min(3, list.length) }, async () => {
-            while (cursor < list.length) {
-              const source = list[cursor++]!
-              const key = sourceKey(source)
-              const path = source.manifestPath ?? 'ahead.yaml'
-              const locator = parseLocator(source.locator)
-              if (!('owner' in locator)) continue
-              const cached = await cache.readAny(key, path)
-              if (cached && usableFeed(cached.feed)) put({ ...cached, locator })
-              try {
-                put(await fetchFeed({ ...source, adapter, cache }))
-              } catch (error) {
-                if (!cached) {
-                  const legacy = listings.find(
-                    (l) => sourceKey(l.source) === key,
-                  )
-                  try {
-                    const fallback =
-                      legacy && loadFeedFromListing(legacy, validator)
-                    if (fallback && !fallback.feed.eventsGlob) put(fallback)
-                  } catch {
-                    /* rejected legacy cache */
-                  }
-                }
-                set((s) => ({
-                  errors: [
-                    ...s.errors,
-                    source.locator +
-                      '/' +
-                      path +
-                      ' 加载失败，保留可用缓存：' +
-                      String(error),
-                  ],
-                }))
-              }
-            }
-          }),
+    setMarketActive(active) {
+      set({ marketActive: active })
+      if (!active) {
+        marketController?.abort()
+        marketController = undefined
+        if (
+          get().marketStatus === 'initial' ||
+          get().marketStatus === 'appending'
         )
+          set({ marketStatus: 'paused' })
+        updateLoading()
+      } else if (get().marketStatus !== 'failed') void pump()
+    },
+    async retry() {
+      set({
+        errors: get().errors.filter((e) => e === localWriteError),
+        loginSuggested: false,
+      })
+      if (get().marketStatus === 'failed') await pump()
+      else await get().refresh({ force: false })
+    },
+    async refresh(options = {}) {
+      if (useAuthSession.getState().loading || !get().ready) return
+      const restart = options.restart ?? true
+      if (restart) {
+        generation++
+        marketController?.abort()
+        marketController = undefined
+        cursor = undefined
+        freshListings = []
+        forceMarket = options.force ?? true
+        set((s) => ({
+          revision: s.revision + 1,
+          marketLoaded: 0,
+          marketStatus: get().marketActive ? 'initial' : 'paused',
+        }))
+      }
+      sourcesController?.abort()
+      const controller = new AbortController(),
+        round = generation
+      sourcesController = controller
+      const profile = get().profile
+      set({
+        errors: get().errors.filter(
+          (e) => e === localWriteError || e.includes('无法恢复本地数据'),
+        ),
+        loginSuggested: false,
+      })
+      updateLoading()
+      const api = marketApi()
+      try {
+        const snapshot = await api.market.snapshot()
+        if (round !== generation || controller.signal.aborted) return
+        if (snapshot)
+          set((s) => ({
+            listings: [
+              ...new Map(
+                [...snapshot, ...s.listings].map((l) => [
+                  sourceKey(l.source),
+                  l,
+                ]),
+              ).values(),
+            ],
+          }))
+        const personal = profile.extensions?.[PERSONAL_FEED] as
+          Subscription | undefined
+        const sources = (await api.relatedSources(profile)).filter(
+          (source) => !personal || sourceKey(source) !== sourceKey(personal),
+        )
+        if (round !== generation || controller.signal.aborted) return
+        for await (const event of api.sources.snapshot(sources)) {
+          if (round !== generation || controller.signal.aborted) return
+          receive(event)
+        }
+        const readSources = async () => {
+          try {
+            for await (const event of api.sources.read({
+              sources,
+              refresh: options.force ?? true,
+              signal: controller.signal,
+            })) {
+              if (round !== generation || controller.signal.aborted) break
+              receive(event)
+            }
+          } catch (error) {
+            if (
+              !isAbort(error) &&
+              round === generation &&
+              !controller.signal.aborted
+            )
+              set((s) => ({ errors: [...s.errors, String(error)] }))
+          } finally {
+            if (sourcesController === controller) {
+              sourcesController = undefined
+              updateLoading()
+            }
+          }
+        }
+        await Promise.all([readSources(), pump()])
       } catch (error) {
-        set((s) => ({ errors: [...s.errors, String(error)] }))
+        if (
+          !isAbort(error) &&
+          round === generation &&
+          !controller.signal.aborted
+        )
+          set((s) => ({ errors: [...s.errors, String(error)] }))
       } finally {
-        set({ loading: false })
-        if (refreshRequested || activeSpace()?.id !== profileId) void get().refresh()
+        if (sourcesController === controller) {
+          sourcesController = undefined
+          updateLoading()
+        }
       }
     },
     act(action) {
@@ -302,8 +320,6 @@ export const useFeedStore = create<FeedStore>((set, get) => {
               undoProfile: previous,
               errors: s.errors.filter((e) => e !== localWriteError),
             }))
-          if ('source' in action && action.source.kind === 'user-data')
-            void get().refresh()
         })
         .catch(() =>
           set((s) => ({
