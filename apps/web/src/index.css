@@ -100,23 +100,9 @@ p {
 .header-right {
   justify-content: flex-end;
 }
-.header-left > a:not(.wordmark) {
+.header-left > a {
   font-size: 14px;
   padding: 12px 0;
-}
-.wordmark {
-  font-size: 26px;
-  letter-spacing: -1.7px;
-  font-weight: 800;
-}
-.wordmark span {
-  color: #92a368;
-  margin-left: 5px;
-}
-.page-brand {
-  font-weight: 700;
-  letter-spacing: -1px;
-  color: var(--muted);
 }
 .segmented {
   display: flex;
@@ -1127,24 +1113,6 @@ p {
 .error-strip a {
   color: var(--muted);
 }
-.undo-toast {
-  position: fixed;
-  left: 50%;
-  bottom: calc(20px + env(safe-area-inset-bottom));
-  transform: translateX(-50%);
-  z-index: 40;
-  padding: 12px 20px;
-  border-radius: 26px;
-  background: #283827;
-  color: #fff;
-  box-shadow: 0 5px 30px #0003;
-  font-size: 13px;
-  white-space: nowrap;
-}
-.undo-toast button {
-  margin-left: 24px;
-  color: #dce9b7;
-}
 @keyframes loading {
   50% {
     opacity: 0.3;
@@ -1157,9 +1125,6 @@ p {
   .app-header {
     padding-left: 20px;
     padding-right: 20px;
-  }
-  .wordmark {
-    font-size: 22px;
   }
   .segmented {
     gap: 24px;
@@ -1371,3 +1336,53 @@ p {
   pointer-events: none;
 }
 .error-strip { white-space: normal; flex-wrap: wrap; }
+
+/* Shared icon sizing keeps buttons and inline affordances consistent. */
+.lucide {
+  width: 18px;
+  height: 18px;
+  stroke-width: 1.8;
+  flex-shrink: 0;
+  vertical-align: middle;
+}
+button .lucide,
+a .lucide,
+summary .lucide {
+  display: inline-block;
+}
+.header-left {
+  min-width: 0;
+  overflow: hidden;
+  padding-right: 12px;
+}
+.profile-switch {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+}
+.profile-switch span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.back-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 0;
+  font-size: 14px;
+}
+.mine-toolbar > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.create-fab .lucide {
+  width: 26px;
+  height: 26px;
+}
+[data-sonner-toaster] {
+  font-family: inherit;
+}

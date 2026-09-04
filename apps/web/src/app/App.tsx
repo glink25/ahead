@@ -11,8 +11,16 @@ import { DiscoverTab } from '../features/discover/DiscoverTab'
 import { MineTab } from '../features/mine/MineTab'
 import { EventDetail } from '../features/event/EventDetail'
 import { FollowingView } from '../features/following/FollowingView'
-const HistoryView = lazy(() => import('../features/profiles/HistoryView').then((m) => ({ default: m.HistoryView })))
-const ProfilesView = lazy(() => import('../features/profiles/ProfilesView').then((m) => ({ default: m.ProfilesView })))
+const ExperimentalView = lazy(() =>
+  import('../features/profile/ExperimentalView').then((m) => ({
+    default: m.ExperimentalView,
+  })),
+)
+const ProfilesView = lazy(() =>
+  import('../features/profiles/ProfilesView').then((m) => ({
+    default: m.ProfilesView,
+  })),
+)
 const StudioPage = lazy(() =>
   import('../features/studio/StudioView').then((module) => ({
     default: module.StudioPage,
@@ -34,7 +42,16 @@ function Landing() {
   return loading ? (
     <div className="empty-view">正在加载…</div>
   ) : (
-    <Navigate to={session ? active === 'guest' ? '/profiles?choose=1' : '/mine' : '/discover'} replace />
+    <Navigate
+      to={
+        session
+          ? active === 'guest'
+            ? '/profiles?choose=1'
+            : '/mine'
+          : '/discover'
+      }
+      replace
+    />
   )
 }
 export function App() {
@@ -42,19 +59,45 @@ export function App() {
   const browsing =
     location.pathname === '/mine' || location.pathname === '/discover'
   const mine = location.pathname === '/mine'
-  const { setSession, setLoading, setRestoreError, loading: restoringIdentity } = useAuthSession()
+  const {
+    setSession,
+    setLoading,
+    setRestoreError,
+    loading: restoringIdentity,
+  } = useAuthSession()
   useEffect(() => {
-    const explicit = location.search.includes('github_authorized=') || sessionStorage.getItem('ahead-login-choice') === '1'
+    const explicit =
+      location.search.includes('github_authorized=') ||
+      sessionStorage.getItem('ahead-login-choice') === '1'
     sessionStorage.removeItem('ahead-login-choice')
     void (async () => {
-      const result = navigator.onLine ? await bootstrapAuthSession({ patProvider, oauthProvider }) : { session: await restoreCachedIdentity(), error: null }
-      const restored = result.session ?? (result.error ? await restoreCachedIdentity() : null)
+      const result = navigator.onLine
+        ? await bootstrapAuthSession({ patProvider, oauthProvider })
+        : { session: await restoreCachedIdentity(), error: null }
+      const restored =
+        result.session ?? (result.error ? await restoreCachedIdentity() : null)
       await activateSession(restored, explicit)
-      setSession(restored); setRestoreError(result.error)
-    })().catch((error) => setRestoreError(String(error))).finally(() => setLoading(false))
-    void useFeedStore.getState().initialize().catch(() => useFeedStore.setState({ errors: ['无法打开本机资料，请检查浏览器存储权限'], loading: false }))
+      setSession(restored)
+      setRestoreError(result.error)
+    })()
+      .catch((error) => setRestoreError(String(error)))
+      .finally(() => setLoading(false))
+    void useFeedStore
+      .getState()
+      .initialize()
+      .catch(() =>
+        useFeedStore.setState({
+          errors: ['无法打开本机资料，请检查浏览器存储权限'],
+          loading: false,
+        }),
+      )
   }, [setSession, setLoading, setRestoreError])
-  if (restoringIdentity) return <div className="empty-view" role="status">正在恢复账户…</div>
+  if (restoringIdentity)
+    return (
+      <div className="empty-view" role="status">
+        正在恢复账户…
+      </div>
+    )
   return (
     <TabShell>
       <div
@@ -85,7 +128,11 @@ export function App() {
           <Route path="/following" element={<FollowingView />} />
           <Route path="/studio" element={<StudioPage />} />
           <Route path="/profiles" element={<ProfilesView />} />
-          <Route path="/history" element={<HistoryView />} />
+          <Route
+            path="/history"
+            element={<Navigate to="/settings" replace />}
+          />
+          <Route path="/settings/experimental" element={<ExperimentalView />} />
           <Route path="/settings" element={<ProfileView />} />
           <Route
             path="/profile"

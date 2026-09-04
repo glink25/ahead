@@ -78,14 +78,17 @@ export function activeSpace(): Space | undefined {
   return db?.spaces[db.active]
 }
 export async function mutateProfile(id: string, action: ProfileAction) {
-  await database.mutate(id, (records) =>
-    diffRecords(
+  let previous: UserData | undefined
+  await database.mutate(id, (records) => {
+    previous = materializeProfile(records)
+    return diffRecords(
       records,
-      profileChanges(changeProfile(materializeProfile(records), action)),
+      profileChanges(changeProfile(previous, action)),
       profileCollections,
-    ),
-  )
+    )
+  })
   changed()
+  return previous!
 }
 export async function replaceLocalProfile(id: string, profile: UserData) {
   await database.mutate(id, (records) =>
@@ -112,24 +115,6 @@ export async function deleteEvent(id: string, eventId: string) {
   await database.mutate(id, [
     { collection: 'events', key: eventId, deleted: true },
   ])
-  changed()
-}
-export async function restoreVersion(
-  id: string,
-  collection: string,
-  key: string,
-  operation: string,
-) {
-  await database.mutate(id, (records) => {
-    const record = Object.values(records).find(
-      (r) => r.collection === collection && r.key === key,
-    )
-    const version = [record, ...(record?.history ?? [])].find(
-      (r) => r?.operation === operation,
-    )
-    if (!version) throw new Error('历史版本不存在')
-    return [{ collection, key, value: version.value, deleted: version.deleted }]
-  })
   changed()
 }
 export async function createLocalProfile(

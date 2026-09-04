@@ -12,6 +12,8 @@ export function offlinePlugin(): Plugin {
           '/',
           '/icon.svg',
           '/manifest.webmanifest',
+          '/reset.html',
+          '/reset.js',
           ...Object.keys(bundle)
             .filter((p) => p.startsWith('assets/'))
             .map((p) => '/' + p),
@@ -31,7 +33,9 @@ self.addEventListener('activate', event => event.waitUntil((async () => {
 self.addEventListener('fetch', event => {
   const request = event.request, url = new URL(request.url);
   if (request.method !== 'GET' || url.origin !== self.location.origin || /^\\/(api|auth)(\\/|$)/.test(url.pathname)) return;
-  if (request.mode === 'navigate') {
+  if (url.pathname === '/reset.html') {
+    event.respondWith(fetch(request).catch(() => caches.open(CACHE).then(cache => cache.match('/reset.html'))));
+  } else if (request.mode === 'navigate') {
     event.respondWith(fetch(request).catch(() => caches.open(CACHE).then(cache => cache.match('/'))));
   } else if (ASSETS.includes(url.pathname) && !url.search) {
     event.respondWith(caches.open(CACHE).then(async cache => (await cache.match(url.pathname)) || fetch(request)));

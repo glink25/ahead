@@ -1,3 +1,4 @@
+import { ChevronRight } from 'lucide-react'
 import { activateSession } from '../../data/session'
 import { useState, type FormEvent } from 'react'
 import { Navigate } from 'react-router'
@@ -42,7 +43,7 @@ export function LoginPage() {
             setBusy(true)
             setError(false)
             sessionStorage.setItem('ahead-login-choice', '1')
-              void oauthProvider
+            void oauthProvider
               .authenticate()
               .catch(() => setError(true))
               .finally(() => setBusy(false))
@@ -53,7 +54,8 @@ export function LoginPage() {
       )}
       <details className="settings-group settings-disclosure">
         <summary>
-          使用访问令牌登录<span>›</span>
+          使用访问令牌登录
+          <ChevronRight />
         </summary>
         <form className="settings-body" onSubmit={loginWithPat}>
           <label>

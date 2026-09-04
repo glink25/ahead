@@ -1,4 +1,4 @@
-import { useData } from '../../data/local'
+import { CalendarDays, List, Plus } from 'lucide-react'
 import { useEffect, useRef } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router'
 import { useFeedView } from '../../hooks/useFeedView'
@@ -9,7 +9,6 @@ import { posterFor } from '../../lib/media'
 import { useFeedStore } from '../../stores/feed'
 
 export function MineTab() {
-  const active = useData((s) => s.db?.spaces[s.db.active])
   const { mine, resolved } = useFeedView()
   const { feeds, profile } = useFeedStore()
   const location = useLocation(),
@@ -26,22 +25,27 @@ export function MineTab() {
   }, [calendar])
   const switchView = () => {
     params.set('view', calendar ? 'timeline' : 'calendar')
-    navigate('/mine?' + params)
+    navigate('/mine?' + params, { replace: true })
   }
   let previous = ''
   return (
     <div className="mine-view">
       <div className="mine-toolbar">
-        <h1><Link to="/profiles">{active?.name ?? '我的盼头'} <span className="profile-chevron">⌄</span></Link></h1>
-        <div>
-          <Link to="/following">关注</Link>
-          <button
-            aria-label={calendar ? '切换时间轴' : '切换日历'}
-            onClick={switchView}
-          >
-            {calendar ? '☷ 时间轴' : '▦ 日历'}
-          </button>
-        </div>
+        <button
+          aria-label={calendar ? '切换时间轴' : '切换日历'}
+          onClick={switchView}
+        >
+          {calendar ? (
+            <>
+              <List /> 时间轴
+            </>
+          ) : (
+            <>
+              <CalendarDays /> 日历
+            </>
+          )}
+        </button>
+        <Link to="/following">关注</Link>
       </div>
       {calendar ? (
         <MonthView
@@ -59,7 +63,9 @@ export function MineTab() {
         >
           {!mine.length ? (
             <div className="empty-view">
-              <span className="empty-orbit">＋</span>
+              <span className="empty-orbit">
+                <Plus />
+              </span>
               <h2>还没有安排</h2>
               <Link className="primary-link" to="/studio">
                 新建事件
@@ -124,7 +130,7 @@ export function MineTab() {
         </div>
       )}
       <Link className="create-fab" to="/studio" aria-label="新建事件">
-        ＋
+        <Plus />
       </Link>
     </div>
   )

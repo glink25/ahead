@@ -1,5 +1,6 @@
+import { ChevronRight, RefreshCw } from 'lucide-react'
 import { useState } from 'react'
-import { Link, useLocation } from 'react-router'
+import { Link, Navigate, useLocation } from 'react-router'
 import { useAuthSession } from '../../stores'
 import { useFeedStore } from '../../stores/feed'
 import { patProvider, oauthProvider } from '../../lib/auth'
@@ -18,11 +19,13 @@ const labels = {
 }
 export function ProfileView() {
   const { session, setSession } = useAuthSession()
-  const { profile, act, refresh, loading, errors } = useFeedStore()
+  const { profile, act, refresh, loading } = useFeedStore()
   const { db } = useData(),
     location = useLocation()
   const space = db?.spaces[db.active]
   const [message, setMessage] = useState('')
+  if (location.hash === '#diagnostics')
+    return <Navigate to="/settings/experimental#diagnostics" replace />
   return (
     <section className="profile-view">
       <h1>设置</h1>
@@ -35,17 +38,24 @@ export function ProfileView() {
               {space?.private === false ? '公开' : '私有'}
             </small>
           </span>
-          <span>切换 →</span>
+          <span>
+            切换 <ChevronRight />
+          </span>
         </Link>
         <Link className="setting-row" to="/following">
-          频道与关注<span>→</span>
+          频道与关注
+          <ChevronRight />
         </Link>
       </div>
       <h2>账户</h2>
       <div className="settings-group">
         <div className="setting-row">
           <strong>{session ? '@' + session.identity.login : '尚未登录'}</strong>
-          {!session && <Link to="/login">登录 →</Link>}
+          {!session && (
+            <Link to="/login">
+              登录 <ChevronRight />
+            </Link>
+          )}
         </div>
         {session && (
           <button
@@ -99,7 +109,8 @@ export function ProfileView() {
               }
               disabled={space.status === 'syncing' || !session}
             >
-              立即同步<span>↻</span>
+              立即同步
+              <RefreshCw />
             </button>
             <button
               className="setting-row"
@@ -119,13 +130,14 @@ export function ProfileView() {
             to={space.status === 'auth' ? '/login' : '/profiles'}
           >
             {space.status === 'auth' ? '重新登录' : '检查资料与仓库授权'}
-            <span>→</span>
+            <ChevronRight />
           </Link>
         )}
         {space?.remote && (
           <details className="settings-disclosure">
             <summary>
-              同步位置<span>›</span>
+              同步位置
+              <ChevronRight />
             </summary>
             <div className="settings-body">
               <p>
@@ -139,15 +151,12 @@ export function ProfileView() {
             </div>
           </details>
         )}
-        <Link className="setting-row" to="/history">
-          历史与恢复<span>→</span>
-        </Link>
         <button
           className="setting-row"
           disabled={loading}
           onClick={() => void refresh()}
         >
-          更新频道内容<span>{loading ? '更新中…' : '↻'}</span>
+          更新频道内容<span>{loading ? '更新中…' : <RefreshCw />}</span>
         </button>
       </div>
       {message && (
@@ -155,24 +164,11 @@ export function ProfileView() {
           {message}
         </p>
       )}
-      <h2>高级</h2>
       <div className="settings-group">
-        <details
-          id="diagnostics"
-          className="settings-disclosure"
-          open={location.hash === '#diagnostics' || undefined}
-        >
-          <summary>
-            诊断信息<span>›</span>
-          </summary>
-          <div className="settings-body diagnostic-output">
-            {errors.map((e, i) => (
-              <p key={i}>{e}</p>
-            ))}
-            {space?.error && <p>{space.error}</p>}
-            {!errors.length && !space?.error && <p>暂无异常</p>}
-          </div>
-        </details>
+        <Link className="setting-row" to="/settings/experimental">
+          实验性设置
+          <ChevronRight />
+        </Link>
       </div>
     </section>
   )

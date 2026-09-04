@@ -128,7 +128,7 @@ async function save(page: Page, title: string) {
     page.getByRole('heading', { name: title, exact: true }),
   ).toBeVisible()
 }
-test('guest event saves, edits, deletes and restores without a login', async ({
+test('guest event saves, edits and deletes without a login; history is retired', async ({
   page,
 }) => {
   await github(page)
@@ -144,13 +144,10 @@ test('guest event saves, edits, deletes and restores without a login', async ({
   await page.getByRole('button', { name: '删除', exact: true }).click()
   await expect(page.locator('.timeline-row')).toHaveCount(0)
   await page.goto('/history')
-  await page.locator('.settings-disclosure summary').first().click()
-  await page.getByRole('button', { name: '恢复', exact: true }).first().click()
-  await expect(
-    page.getByRole('status').filter({ hasText: '已恢复到此资料' }),
-  ).toBeVisible()
+  await expect(page).toHaveURL(/\/settings$/)
+  await expect(page.getByText('历史与恢复')).toHaveCount(0)
   await page.goto('/mine')
-  await expect(page.locator('.timeline-row')).toContainText('修改后的日程')
+  await expect(page.locator('.timeline-row')).toHaveCount(0)
 })
 test('login selects profiles, auto-syncs standard manifests and keeps public/private data separate', async ({
   page,

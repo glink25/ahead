@@ -9,7 +9,34 @@ const rootDir = path.dirname(fileURLToPath(import.meta.url))
 const packagesDir = path.resolve(rootDir, '../../packages')
 
 export default defineConfig({
-  plugins: [react(), tailwindcss(), offlinePlugin()],
+  plugins: [
+    react(),
+    tailwindcss(),
+    offlinePlugin(),
+    {
+      name: 'local-data-reset-headers',
+      configureServer(server) {
+        server.middlewares.use((req, res, next) => {
+          if (req.url?.split('?')[0] === '/clear-site-data.txt') {
+            res.setHeader('Clear-Site-Data', '"cache", "cookies"')
+            res.setHeader('X-Ahead-Reset', 'clear-cache-and-cookies')
+            res.setHeader('Cache-Control', 'no-store')
+          }
+          next()
+        })
+      },
+      configurePreviewServer(server) {
+        server.middlewares.use((req, res, next) => {
+          if (req.url?.split('?')[0] === '/clear-site-data.txt') {
+            res.setHeader('Clear-Site-Data', '"cache", "cookies"')
+            res.setHeader('X-Ahead-Reset', 'clear-cache-and-cookies')
+            res.setHeader('Cache-Control', 'no-store')
+          }
+          next()
+        })
+      },
+    },
+  ],
   resolve: {
     alias: {
       '@ahead/sync': path.join(packagesDir, 'sync/src'),
@@ -32,7 +59,8 @@ export default defineConfig({
       output: {
         manualChunks(id) {
           if (id.includes('/node_modules/')) {
-            if (/\/(react|react-dom|react-router|scheduler)\//u.test(id)) return 'react-vendor'
+            if (/\/(react|react-dom|react-router|scheduler)\//u.test(id))
+              return 'react-vendor'
             if (id.includes('/@octokit/')) return 'github-vendor'
             if (/\/(ajv|ajv-formats|yaml)\//u.test(id)) return 'protocol-vendor'
           }

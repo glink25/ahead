@@ -1,6 +1,9 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router'
-import { useAuthSession } from '../stores'
+import { useData } from '../data/local'
+import { ArrowLeft, ChevronDown, Settings, X } from 'lucide-react'
+import { useAppBack, useNavigationJournal } from './navigation'
+import { UndoToast } from './UndoToast'
 import { useFeedStore } from '../stores/feed'
 import { useSwipe } from '../hooks/useSwipe'
 
@@ -9,20 +12,12 @@ export function TabShell({ children }: { children: ReactNode }) {
     navigate = useNavigate()
   const mine = location.pathname === '/mine'
   const tab = mine || location.pathname === '/discover'
-  const [previousTab, setPreviousTab] = useState('/discover')
+  useNavigationJournal()
+  const back = useAppBack()
+  const active = useData((s) => s.db?.spaces[s.db.active])
   const [mineUrl, setMineUrl] = useState('/mine')
-  const { session } = useAuthSession()
-  const {
-    loading,
-    errors,
-    undoProfile,
-    undo,
-    retry,
-    loginSuggested,
-    marketStatus,
-    marketLoaded,
-  } = useFeedStore()
-  const [showUndo, setShowUndo] = useState(false)
+  const { loading, errors, retry, loginSuggested, marketStatus, marketLoaded } =
+    useFeedStore()
   const [dismissedErrors, setDismissedErrors] = useState<string[]>([])
   const storageError = errors.some((error) => /存储|保存|恢复本地/.test(error))
   useEffect(() => {
@@ -37,17 +32,12 @@ export function TabShell({ children }: { children: ReactNode }) {
     return () => clearTimeout(timer)
   }, [errors, loading, storageError])
   const { offset, handlers } = useSwipe((direction) => {
-    if (tab) navigate(direction === 'left' ? '/discover' : mineUrl)
+    if (tab && (direction === 'left' ? mine : !mine))
+      navigate(direction === 'left' ? '/discover' : mineUrl)
   })
   useEffect(() => {
-    if (tab) setPreviousTab(location.pathname + location.search)
     if (mine) setMineUrl(location.pathname + location.search)
   }, [location.pathname, location.search, tab, mine])
-  useEffect(() => {
-    setShowUndo(Boolean(undoProfile))
-    const timer = setTimeout(() => setShowUndo(false), 4500)
-    return () => clearTimeout(timer)
-  }, [undoProfile])
   useEffect(() => {
     const keydown = (e: KeyboardEvent) => {
       if (
@@ -59,16 +49,16 @@ export function TabShell({ children }: { children: ReactNode }) {
         e.altKey
       )
         return
-      if (e.key === 'Escape' && !tab && location.pathname !== '/studio')
-        navigate(previousTab)
+      if (e.key === 'Escape' && !tab) back()
       if (tab && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
         e.preventDefault()
-        navigate(e.key === 'ArrowLeft' ? mineUrl : '/discover')
+        if (e.key === 'ArrowLeft' ? !mine : mine)
+          navigate(e.key === 'ArrowLeft' ? mineUrl : '/discover')
       }
     }
     window.addEventListener('keydown', keydown)
     return () => window.removeEventListener('keydown', keydown)
-  }, [tab, navigate, previousTab, mineUrl, location.pathname])
+  }, [tab, navigate, back, mineUrl, location.pathname])
   return (
     <div
       className={
@@ -78,30 +68,52 @@ export function TabShell({ children }: { children: ReactNode }) {
       <header className="app-header">
         <div className="header-left">
           {!tab ? (
-            <Link to={previousTab} aria-label="关闭页面">
-              ← 返回
+            <button
+              className="back-button"
+              onClick={back}
+              aria-label="返回上一页"
+            >
+              <ArrowLeft /> 返回
+            </button>
+          ) : mine ? (
+            <Link
+              className="profile-switch"
+              to="/profiles"
+              aria-label="切换个人资料"
+            >
+              <span>{active?.name ?? '我的盼头'}</span>
+              <ChevronDown />
             </Link>
-          ) : (
-            <Link className="wordmark" to="/discover" aria-label="Ahead 首页">
-              ahead<span>✳</span>
-            </Link>
-          )}
+          ) : null}
         </div>
         {tab ? (
           <nav className="segmented" aria-label="主导航">
-            <Link to={mineUrl} aria-current={mine ? 'page' : undefined}>
+            <Link
+              to={mineUrl}
+              replace={mine}
+              aria-current={mine ? 'page' : undefined}
+            >
               我的
             </Link>
-            <Link to="/discover" aria-current={!mine ? 'page' : undefined}>
+            <Link
+              to="/discover"
+              replace={!mine}
+              aria-current={!mine ? 'page' : undefined}
+            >
               发现
             </Link>
           </nav>
         ) : (
-          <span className="page-brand">ahead</span>
+          <span />
         )}
         <div className="header-right">
-          <Link className="avatar-button" to="/settings" aria-label="设置">
-            {session?.identity.login.slice(0, 1).toUpperCase() ?? '⚙'}
+          <Link
+            className="avatar-button"
+            to="/settings"
+            replace={location.pathname === '/settings'}
+            aria-label="设置"
+          >
+            <Settings />
           </Link>
         </div>
       </header>
@@ -138,12 +150,12 @@ export function TabShell({ children }: { children: ReactNode }) {
               </button>
             )}
             {loginSuggested && <Link to="/login">登录 GitHub</Link>}
-            <Link to="/settings#diagnostics">详情</Link>
+            <Link to="/settings/experimental#diagnostics">详情</Link>
             <button
               aria-label="关闭提示"
               onClick={() => setDismissedErrors(errors)}
             >
-              ×
+              <X />
             </button>
           </div>
         )}
@@ -161,11 +173,7 @@ export function TabShell({ children }: { children: ReactNode }) {
       >
         {children}
       </main>
-      {showUndo && undoProfile && !storageError && (
-        <div className="undo-toast" role="status">
-          已更新 <button onClick={undo}>撤销</button>
-        </div>
-      )}
+      <UndoToast />
     </div>
   )
 }

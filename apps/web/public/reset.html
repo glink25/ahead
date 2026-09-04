@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>清空本机数据</title>
+    <style>
+      body {
+        font:
+          16px/1.7 system-ui,
+          sans-serif;
+        margin: 0;
+        background: #faf9f6;
+        color: #252923;
+      }
+      main {
+        max-width: 560px;
+        margin: 15vh auto;
+        padding: 24px;
+      }
+      button {
+        font: inherit;
+        padding: 10px 20px;
+        border: 1px solid #ccc;
+        border-radius: 12px;
+        background: white;
+        cursor: pointer;
+      }
+      button:disabled {
+        opacity: 0.5;
+      }
+      p {
+        white-space: pre-line;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>清空本机数据</h1>
+      <p id="status" role="status">正在停止应用并清理本机数据…</p>
+      <button id="retry" hidden>重试清理</button
+      ><button id="open" hidden>重新打开应用</button>
+    </main>
+    <script type="module" src="/reset.js"></script>
+  </body>
+</html>

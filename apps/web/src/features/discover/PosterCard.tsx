@@ -1,3 +1,4 @@
+import { ArrowUpRight, Ellipsis, Heart } from 'lucide-react'
 import { useLayoutEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import { Poster, Countdown, TagChip, IconButton } from '@ahead/ui'
@@ -17,7 +18,7 @@ export function EvidenceLinks({ evidence }: { evidence?: Evidence[] }) {
         )
         .map((item, index) => (
           <a key={index} href={item.value} target="_blank" rel="noreferrer">
-            {pickText(item.label) || '来源'} ↗
+            {pickText(item.label) || '来源'} <ArrowUpRight />
           </a>
         ))}
     </div>
@@ -41,7 +42,7 @@ export function FavoriteButton({ event }: { event: ResolvedEvent }) {
         })
       }
     >
-      {favorite ? '♥' : '♡'}
+      {<Heart fill={favorite ? 'currentColor' : 'none'} />}
     </IconButton>
   )
 }
@@ -89,7 +90,9 @@ export function HideMenu({ event }: { event: ResolvedEvent }) {
   const act = useFeedStore((s) => s.act)
   return (
     <details className="event-menu">
-      <summary aria-label="更多事件操作">···</summary>
+      <summary aria-label="更多事件操作">
+        <Ellipsis />
+      </summary>
       <button
         onClick={() => act({ type: 'hide', id: event.id, tags: event.tags })}
       >

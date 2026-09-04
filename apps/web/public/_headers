@@ -2,3 +2,14 @@
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
   X-Frame-Options: DENY
+
+/clear-site-data.txt
+  Clear-Site-Data: "cache", "cookies"
+  X-Ahead-Reset: clear-cache-and-cookies
+  Cache-Control: no-store
+
+/reset.html
+  Cache-Control: no-store
+
+/reset.js
+  Cache-Control: no-store

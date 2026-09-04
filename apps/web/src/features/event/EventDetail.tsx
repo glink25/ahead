@@ -38,7 +38,26 @@ export function EventDetail() {
       <h1>{pickText(event.title)}</h1>
       <p className="detail-countdown">{countdown.headline}</p>
       <p>{pickText(event.description) || pickText(event.summary)}</p>
-      {own && <div className="personal-actions"><Link className="primary-link" to={'/studio?event=' + encodeURIComponent(event.id)}>编辑</Link><button onClick={() => { if (db) void deleteEvent(db.active, event.id).then(() => navigate('/mine')).catch(() => setError('删除未能保存，请重试')) }}>删除</button><Link to="/history">历史与恢复</Link></div>}
+      {own && (
+        <div className="personal-actions">
+          <Link
+            className="primary-link"
+            to={'/studio?event=' + encodeURIComponent(event.id)}
+          >
+            编辑
+          </Link>
+          <button
+            onClick={() => {
+              if (db)
+                void deleteEvent(db.active, event.id)
+                  .then(() => navigate('/mine', { replace: true }))
+                  .catch(() => setError('删除未能保存，请重试'))
+            }}
+          >
+            删除
+          </button>
+        </div>
+      )}
       {error && <p role="alert">{error}</p>}
       <div className="detail-actions">
         <FavoriteButton event={event} />

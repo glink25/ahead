@@ -1,7 +1,9 @@
-import { useNavigate, useSearchParams } from 'react-router'
+import { previousUrl } from '../../app/navigation'
+import { Plus } from 'lucide-react'
+import { useNavigate, useSearchParams, useBlocker } from 'react-router'
 import { useData, saveEvent } from '../../data/local'
 import { personalEvents } from '../../data/model'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { EventEditorState } from '@ahead/editor'
 import type { Event } from '@ahead/schema'
 import { pickText, describeTemporal } from '../../lib/format'
@@ -90,34 +92,22 @@ function StudioEditor({
   const navigate = useNavigate()
   const [saving, setSaving] = useState(false)
   const [dirty, setDirty] = useState(false)
-  const [leaving, setLeaving] = useState<string>()
+  const allowLeave = useRef(false)
+  const blocker = useBlocker(() => dirty && !allowLeave.current)
   const [identity] = useState(
     () => initial?.id ?? 'personal-' + crypto.randomUUID(),
   )
   useEffect(() => {
     if (!dirty) return
-    const click = (e: MouseEvent) => {
-      const anchor = (e.target as HTMLElement).closest('a')
-      if (
-        anchor &&
-        anchor.origin === location.origin &&
-        anchor.pathname !== '/studio' &&
-        !e.metaKey &&
-        !e.ctrlKey
-      ) {
-        e.preventDefault()
-        e.stopPropagation()
-        setLeaving(anchor.pathname + anchor.search)
-      }
-    }
     const unload = (e: BeforeUnloadEvent) => {
       e.preventDefault()
       e.returnValue = ''
     }
-    document.addEventListener('click', click, true)
+    const reset = () => window.removeEventListener('beforeunload', unload)
+    window.addEventListener('ahead-reset', reset)
     window.addEventListener('beforeunload', unload)
     return () => {
-      document.removeEventListener('click', click, true)
+      window.removeEventListener('ahead-reset', reset)
       window.removeEventListener('beforeunload', unload)
     }
   }, [dirty])
@@ -244,7 +234,7 @@ function StudioEditor({
     }
     setPreview(null)
   }
-  const save = async (destination?: string) => {
+  const save = async (leave = false) => {
     const event = mode === 'form' ? build() : readYaml()
     if (!event) return
     if (event.id !== identity) {
@@ -255,9 +245,13 @@ function StudioEditor({
     try {
       await saveEvent(spaceId, event, initial?.id)
       setDirty(false)
-      navigate(destination ?? '/events/' + encodeURIComponent(event.id), {
-        replace: !destination,
-      })
+      allowLeave.current = true
+      if (leave && blocker.state === 'blocked') blocker.proceed()
+      else {
+        const destination = '/events/' + encodeURIComponent(event.id)
+        if (initial && previousUrl() === destination) navigate(-1)
+        else navigate(destination, { replace: true })
+      }
     } catch (error) {
       setErrors({
         form:
@@ -368,7 +362,8 @@ function StudioEditor({
           </div>
           <details className="settings-group settings-disclosure">
             <summary>
-              备注<span>＋</span>
+              备注
+              <Plus />
             </summary>
             <textarea
               aria-label="备注"
@@ -422,7 +417,7 @@ function StudioEditor({
           预览
         </button>
       </div>
-      {leaving && (
+      {blocker.state === 'blocked' && (
         <div className="confirm-backdrop">
           <section
             className="confirm-panel"
@@ -434,19 +429,20 @@ function StudioEditor({
             <button
               className="primary-link"
               disabled={saving}
-              onClick={() => void save(leaving)}
+              onClick={() => void save(true)}
             >
               保存并离开
             </button>
             <button
               onClick={() => {
                 setDirty(false)
-                navigate(leaving)
+                allowLeave.current = true
+                blocker.proceed()
               }}
             >
               放弃更改
             </button>
-            <button onClick={() => setLeaving(undefined)}>继续编辑</button>
+            <button onClick={() => blocker.reset()}>继续编辑</button>
           </section>
         </div>
       )}

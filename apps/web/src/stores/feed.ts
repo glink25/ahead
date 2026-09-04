@@ -33,12 +33,14 @@ interface FeedStore {
   marketActive: boolean
   revision: number
   undoProfile?: UserData
+  undoOperation?: { id: string; spaceId: string }
+  expireUndo(id: string): void
   initialize(): Promise<void>
   refresh(options?: { force?: boolean; restart?: boolean }): Promise<void>
   retry(): Promise<void>
   setMarketActive(active: boolean): void
   act(action: ProfileAction): void
-  undo(): void
+  undo(id?: string): Promise<void>
   replaceProfile(profile: UserData): void
 }
 let initializing: Promise<void> | undefined
@@ -46,6 +48,7 @@ let marketController: AbortController | undefined
 let sourcesController: AbortController | undefined
 let cursor: string | undefined
 let generation = 0
+let undoGeneration = 0
 let forceMarket = false
 let freshListings: MarketListing[] = []
 const localWriteError = '保存失败，请检查浏览器存储权限后重试。'
@@ -173,18 +176,32 @@ export const useFeedStore = create<FeedStore>((set, get) => {
               current.session?.identity.id !== previous.session?.identity.id ||
               current.session?.providerId !== previous.session?.providerId)
           ) {
-            set({ feeds: [], listings: [], users: [] })
+            undoGeneration++
+            set({
+              feeds: [],
+              listings: [],
+              users: [],
+              undoProfile: undefined,
+              undoOperation: undefined,
+            })
             void get().refresh({ force: false })
           }
         })
         database.subscribe((db) => {
           const changedProfile = previousActive !== db.active
+          if (changedProfile) undoGeneration++
           previousActive = db.active
           const space = db.spaces[db.active]
           if (space)
             set({
               profile: materializeProfile(space.records),
-              ...(changedProfile ? { undoProfile: undefined, users: [] } : {}),
+              ...(changedProfile
+                ? {
+                    undoProfile: undefined,
+                    undoOperation: undefined,
+                    users: [],
+                  }
+                : {}),
             })
           const subscriptions = JSON.stringify(get().profile.subscriptions)
           const changedSubscriptions = subscriptions !== previousSubscriptions
@@ -312,12 +329,13 @@ export const useFeedStore = create<FeedStore>((set, get) => {
     act(action) {
       const id = activeSpace()?.id
       if (!id) return
-      const previous = get().profile
+      const generation = ++undoGeneration
       void mutateProfile(id, action)
-        .then(() => {
-          if (activeSpace()?.id === id)
+        .then((previous) => {
+          if (activeSpace()?.id === id && generation === undoGeneration)
             set((s) => ({
               undoProfile: previous,
+              undoOperation: { id: crypto.randomUUID(), spaceId: id },
               errors: s.errors.filter((e) => e !== localWriteError),
             }))
         })
@@ -330,13 +348,27 @@ export const useFeedStore = create<FeedStore>((set, get) => {
           })),
         )
     },
-    undo() {
-      const id = activeSpace()?.id,
+    expireUndo(id) {
+      if (get().undoOperation?.id === id)
+        set({ undoProfile: undefined, undoOperation: undefined })
+    },
+    async undo(id = get().undoOperation?.id) {
+      const operation = get().undoOperation,
         profile = get().undoProfile
-      if (id && profile)
-        void replaceLocalProfile(id, profile)
-          .then(() => set({ undoProfile: undefined }))
-          .catch(() => set((s) => ({ errors: [...s.errors, localWriteError] })))
+      if (
+        !operation ||
+        operation.id !== id ||
+        operation.spaceId !== activeSpace()?.id ||
+        !profile
+      )
+        return
+      set({ undoProfile: undefined, undoOperation: undefined })
+      try {
+        await replaceLocalProfile(operation.spaceId, profile)
+      } catch (error) {
+        set((s) => ({ errors: [...s.errors, localWriteError] }))
+        throw error
+      }
     },
     replaceProfile(profile) {
       const id = activeSpace()?.id

@@ -36,3 +36,44 @@ test('production app reopens offline and saves a personal event', async ({
     page.getByRole('heading', { name: '设置', exact: true }),
   ).toBeVisible()
 })
+
+test('production reset clears service worker caches before starting fresh', async ({
+  page,
+  context,
+}) => {
+  await page.route('https://api.github.com/**', (route) =>
+    route.fulfill({ json: [] }),
+  )
+  await page.goto('/settings/experimental')
+  await page.evaluate(async () => {
+    await navigator.serviceWorker.ready
+  })
+  const oldCaches = await page.evaluate(() => caches.keys())
+  expect(oldCaches.length).toBeGreaterThan(0)
+  await page.evaluate(async () => {
+    await (
+      await caches.open('old-private-cache')
+    ).put('/private', new Response('old'))
+  })
+  // Inspect the empty origin before the new app is allowed to create fresh caches.
+  await page.route('**/discover', (route) =>
+    route.fulfill({
+      contentType: 'text/html; charset=utf-8',
+      body: '<h1>重置完成</h1>',
+    }),
+  )
+  await context.setOffline(true)
+  page.once('dialog', (dialog) => dialog.accept())
+  await page.getByRole('button', { name: '清空数据', exact: true }).click()
+  await expect(page.getByRole('status')).toContainText('清理未完成')
+  await context.setOffline(false)
+  await page.getByRole('button', { name: '重试清理' }).click()
+  await expect(page.getByRole('heading', { name: '重置完成' })).toBeVisible()
+  expect(await page.evaluate(() => caches.keys())).toEqual([])
+  expect(
+    await page.evaluate(
+      async () => (await navigator.serviceWorker.getRegistrations()).length,
+    ),
+  ).toBe(0)
+  expect(await page.evaluate(() => indexedDB.databases())).toEqual([])
+})

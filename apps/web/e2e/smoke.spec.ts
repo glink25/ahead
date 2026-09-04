@@ -190,7 +190,7 @@ test('same repository feeds subscribe independently and cached events survive ne
   await page.goto('/settings')
   await page.getByRole('button', { name: /更新频道内容/ }).click()
   await expect(page.locator('.loading-progress')).toHaveCount(0)
-  await page.getByRole('link', { name: '关闭页面' }).click()
+  await page.getByRole('button', { name: '返回上一页' }).click()
   await expect(page.locator('.timeline-row')).toHaveCount(2)
   await expect(page.locator('.error-strip')).toBeVisible()
 })
@@ -229,7 +229,7 @@ test('empty calendar supports year and week; editor previews without saving', as
   await page.getByRole('button', { name: '高级编辑' }).click()
   await expect(yaml).toHaveValue(/freq: yearly/)
   await expect(yaml).toHaveValue(/keep: yes/)
-  await page.getByRole('link', { name: '关闭页面' }).click()
+  await page.getByRole('button', { name: '返回上一页' }).click()
   await expect(
     page.locator('.week-strip button[aria-pressed=true]'),
   ).toHaveText('二29')
@@ -251,7 +251,7 @@ test('tab and detail navigation preserve discovery position and settings hide di
   await page.getByRole('link', { name: '发现', exact: true }).click()
   await expect(page.locator('[data-index="1"]')).toBeInViewport()
   await page.locator('[data-index="1"]').getByRole('heading').click()
-  await page.getByRole('link', { name: '关闭页面' }).click()
+  await page.getByRole('button', { name: '返回上一页' }).click()
   await expect(page.locator('[data-index="1"]')).toBeInViewport()
   await page.getByRole('link', { name: '设置', exact: true }).click()
   await expect(

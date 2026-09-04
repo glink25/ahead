@@ -1,3 +1,4 @@
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { useMemo, useState, useRef, useLayoutEffect } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { expandRecurrence, type ResolvedEvent } from '@ahead/resolver'
@@ -286,7 +287,7 @@ export function MonthView({
                 update(keyFor(new Date(selected.getFullYear() - 1, 0, 1)))
               }
             >
-              ←
+              <ChevronLeft />
             </button>
             <h2>{selected.getFullYear()} 年</h2>
             <button
@@ -295,7 +296,7 @@ export function MonthView({
                 update(keyFor(new Date(selected.getFullYear() + 1, 0, 1)))
               }
             >
-              →
+              <ChevronRight />
             </button>
           </div>
           <div className="year-grid">
@@ -316,7 +317,7 @@ export function MonthView({
                 update(keyFor(d))
               }}
             >
-              ←
+              <ChevronLeft />
             </button>
             <h2>
               {selected.getFullYear()} 年 {selected.getMonth() + 1} 月
@@ -329,7 +330,7 @@ export function MonthView({
                 update(keyFor(d))
               }}
             >
-              →
+              <ChevronRight />
             </button>
           </div>
           <div className="week-strip">

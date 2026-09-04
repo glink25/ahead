@@ -1,3 +1,5 @@
+import { previousUrl } from '../../app/navigation'
+import { ChevronRight, Plus } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { useAuthSession } from '../../stores'
@@ -42,7 +44,9 @@ export function ProfilesView() {
     setBusy(true)
     try {
       await chooseProfile(id, session)
-      navigate('/mine')
+      previousUrl()?.startsWith('/mine')
+        ? navigate(-1)
+        : navigate('/mine', { replace: true })
     } catch {
       setMessage('未能切换个人资料，本机数据已保留')
     } finally {
@@ -72,7 +76,7 @@ export function ProfilesView() {
                     : ' · 本机'}
                 </small>
               </span>
-              <span>{space.id === db?.active ? '当前' : '→'}</span>
+              <span>{space.id === db?.active ? '当前' : <ChevronRight />}</span>
             </button>
             {(space.provision || space.feedProvision) &&
               space.status === 'attention' && (
@@ -117,7 +121,8 @@ export function ProfilesView() {
         open={!profiles.length}
       >
         <summary>
-          新建个人资料<span>＋</span>
+          新建个人资料
+          <Plus />
         </summary>
         <form
           className="settings-body"
@@ -126,7 +131,11 @@ export function ProfilesView() {
             setBusy(true)
             void createLocalProfile(name.trim(), privateRepo, account, bio)
               .then((id) => chooseProfile(id, session))
-              .then(() => navigate('/mine'))
+              .then(() =>
+                previousUrl()?.startsWith('/mine')
+                  ? navigate(-1)
+                  : navigate('/mine', { replace: true }),
+              )
               .catch(() => setMessage('未能创建资料，请检查本机存储后重试'))
               .finally(() => setBusy(false))
           }}
@@ -163,7 +172,8 @@ export function ProfilesView() {
       {session && (
         <details className="settings-group settings-disclosure">
           <summary>
-            通过仓库地址添加<span>＋</span>
+            通过仓库地址添加
+            <Plus />
           </summary>
           <form
             className="settings-body"

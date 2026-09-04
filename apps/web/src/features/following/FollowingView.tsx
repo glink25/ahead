@@ -1,3 +1,4 @@
+import { ArrowRight } from 'lucide-react'
 import { Link } from 'react-router'
 import { sourceKey } from '@ahead/protocol'
 import { useFeedStore } from '../../stores/feed'
@@ -7,9 +8,14 @@ import type { Subscription } from '@ahead/schema'
 const priorities = ['最低', '很低', '较低', '默认', '较高', '很高', '最高']
 export function FollowingView() {
   const { profile, feeds, users, listings, act, loading } = useFeedStore()
-  const personalFeed = profile.extensions?.[PERSONAL_FEED] as Subscription | undefined
+  const personalFeed = profile.extensions?.[PERSONAL_FEED] as
+    Subscription | undefined
   let personalKey: string | undefined
-  try { if (personalFeed) personalKey = sourceKey(personalFeed) } catch { /* Invalid external associations are reported by sync. */ }
+  try {
+    if (personalFeed) personalKey = sourceKey(personalFeed)
+  } catch {
+    /* Invalid external associations are reported by sync. */
+  }
   const channels = (profile.subscriptions ?? []).filter(
     (s) => s.kind !== 'user-data' && sourceKey(s) !== personalKey,
   )
@@ -29,7 +35,10 @@ export function FollowingView() {
       </h2>
       {!channels.length && (
         <p className="muted">
-          还没有订阅频道。<Link to="/discover">去发现 →</Link>
+          还没有订阅频道。
+          <Link to="/discover">
+            去发现 <ArrowRight />
+          </Link>
         </p>
       )}
       {channels.map((source) => {
