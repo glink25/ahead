@@ -1,50 +1,179 @@
 import { useState } from 'react'
-import { Link } from 'react-router'
+import { Link, useLocation } from 'react-router'
 import { useAuthSession } from '../../stores'
 import { useFeedStore } from '../../stores/feed'
-import { authenticatedAdapter, patProvider, oauthProvider } from '../../lib/auth'
-import { syncProfile, mergeProfile } from '../../lib/sync'
-import { createIdbStore } from '../../lib/idb'
-import type { UserData } from '@ahead/schema'
-import { sourceKey } from '@ahead/protocol'
-const syncStorage = createIdbStore('ahead-sync', 'profiles')
+import { patProvider, oauthProvider } from '../../lib/auth'
+import { useData } from '../../data/local'
+import { forgetSession } from '../../data/session'
+import { setPaused, syncNow } from '../../data/scheduler'
+const labels = {
+  local: '仅在本机',
+  pending: '等待同步',
+  offline: '等待联网',
+  syncing: '同步中',
+  synced: '已同步',
+  auth: '需要重新登录',
+  attention: '需要处理',
+  paused: '已暂停',
+}
 export function ProfileView() {
   const { session, setSession } = useAuthSession()
-  const { profile, act, replaceProfile, refresh } = useFeedStore()
-  const [locator, setLocator] = useState('')
-  const [path, setPath] = useState('ahead.yaml')
-  const [busy, setBusy] = useState(false)
+  const { profile, act, refresh, loading, errors } = useFeedStore()
+  const { db } = useData(),
+    location = useLocation()
+  const space = db?.spaces[db.active]
   const [message, setMessage] = useState('')
-  const synchronize = async () => {
-    if (!session) return
-    setBusy(true); setMessage('')
-    try {
-      const key = session.identity.id + ':' + sourceKey({ locator, manifestPath: path })
-      const base = await syncStorage.get<UserData>(key)
-      const snapshot = useFeedStore.getState().profile
-      const merged = await syncProfile({ adapter: authenticatedAdapter(), locator, path, local: snapshot, base })
-      // Do not erase interactions made while a network request was in flight.
-      const current = useFeedStore.getState().profile
-      replaceProfile(current === snapshot ? merged : mergeProfile(merged, current, snapshot))
-      await syncStorage.set(key, merged)
-      await refresh()
-      setMessage(current === snapshot ? '已合并本地与远端数据，并保存到 GitHub。' : '本次快照已保存到 GitHub；同步期间的新操作已保留，请再次同步。')
-    } catch (error) { setMessage(String(error) + ' 本地数据仍保留；如有版本冲突，请重试。') }
-    finally { setBusy(false) }
-  }
-  return <section className="profile-view"><p className="eyebrow">A LITTLE MORE YOU</p><h1>{session ? '@' + session.identity.login : '我的个人资料'}</h1>
-    <p>订阅与喜爱默认保存在本设备，无需登录。</p>
-    <label className="privacy-setting"><input type="checkbox" checked={Boolean(profile.settings?.privacyRemoteImages)} onChange={(e) => act({ type: 'privacy', enabled: e.target.checked })} />不加载事件中的外部图片 URL</label>
-    {session ? <><h2>同步到已有 UserData 文件</h2><p>首次同步合并两端的订阅与喜爱；之后保留本地删除操作。不会自动创建仓库。</p>
-      <label>仓库 Locator<input value={locator} onChange={(e) => setLocator(e.target.value)} placeholder="github:owner/my-ahead" /></label>
-      <label>Manifest 路径<input value={path} onChange={(e) => setPath(e.target.value)} /></label>
-      <button disabled={busy || !locator} onClick={() => void synchronize()}>{busy ? '同步中…' : '合并并同步到 GitHub'}</button>
-      <button className="quiet-button" onClick={() => {
-        void (session.providerId === oauthProvider.id ? oauthProvider : patProvider).logout().then(() => setSession(null)).catch((e) => setMessage(String(e)))
-      }}>退出登录</button>
-    </> : <Link className="primary-link" to="/login">登录 GitHub 以同步 →</Link>}
-    {message && <p role="status">{message}</p>}
-    <h2>兴趣偏好</h2><p>喜爱与隐藏会逐步调整推荐；权重限制在 -1 到 1。</p>
-    {Object.entries(profile.interests ?? {}).map(([tag, value]) => <p key={tag}>#{tag} <meter min={-1} max={1} value={value} /> {value.toFixed(2)}</p>)}
-  </section>
+  return (
+    <section className="profile-view">
+      <h1>设置</h1>
+      <h2>个人资料</h2>
+      <div className="settings-group">
+        <Link className="setting-row" to="/profiles">
+          <span>
+            <strong>{space?.name ?? '本机资料'}</strong>
+            <small className="profile-meta">
+              {space?.private === false ? '公开' : '私有'}
+            </small>
+          </span>
+          <span>切换 →</span>
+        </Link>
+        <Link className="setting-row" to="/following">
+          频道与关注<span>→</span>
+        </Link>
+      </div>
+      <h2>账户</h2>
+      <div className="settings-group">
+        <div className="setting-row">
+          <strong>{session ? '@' + session.identity.login : '尚未登录'}</strong>
+          {!session && <Link to="/login">登录 →</Link>}
+        </div>
+        {session && (
+          <button
+            className="setting-row danger"
+            onClick={() => {
+              void forgetSession()
+                .then(() =>
+                  (session.providerId === oauthProvider.id
+                    ? oauthProvider
+                    : patProvider
+                  ).logout(),
+                )
+                .then(() => setSession(null))
+                .catch(() => setMessage('退出未完成，请重试'))
+            }}
+          >
+            退出登录
+          </button>
+        )}
+      </div>
+      <h2>显示与隐私</h2>
+      <div className="settings-group">
+        <label className="setting-row">
+          加载外部图片
+          <input
+            role="switch"
+            type="checkbox"
+            checked={!profile.settings?.privacyRemoteImages}
+            onChange={(e) =>
+              act({ type: 'privacy', enabled: !e.target.checked })
+            }
+          />
+        </label>
+      </div>
+      <h2>数据与同步</h2>
+      <div className="settings-group">
+        <div className="setting-row">
+          <span>{space ? labels[space.status] : '正在打开资料'}</span>
+          {space?.lastSynced && (
+            <small>{new Date(space.lastSynced).toLocaleTimeString()}</small>
+          )}
+        </div>
+        {space?.account && (
+          <>
+            <button
+              className="setting-row"
+              onClick={() =>
+                void syncNow(space.id).catch(() =>
+                  setMessage('无法同步，请重试'),
+                )
+              }
+              disabled={space.status === 'syncing' || !session}
+            >
+              立即同步<span>↻</span>
+            </button>
+            <button
+              className="setting-row"
+              onClick={() =>
+                void setPaused(space.id, !space.paused).catch(() =>
+                  setMessage('未能保存设置'),
+                )
+              }
+            >
+              {space.paused ? '恢复自动同步' : '暂停自动同步'}
+            </button>
+          </>
+        )}
+        {(space?.status === 'auth' || space?.status === 'attention') && (
+          <Link
+            className="setting-row"
+            to={space.status === 'auth' ? '/login' : '/profiles'}
+          >
+            {space.status === 'auth' ? '重新登录' : '检查资料与仓库授权'}
+            <span>→</span>
+          </Link>
+        )}
+        {space?.remote && (
+          <details className="settings-disclosure">
+            <summary>
+              同步位置<span>›</span>
+            </summary>
+            <div className="settings-body">
+              <p>
+                {space.remote.owner}/{space.remote.repo}
+              </p>
+              {space.feed && (
+                <p>
+                  个人事件：{space.feed.owner}/{space.feed.repo}
+                </p>
+              )}
+            </div>
+          </details>
+        )}
+        <Link className="setting-row" to="/history">
+          历史与恢复<span>→</span>
+        </Link>
+        <button
+          className="setting-row"
+          disabled={loading}
+          onClick={() => void refresh()}
+        >
+          更新频道内容<span>{loading ? '更新中…' : '↻'}</span>
+        </button>
+      </div>
+      {message && (
+        <p role="status" className="feedback">
+          {message}
+        </p>
+      )}
+      <h2>高级</h2>
+      <div className="settings-group">
+        <details
+          id="diagnostics"
+          className="settings-disclosure"
+          open={location.hash === '#diagnostics' || undefined}
+        >
+          <summary>
+            诊断信息<span>›</span>
+          </summary>
+          <div className="settings-body diagnostic-output">
+            {errors.map((e, i) => (
+              <p key={i}>{e}</p>
+            ))}
+            {space?.error && <p>{space.error}</p>}
+            {!errors.length && !space?.error && <p>暂无异常</p>}
+          </div>
+        </details>
+      </div>
+    </section>
+  )
 }

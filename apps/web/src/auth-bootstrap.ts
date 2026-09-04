@@ -68,7 +68,7 @@ export async function bootstrapAuthSession(options: {
   ])
   const pat = patResult.status === 'fulfilled' ? patResult.value : null
   if (oauthResult.status === 'fulfilled') {
-    return { session: oauthResult.value ?? pat, error: null }
+    return { session: oauthResult.value ?? pat, error: patResult.status === 'rejected' && !oauthResult.value ? '暂时无法验证登录，请联网后重试' : null }
   }
   if (oauthResult.reason instanceof GitHubOAuthError && oauthResult.reason.kind === 'network') {
     return { session: pat, error: describeOAuthError(oauthResult.reason) }

@@ -3,6 +3,7 @@ export interface KeyValueStore {
   get<T>(key: string): Promise<T | undefined>
   set(key: string, value: unknown): Promise<void>
   delete(key: string): Promise<void>
+  update<T>(key: string, change: (value: T | undefined) => T): Promise<T>
   keys(): Promise<string[]>
 }
 
@@ -54,6 +55,23 @@ export function createIdbStore(dbName: string, storeName: string): KeyValueStore
     },
     async delete(key) {
       await transact('readwrite', (store) => store.delete(key))
+    },
+    async update<T>(key: string, change: (value: T | undefined) => T): Promise<T> {
+      const database = await open()
+      return new Promise<T>((resolve, reject) => {
+        const tx = database.transaction(storeName, 'readwrite')
+        const store = tx.objectStore(storeName)
+        let result: T
+        let cause: unknown
+        const read = store.get(key)
+        read.onsuccess = () => {
+          try { result = change(read.result); store.put(result, key) }
+          catch (error) { cause = error; tx.abort() }
+        }
+        tx.oncomplete = () => resolve(result)
+        tx.onabort = () => reject(cause ?? tx.error ?? new Error('Local transaction aborted'))
+        tx.onerror = () => reject(tx.error)
+      })
     },
     async keys() {
       const keys = await transact<IDBValidKey[]>('readonly', (store) => store.getAllKeys())

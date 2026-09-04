@@ -17,6 +17,10 @@ export interface RepositorySnapshot {
   locator: ResourceLocator
   defaultBranch: string
   headSha: string
+  committedAt?: string
+  repositoryId?: number
+  description?: string | null
+  writable?: boolean
   private: boolean
 }
 

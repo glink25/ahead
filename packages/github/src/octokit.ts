@@ -14,7 +14,7 @@ export function createOctokit(getAccessToken: () => Promise<string>): AheadOctok
       onSecondaryRateLimit: () => false,
     },
     retry: {
-      doNotRetry: ['400', '401', '403', '404', '409', '422'],
+      doNotRetry: [400, 401, 403, 404, 409, 422],
     },
   })
 

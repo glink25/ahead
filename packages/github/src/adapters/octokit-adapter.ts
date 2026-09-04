@@ -39,8 +39,19 @@ export class OctokitAdapter implements RepositoryAdapter {
       locator,
       defaultBranch: repository.data.default_branch,
       headSha: commit.data.sha,
+      committedAt: commit.data.commit.committer?.date ?? undefined,
+      repositoryId: repository.data.id,
+      description: repository.data.description,
+      writable: repository.data.permissions?.push,
       private: repository.data.private,
     }
+  }
+
+  async listRepositories(page = 1) {
+    const response = await this.octokit.request('GET /user/repos', { per_page: 100, page, sort: 'updated', affiliation: 'owner,collaborator,organization_member' })
+    return response.data.map((repo) => ({
+      owner: repo.owner.login, repo: repo.name, private: repo.private, repositoryId: repo.id, writable: repo.permissions?.push,
+    }))
   }
 
   async readFile(

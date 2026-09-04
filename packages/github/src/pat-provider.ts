@@ -49,7 +49,8 @@ export class PersonalAccessTokenProvider implements AuthProvider {
         capabilities: probe.capabilities,
       }
       return this.session
-    } catch {
+    } catch (error) {
+      if ((error as { status?: number })?.status !== 401) throw error
       await this.tokenStore.clear()
       this.session = null
       this.scopes = []

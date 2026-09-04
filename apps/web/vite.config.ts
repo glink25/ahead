@@ -1,3 +1,4 @@
+import { offlinePlugin } from './offline-plugin'
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
 import path from 'node:path'
@@ -8,9 +9,10 @@ const rootDir = path.dirname(fileURLToPath(import.meta.url))
 const packagesDir = path.resolve(rootDir, '../../packages')
 
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [react(), tailwindcss(), offlinePlugin()],
   resolve: {
     alias: {
+      '@ahead/sync': path.join(packagesDir, 'sync/src'),
       '@ahead/core': path.join(packagesDir, 'core/src'),
       '@ahead/editor': path.join(packagesDir, 'editor/src'),
       '@ahead/github': path.join(packagesDir, 'github/src'),

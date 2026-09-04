@@ -7,9 +7,9 @@ export const oauthProvider = new GitHubOAuthProvider({
   redirectUri: location.origin + '/login',
   credentialStore: indexedDbOAuthCredentialStore,
 })
-export function authenticatedAdapter() {
+export function authenticatedAdapter(session = useAuthSession.getState().session) {
   return new OctokitAdapter(async () => {
-    const provider = useAuthSession.getState().session?.providerId === oauthProvider.id ? oauthProvider : patProvider
+    const provider = session?.providerId === oauthProvider.id ? oauthProvider : patProvider
     return (await provider.getCredential()).accessToken
   })
 }

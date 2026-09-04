@@ -14,7 +14,7 @@ export function selectMine(profile: ResolvedProfile, now = new Date()) {
   const ids = new Set([...profile.favorites, ...profile.pins])
   return profile.events.filter((event) =>
     !profile.hidden.includes(event.id) && event.status !== 'cancelled' && event.status !== 'archived' &&
-    (ids.has(event.id) || event.sourceLocators.some((source) => sources.has(source))),
+    (event.sourceLocators.some((s) => s.startsWith('personal:')) || ids.has(event.id) || event.sourceLocators.some((source) => sources.has(source))),
   ).sort((a, b) => {
     const left = daysUntilEvent(a, now) ?? Infinity
     const right = daysUntilEvent(b, now) ?? Infinity

@@ -1,31 +1,131 @@
-import { Link, useSearchParams } from 'react-router'
-import { assignBucket, daysUntilEvent } from '@ahead/recommendation'
+import { useData } from '../../data/local'
+import { useEffect, useRef } from 'react'
+import { Link, useLocation, useNavigate } from 'react-router'
 import { useFeedView } from '../../hooks/useFeedView'
-import { BUCKET_LABELS, countdownFor, pickText } from '../../lib/format'
+import { countdownFor, pickText } from '../../lib/format'
 import { FavoriteButton } from '../discover/PosterCard'
 import { MonthView } from './MonthView'
 import { posterFor } from '../../lib/media'
 import { useFeedStore } from '../../stores/feed'
 
 export function MineTab() {
+  const active = useData((s) => s.db?.spaces[s.db.active])
   const { mine, resolved } = useFeedView()
   const { feeds, profile } = useFeedStore()
-  const [params] = useSearchParams()
-  if (!mine.length) return <div className="empty-view"><span className="empty-orbit">♡</span><p className="eyebrow">YOUR NEXT CHAPTER</p><h1>给未来，留一点期待。</h1><p>订阅一个源，或喜爱一个事件。<br />值得等的日子，就会来到这里。</p><Link className="primary-link" to="/discover">去发现盼头 ↗</Link></div>
-  if (params.get('view') === 'calendar') return <div className="tab-scroll"><MonthView events={mine} timezone={resolved.timezone} /></div>
+  const location = useLocation(),
+    navigate = useNavigate()
+  const savedSearch = useRef('')
+  if (location.pathname === '/mine') savedSearch.current = location.search
+  const params = new URLSearchParams(savedSearch.current)
+  const calendar = params.get('view') === 'calendar'
+  const timeline = useRef<HTMLDivElement>(null)
+  const scroll = useRef(0)
+  useEffect(() => {
+    if (!calendar && timeline.current)
+      timeline.current.scrollTop = scroll.current
+  }, [calendar])
+  const switchView = () => {
+    params.set('view', calendar ? 'timeline' : 'calendar')
+    navigate('/mine?' + params)
+  }
   let previous = ''
-  return <div className="tab-scroll"><div className="timeline"><header><p className="eyebrow">YOUR HORIZON</p><h1>我的盼头<span>{mine.length}</span></h1><p>把值得期待的日子，放在眼前。</p></header>
-    {mine.map((event) => {
-      const bucket = assignBucket(daysUntilEvent(event, new Date()))
-      const heading = bucket !== previous
-      previous = bucket
-      const countdown = countdownFor(event)
-      const feed = feeds.find((f) => event.sourceLocators.includes(f.sourceLocator))
-      const poster = posterFor(event, { locator: feed?.locator, headSha: feed?.headSha, allowRemoteImages: !profile.settings?.privacyRemoteImages })
-      return <section key={event.id}>{heading && <h2 className="bucket-heading">{BUCKET_LABELS[bucket]}</h2>}
-        <div className="timeline-row"><div className="timeline-thumb" style={{ background: poster.gradient[1] }}>{poster.url && <img src={poster.url} alt={poster.alt} loading="lazy" />}</div>
-          <Link to={'/events/' + encodeURIComponent(event.id)}><small>{countdown.headline}</small><h3>{pickText(event.title)}</h3><p>{countdown.dateLabel}</p><div className="tag-list">{event.tags?.map((t) => <span key={t}>#{t}</span>)}</div></Link><FavoriteButton event={event} /></div>
-      </section>
-    })}
-  </div></div>
+  return (
+    <div className="mine-view">
+      <div className="mine-toolbar">
+        <h1><Link to="/profiles">{active?.name ?? '我的盼头'} <span className="profile-chevron">⌄</span></Link></h1>
+        <div>
+          <Link to="/following">关注</Link>
+          <button
+            aria-label={calendar ? '切换时间轴' : '切换日历'}
+            onClick={switchView}
+          >
+            {calendar ? '☷ 时间轴' : '▦ 日历'}
+          </button>
+        </div>
+      </div>
+      {calendar ? (
+        <MonthView
+          events={mine}
+          timezone={resolved.timezone}
+          search={savedSearch.current}
+        />
+      ) : (
+        <div
+          className="tab-scroll"
+          ref={timeline}
+          onScroll={(e) => {
+            scroll.current = e.currentTarget.scrollTop
+          }}
+        >
+          {!mine.length ? (
+            <div className="empty-view">
+              <span className="empty-orbit">＋</span>
+              <h2>还没有安排</h2>
+              <Link className="primary-link" to="/studio">
+                新建事件
+              </Link>
+              <Link to="/discover">去发现</Link>
+            </div>
+          ) : (
+            <div className="timeline">
+              {mine.map((event) => {
+                const countdown = countdownFor(event)
+                const group = countdown.dateLabel || '日期待定'
+                const heading = group !== previous
+                previous = group
+                const feed = feeds.find((f) =>
+                  event.sourceLocators.includes(f.sourceLocator),
+                )
+                const poster = posterFor(event, {
+                  locator: feed?.locator,
+                  headSha: feed?.headSha,
+                  allowRemoteImages: !profile.settings?.privacyRemoteImages,
+                })
+                return (
+                  <section key={event.id}>
+                    {heading && <h2 className="bucket-heading">{group}</h2>}
+                    <div className="timeline-row">
+                      <Link
+                        className="timeline-thumb"
+                        to={'/events/' + encodeURIComponent(event.id)}
+                        tabIndex={-1}
+                        aria-hidden
+                        style={{ background: poster.gradient[1] }}
+                      >
+                        {poster.url && (
+                          <img
+                            src={poster.url}
+                            alt=""
+                            loading="lazy"
+                            onError={(e) => {
+                              e.currentTarget.style.opacity = '0'
+                            }}
+                          />
+                        )}
+                      </Link>
+                      <Link
+                        className="timeline-copy"
+                        to={'/events/' + encodeURIComponent(event.id)}
+                      >
+                        <small>{countdown.headline}</small>
+                        <h3>{pickText(event.title)}</h3>
+                        <p>
+                          {pickText(event.summary) ||
+                            pickText(event.description)}
+                        </p>
+                      </Link>
+                      <FavoriteButton event={event} />
+                    </div>
+                  </section>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
+      <Link className="create-fab" to="/studio" aria-label="新建事件">
+        ＋
+      </Link>
+    </div>
+  )
 }

@@ -8,7 +8,7 @@ const sha = 'a'.repeat(40)
 const locator = { scheme: 'github', owner: 'a', repo: 'b' }
 function memory(): KeyValueStore {
   const map = new Map<string, unknown>()
-  return { get: async <T>(key: string) => map.get(key) as T | undefined, set: async (key, value) => { map.set(key, value) }, delete: async (key) => { map.delete(key) }, keys: async () => [...map.keys()] }
+  return { update: async <T>(key: string, change: (v: T | undefined) => T) => { const next = change(map.get(key) as T | undefined); map.set(key, next); return next }, get: async <T>(key: string) => map.get(key) as T | undefined, set: async (key, value) => { map.set(key, value) }, delete: async (key) => { map.delete(key) }, keys: async () => [...map.keys()] }
 }
 function adapter(document: unknown): RepositoryAdapter {
   return {
