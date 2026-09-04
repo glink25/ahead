@@ -25,7 +25,7 @@ function readLegacyOAuthReturnUrl(): string | null {
   }
 }
 
-/** Prefer the live URL (module-safe under CSP); fall back to legacy localStorage stash. */
+/** Prefer the live URL; fall back to the legacy localStorage stash. */
 export function resolveOAuthReturnUrl(
   href = globalThis.location?.href ?? '',
 ): string | null {

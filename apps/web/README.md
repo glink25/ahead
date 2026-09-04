@@ -21,10 +21,20 @@ pnpm dev
 
 OAuth 需要同时启动 `pnpm dev:auth`，并把 `VITE_AUTH_BASE_URL` 设为
 `http://localhost:8787`。授权成功后 Auth 会带着 `github_authorized` 回到 `/login`；
-应用模块启动时消费该参数、写入 IndexedDB，再用 `history.replaceState` 清掉地址栏
-（不使用内联脚本，以兼容生产 CSP `script-src 'self'`）。PAT 与 OAuth 凭证均写在本机
+应用模块启动时消费该参数、写入 IndexedDB，再用 `history.replaceState` 清掉地址栏。
+PAT 与 OAuth 凭证均写在本机
 IndexedDB；刷新恢复登录不依赖 Auth 是否在线。开发时 Vite 已 alias 到 packages 源码。
 当前有基础 Web App Manifest，但没有 service worker：已加载的应用可离线读资料/事件缓存；完全断网时首次加载应用外壳不在支持范围内。
+
+## Cloudflare 响应头
+
+`public/_headers` 随构建复制到 `dist/_headers`。不设置 Content-Security-Policy 或
+Content-Security-Policy-Report-Only，也没有 HTML meta CSP；保留 nosniff、Referrer-Policy
+和 X-Frame-Options。当前 Ajv 校验器在浏览器中动态编译，禁止动态求值的 CSP 会阻止源数据校验。
+CSP 与 Cookie 登录机制无关；移除 CSP 也意味着不再提供该策略的脚本和资源加载限制。
+
+修改后需要重新部署 Cloudflare Pages。若部署后响应仍带 CSP，应检查 Cloudflare 控制台的
+响应头变换规则或额外的 Worker/代理策略；这类外部规则不由本仓库控制。
 
 ## 验证
 
