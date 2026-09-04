@@ -164,6 +164,7 @@ export function ProfileView() {
           {message}
         </p>
       )}
+      <h2>高级</h2>
       <div className="settings-group">
         <Link className="setting-row" to="/settings/experimental">
           实验性设置

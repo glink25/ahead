@@ -1,3 +1,4 @@
+import { LoaderCircle, Sparkles } from 'lucide-react'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useFeedView } from '../../hooks/useFeedView'
 import { useFeedStore } from '../../stores/feed'
@@ -128,16 +129,18 @@ export function DiscoverTab({ active = true }: { active?: boolean }) {
     window.addEventListener('keydown', keydown)
     return () => window.removeEventListener('keydown', keydown)
   }, [events, index, height, active])
+  if (!events.length && loading)
+    return (
+      <div className="empty-view" role="status" aria-label="正在加载">
+        <LoaderCircle className="loading-spinner" />
+      </div>
+    )
   if (!events.length)
     return (
       <div className="empty-view">
-        <span className="empty-orbit">✧</span>
+        <span className="empty-orbit"><Sparkles /></span>
         <h1>
-          {loading
-            ? '正在加载…'
-            : marketStatus === 'failed'
-              ? '市场加载失败'
-              : '暂时没有事件'}
+          {marketStatus === 'failed' ? '暂时无法加载内容' : '暂时没有事件'}
         </h1>
         <button onClick={() => void refresh()} disabled={loading}>
           重新加载

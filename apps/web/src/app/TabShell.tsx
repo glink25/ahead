@@ -16,8 +16,7 @@ export function TabShell({ children }: { children: ReactNode }) {
   const back = useAppBack()
   const active = useData((s) => s.db?.spaces[s.db.active])
   const [mineUrl, setMineUrl] = useState('/mine')
-  const { loading, errors, retry, loginSuggested, marketStatus, marketLoaded } =
-    useFeedStore()
+  const { loading, errors, retry, loginSuggested } = useFeedStore()
   const [dismissedErrors, setDismissedErrors] = useState<string[]>([])
   const storageError = errors.some((error) => /存储|保存|恢复本地/.test(error))
   useEffect(() => {
@@ -117,21 +116,8 @@ export function TabShell({ children }: { children: ReactNode }) {
           </Link>
         </div>
       </header>
-      {loading && (
+      {loading && location.pathname !== '/discover' && (
         <div className="loading-progress" role="status" aria-label="正在更新" />
-      )}
-      {location.pathname === '/discover' && marketStatus !== 'idle' && (
-        <div className="market-progress" role="status" aria-live="polite">
-          {marketStatus === 'initial'
-            ? '正在读取首批内容…'
-            : marketStatus === 'appending'
-              ? `正在追加内容 · 已读取 ${marketLoaded} 个源`
-              : marketStatus === 'paused'
-                ? '已暂停追加'
-                : marketStatus === 'complete'
-                  ? `市场已加载 · ${marketLoaded} 个源`
-                  : '追加失败，可重试'}
-        </div>
       )}
       {!!errors.length &&
         (tab || storageError) &&

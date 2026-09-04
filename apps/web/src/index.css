@@ -1322,19 +1322,6 @@ p {
 .confirm-panel h2 {margin:0;font-size:20px}
 .personal-actions {display:flex;align-items:center;gap:20px;margin:20px 0;font-size:14px}
 
-/* Streaming status stays out of the poster's layout, preserving scroll geometry. */
-.market-progress {
-  position: absolute;
-  top: calc(var(--header-height) + env(safe-area-inset-top) + 8px);
-  right: 16px;
-  z-index: 21;
-  padding: 4px 10px;
-  border-radius: 14px;
-  background: #102218b3;
-  color: #fff;
-  font-size: 11px;
-  pointer-events: none;
-}
 .error-strip { white-space: normal; flex-wrap: wrap; }
 
 /* Shared icon sizing keeps buttons and inline affordances consistent. */
@@ -1385,4 +1372,15 @@ summary .lucide {
 }
 [data-sonner-toaster] {
   font-family: inherit;
+}
+
+.loading-spinner.lucide {
+  width: 28px;
+  height: 28px;
+  color: var(--muted);
+  animation: spinner-turn 1s linear infinite;
+}
+@keyframes spinner-turn { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .loading-spinner.lucide { animation: none; }
 }
