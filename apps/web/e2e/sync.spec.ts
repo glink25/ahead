@@ -223,7 +223,13 @@ test('login selects profiles, auto-syncs standard manifests and keeps public/pri
     if (request.url().includes('api.github.com/') && request.url().includes('/issues?'))
       registryCredentials.push(Boolean(request.headers().authorization))
   })
+  let release!: () => void
+  const restoring = new Promise<void>(resolve => { release = resolve })
+  await page.route('https://api.github.com/user', async route => { await restoring; await route.fallback() })
   await page.reload()
+  await expect(page.getByRole('status')).toHaveText('正在恢复账户…')
+  await expect(page.getByRole('link', { name: '新建事件', exact: true })).toHaveCount(0)
+  release()
   await expect.poll(() => registryCredentials.length).toBeGreaterThan(0)
   expect(registryCredentials.every(Boolean)).toBe(true)
 })

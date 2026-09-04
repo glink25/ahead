@@ -42,7 +42,7 @@ export function App() {
   const browsing =
     location.pathname === '/mine' || location.pathname === '/discover'
   const mine = location.pathname === '/mine'
-  const { setSession, setLoading, setRestoreError } = useAuthSession()
+  const { setSession, setLoading, setRestoreError, loading: restoringIdentity } = useAuthSession()
   useEffect(() => {
     const explicit = location.search.includes('github_authorized=') || sessionStorage.getItem('ahead-login-choice') === '1'
     sessionStorage.removeItem('ahead-login-choice')
@@ -54,6 +54,7 @@ export function App() {
     })().catch((error) => setRestoreError(String(error))).finally(() => setLoading(false))
     void useFeedStore.getState().initialize().catch(() => useFeedStore.setState({ errors: ['无法打开本机资料，请检查浏览器存储权限'], loading: false }))
   }, [setSession, setLoading, setRestoreError])
+  if (restoringIdentity) return <div className="empty-view" role="status">正在恢复账户…</div>
   return (
     <TabShell>
       <div

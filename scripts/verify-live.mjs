@@ -47,6 +47,7 @@ async function login(p, account) {
 }
 async function create(p, name, visibility = 'public') {
   await p.goto(baseURL + '/profiles')
+  await expect(p.locator('.profiles-view > .muted')).toContainText('@')
   const section = p.locator('details').filter({ has: p.getByPlaceholder('例如：我的盼头、工作、游戏') })
   if (await section.getAttribute('open') === null) await section.locator('summary').click()
   await p.getByPlaceholder('例如：我的盼头、工作、游戏').fill(name)
@@ -197,7 +198,7 @@ try {
     await channel.getByRole('combobox').selectOption('2')
     await expect.poll(async () => Object.values((await active(consumer)).records).find(r => r.collection === 'subscriptions' && r.value?.locator?.endsWith(resource.feed.repo))?.value?.priority).toBe(2)
     const available = consumer.locator('.following-card').filter({ hasText: `链路验证 ${resource.account} ${run}` }).filter({ has: consumer.getByRole('button', { name: '关注', exact: true }) })
-    await available.getByRole('button', { name: '关注', exact: true }).click()
+    if (await available.count()) await available.getByRole('button', { name: '关注', exact: true }).click()
     await expect(consumer.getByRole('button', { name: '取消关注', exact: true })).toHaveCount(1)
     await synced(consumer)
     const profile = await document(accounts[index], report.resources[index].profile)
@@ -210,6 +211,7 @@ try {
     await expect(consumer.locator('.timeline-row').filter({ hasText: `发布更新 ${resource.account} ${trial}` })).toHaveCount(1, { timeout: 60000 })
     record(`${accounts[index]} receives a new publisher commit without re-registering the source`)
     await consumer.goto(baseURL + '/events/' + encodeURIComponent(event.id))
+    await expect(consumer.getByRole('button', { name: /^(喜爱|取消喜爱)$/ })).toBeVisible({ timeout: 60000 })
     if (await consumer.getByRole('button', { name: '喜爱', exact: true }).isVisible()) await consumer.getByRole('button', { name: '喜爱', exact: true }).click()
     await expect(consumer.getByRole('button', { name: '取消喜爱', exact: true })).toBeVisible(); await synced(consumer)
     await consumer.goto(baseURL + '/following')
