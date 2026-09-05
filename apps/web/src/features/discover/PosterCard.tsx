@@ -8,6 +8,7 @@ import type { ResolvedEvent } from '@ahead/resolver'
 import { useFeedStore } from '../../stores/feed'
 import { countdownFor, pickText } from '../../lib/format'
 import { posterFor } from '../../lib/media'
+import { tagLabel } from '../../lib/tag-label'
 
 export function EvidenceLinks({ evidence }: { evidence?: Evidence[] }) {
   return (
@@ -180,7 +181,7 @@ export function PosterCard({
         <div className="poster-main">
           <div className="tag-list">
             {event.tags?.map((tag) => (
-              <TagChip key={tag}># {tag}</TagChip>
+              <TagChip key={tag}># {tagLabel(tag, event, feeds, document.documentElement.lang)}</TagChip>
             ))}
           </div>
           <Link to={'/events/' + encodeURIComponent(event.id)}>
