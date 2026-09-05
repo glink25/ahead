@@ -38,6 +38,12 @@ const LoginPage = lazy(() =>
     default: module.LoginPage,
   })),
 )
+const ChannelDetail = lazy(() =>
+  import('../features/share/ChannelDetail').then((module) => ({ default: module.ChannelDetail })),
+)
+const PersonDetail = lazy(() =>
+  import('../features/share/PersonDetail').then((module) => ({ default: module.PersonDetail })),
+)
 
 function skeletonFor(path: string): SkeletonVariant {
   if (path === '/discover') return 'poster'
@@ -138,6 +144,8 @@ export function App() {
           <Route path="/mine" element={null} />
           <Route path="/discover" element={null} />
           <Route path="/events/:id" element={<EventDetail />} />
+          <Route path="/channels/view" element={<ChannelDetail />} />
+          <Route path="/people/view" element={<PersonDetail />} />
           <Route path="/following" element={<FollowingView />} />
           <Route path="/studio" element={<StudioPage />} />
           <Route path="/profiles" element={<ProfilesView />} />

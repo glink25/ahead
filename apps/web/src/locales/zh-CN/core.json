@@ -183,7 +183,22 @@
     "personal_events": "个人事件：",
     "refresh_channels": "更新频道内容",
     "updating_2": "更新中…",
-    "advanced": "高级"
+    "advanced": "高级",
+    "copy_link": "复制链接",
+    "link_copied": "链接已复制",
+    "copy_this_address": "复制此地址",
+    "sync_before_copying_link": "同步到 GitHub 后才能复制链接",
+    "sign_in_to_view_this_resource": "登录 GitHub 后查看此资源",
+    "could_not_open_shared_resource": "无法打开此资源，请检查链接、仓库权限或稍后重试。",
+    "some_event_sources_could_not_be_opened": "部分事件来源无法访问，当前展示可读取的内容。",
+    "events": "事件",
+    "channels": "频道",
+    "people": "关注的人",
+    "channel_details": "频道详情",
+    "user_details": "用户详情",
+    "follow": "关注",
+    "followed": "已关注",
+    "view_profile": "查看个人资料"
   },
   "language": {
     "label": "语言",

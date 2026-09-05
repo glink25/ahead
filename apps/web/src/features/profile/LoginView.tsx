@@ -4,12 +4,15 @@ import { useTranslation } from 'react-i18next'
 import { ChevronRight } from 'lucide-react'
 import { activateSession } from '../../data/session'
 import { useState, type FormEvent } from 'react'
-import { Navigate } from 'react-router'
+import { Navigate, useSearchParams } from 'react-router'
 import { useAuthSession } from '../../stores'
 import { patProvider, oauthProvider } from '../../lib/auth'
 export function LoginPage() {
   useFeatureTranslations('login')
   const { t } = useTranslation()
+  const [params] = useSearchParams()
+  const requested = params.get('returnTo') ?? sessionStorage.getItem('ahead-login-return')
+  const returnTo = requested?.startsWith('/') && !requested.startsWith('//') ? requested : undefined
 
   const [token, setToken] = useState('')
   const [error, setError] = useState(false)
@@ -32,7 +35,10 @@ export function LoginPage() {
     }
   }
   if (loading) return <PageSkeleton variant="settings" />
-  if (session) return <Navigate to="/profiles?choose=1" replace />
+  if (session) {
+    if (returnTo) sessionStorage.removeItem('ahead-login-return')
+    return <Navigate to={returnTo ?? '/profiles?choose=1'} replace />
+  }
   return (
     <section className="login-view">
       <h1>{t('messages.sign_in_to_ahead')}</h1>
@@ -44,6 +50,7 @@ export function LoginPage() {
             setBusy(true)
             setError(false)
             sessionStorage.setItem('ahead-login-choice', '1')
+            if (returnTo) sessionStorage.setItem('ahead-login-return', returnTo)
             void oauthProvider
               .authenticate()
               .catch(() => setError(true))

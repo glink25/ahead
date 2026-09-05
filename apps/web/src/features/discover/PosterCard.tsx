@@ -53,11 +53,11 @@ export function FavoriteButton({ event }: { event: ResolvedEvent }) {
   )
 }
 
-export function FeedSourceBar({ event }: { event: ResolvedEvent }) {
+export function FeedSourceBar({ event, availableFeeds }: { event: ResolvedEvent; availableFeeds?: ReturnType<typeof useFeedStore.getState>['feeds'] }) {
   const { t, i18n } = useTranslation()
 
   const { feeds, profile, act, ready } = useFeedStore()
-  const sources = feeds.filter((f) =>
+  const sources = (availableFeeds ?? feeds).filter((f) =>
     event.sourceLocators.includes(f.sourceLocator),
   )
   return (
@@ -75,7 +75,9 @@ export function FeedSourceBar({ event }: { event: ResolvedEvent }) {
         return (
           <div className="source-bar" key={feed.sourceLocator}>
             <div>
-              <strong>{name}</strong>
+              <Link to={'/channels/view?source=' + encodeURIComponent(feed.sourceLocator)}>
+                <strong>{name}</strong>
+              </Link>
             </div>
             <button
               disabled={!ready}

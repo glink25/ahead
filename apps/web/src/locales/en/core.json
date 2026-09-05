@@ -183,7 +183,22 @@
     "personal_events": "Personal events:",
     "refresh_channels": "Refresh channels",
     "updating_2": "Updating…",
-    "advanced": "Advanced"
+    "advanced": "Advanced",
+    "copy_link": "Copy link",
+    "link_copied": "Link copied",
+    "copy_this_address": "Copy this address",
+    "sync_before_copying_link": "Sync to GitHub before copying a link",
+    "sign_in_to_view_this_resource": "Sign in to GitHub to view this resource",
+    "could_not_open_shared_resource": "Could not open this resource. Check the link or repository access and retry.",
+    "some_event_sources_could_not_be_opened": "Some event sources could not be opened. Showing the available content.",
+    "events": "Events",
+    "channels": "Channels",
+    "people": "People",
+    "channel_details": "Channel details",
+    "user_details": "User details",
+    "follow": "Follow",
+    "followed": "Following",
+    "view_profile": "View profile"
   },
   "language": {
     "label": "Language",

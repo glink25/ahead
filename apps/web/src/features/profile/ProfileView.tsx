@@ -12,6 +12,7 @@ import { patProvider, oauthProvider } from '../../lib/auth'
 import { useData } from '../../data/local'
 import { forgetSession } from '../../data/session'
 import { setPaused, syncNow } from '../../data/scheduler'
+import { sourceKey } from '@ahead/protocol'
 export function ProfileView() {
   useFeatureTranslations('settings')
   const { t, i18n } = useTranslation()
@@ -32,6 +33,12 @@ export function ProfileView() {
   const { db, ready } = useData(),
     location = useLocation()
   const space = db?.spaces[db.active]
+  const profileSource = space?.remote && !space.pending.length
+    ? sourceKey({
+        locator: 'github:' + space.remote.owner + '/' + space.remote.repo,
+        manifestPath: space.remote.path,
+      })
+    : undefined
   const [message, setMessage] = useState('')
   if (location.hash === '#diagnostics')
     return <Navigate to="/settings/experimental#diagnostics" replace />
@@ -55,6 +62,19 @@ export function ProfileView() {
         <Link className="setting-row" to="/following">
            {t('messages.channels_and_following')} <ChevronRight />
         </Link>
+        {profileSource && (
+          <Link className="setting-row" to={'/people/view?source=' + encodeURIComponent(profileSource)}>
+            {t('messages.view_profile')} <ChevronRight />
+          </Link>
+        )}
+        {!profileSource && (space?.remote || space?.provision) && (
+          <div className="setting-row" aria-disabled="true">
+            <span>
+              {t('messages.view_profile')}
+              <small className="profile-meta">{t('messages.sync_before_copying_link')}</small>
+            </span>
+          </div>
+        )}
       </div>
       <h2>{t('messages.account')}</h2>
       <div className="settings-group">

@@ -150,6 +150,8 @@ export interface FetchFeedOptions {
   validator?: OefValidator
   ref?: string
   cache?: RepoCache
+  /** Authenticated, non-persistent reads may opt into private repositories. */
+  allowPrivate?: boolean
 }
 
 /**
@@ -164,7 +166,8 @@ export async function fetchFeed(options: FetchFeedOptions): Promise<LoadedFeed> 
   const manifestPath = safePath(options.manifestPath ?? DEFAULT_MANIFEST_PATH)
 
   const snapshot = await options.adapter.inspect({ ...locator, ref: options.ref ?? locator.ref })
-  if (snapshot.private) throw new FeedLoadError('messages.public_feeds_cannot_read_private_repositories', sourceLocator)
+  if (snapshot.private && !options.allowPrivate)
+    throw new FeedLoadError('messages.public_feeds_cannot_read_private_repositories', sourceLocator)
   const headSha = snapshot.headSha
   const cached = await options.cache?.read(sourceLocator, manifestPath, headSha)
   if (cached) return { sourceLocator, manifestPath, feed: assertEventFeed(cached.feed, validator, sourceLocator), headSha, locator }

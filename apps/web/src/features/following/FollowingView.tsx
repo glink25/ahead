@@ -54,7 +54,11 @@ export function FollowingView() {
         return (
           <article className="following-card" key={key}>
             <div className="setting-row">
-              <h3>{pickText(feed?.feed.name) || t('messages.untitled_channel')}</h3>
+              <h3>
+                <Link to={'/channels/view?source=' + encodeURIComponent(key)}>
+                  {pickText(feed?.feed.name) || t('messages.untitled_channel')}
+                </Link>
+              </h3>
               <button onClick={() => act({ type: 'unsubscribe', source })}>
                  {t('messages.unsubscribe')} </button>
             </div>
@@ -96,12 +100,9 @@ export function FollowingView() {
         return (
           <article className="following-card" key={key}>
             <div className="setting-row">
-              <h3>
-                {pickText(user?.displayName) ||
-                  pickText(listing?.source.name) ||
-                  listing?.title ||
-                  t('messages.followed_user')}
-              </h3>
+              <h3><Link to={'/people/view?source=' + encodeURIComponent(key)}>
+                {pickText(user?.displayName) || pickText(listing?.source.name) || listing?.title || t('messages.followed_user')}
+              </Link></h3>
               <button onClick={() => act({ type: 'unsubscribe', source })}>
                  {t('messages.unfollow')} </button>
             </div>
@@ -146,7 +147,7 @@ export function FollowingView() {
             className="following-card setting-row"
             key={listing.issueNumber}
           >
-            <h3>{pickText(listing.source.name) || listing.title}</h3>
+            <h3><Link to={'/people/view?source=' + encodeURIComponent(sourceKey(source))}>{pickText(listing.source.name) || listing.title}</Link></h3>
             <button
               disabled={loading}
               onClick={() => act({ type: 'subscribe', source })}

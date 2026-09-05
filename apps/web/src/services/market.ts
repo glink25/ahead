@@ -1,4 +1,4 @@
-import { publicReadFetch } from '../lib/auth'
+import { authenticatedAdapter, publicReadFetch } from '../lib/auth'
 import { createIdbStore, type KeyValueStore } from '../lib/idb'
 import { RepoCache } from '../lib/repo-cache'
 import { useAuthSession } from '../stores'
@@ -51,6 +51,7 @@ export function marketApi(): MarketApi {
         createIdbStore('ahead-repo-cache', 'feeds'),
       ),
     ),
+    ...(session ? { privateAdapter: authenticatedAdapter(session) } : {}),
   })
   current = { identity, api }
   return api

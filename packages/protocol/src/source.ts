@@ -16,3 +16,24 @@ export function sourceKey(source: { locator: string; manifestPath?: string }): s
   const locator = source.locator.startsWith('github:') ? source.locator.toLowerCase() : source.locator
   return path === DEFAULT_MANIFEST_PATH ? locator : `${locator}#${encodeURIComponent(path)}`
 }
+
+/** Decode the canonical GitHub resource identity produced by sourceKey(). */
+export function parseSourceKey(key: string): { locator: string; manifestPath?: string } {
+  const parts = key.split('#')
+  if (parts.length > 2) throw new TypeError('Invalid source key')
+  const locator = parts[0]!
+  if (!/^github:[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u.test(locator))
+    throw new TypeError('Invalid GitHub source key')
+  if (parts.length === 1) return { locator: locator.toLowerCase() }
+  if (!parts[1]) throw new TypeError('Invalid source key manifest path')
+  let path: string
+  try {
+    path = manifestPath(decodeURIComponent(parts[1]))
+  } catch {
+    throw new TypeError('Invalid source key manifest path')
+  }
+  return {
+    locator: locator.toLowerCase(),
+    ...(path === DEFAULT_MANIFEST_PATH ? {} : { manifestPath: path }),
+  }
+}
