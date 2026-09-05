@@ -164,6 +164,9 @@ p {
   overflow: hidden;
   touch-action: pan-y;
 }
+.tab-stage * {
+  touch-action: pan-y;
+}
 .browser-pages {
   position: absolute;
   inset: 0 auto 0 0;

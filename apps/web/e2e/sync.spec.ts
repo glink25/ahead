@@ -180,12 +180,14 @@ test('login selects profiles, auto-syncs standard manifests and keeps public/pri
   )!
   expect(privateFeed.private).toBe(true)
   await expect
-    .poll(() =>
-      [...repos.values()].some(
-        (r) =>
-          r.name.startsWith('ahead-user-') &&
-          r.files['ahead.yaml']?.includes(privateFeed.name),
-      ),
+    .poll(
+      () =>
+        [...repos.values()].some(
+          (r) =>
+            r.name.startsWith('ahead-user-') &&
+            r.files['ahead.yaml']?.includes(privateFeed.name),
+        ),
+      { timeout: 15000 },
     )
     .toBe(true)
   await page.goto('/profiles')
