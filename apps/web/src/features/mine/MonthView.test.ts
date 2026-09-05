@@ -1,5 +1,9 @@
 import { it, expect } from 'vitest'
-import { firstDayOfWeek, monthOccurrences } from './MonthView'
+import {
+  firstDayOfWeek,
+  monthOccurrences,
+  resolveFirstDayOfWeek,
+} from './MonthView'
 import { resolvedEvent } from '../../lib/test-fixtures'
 it('expands yearly recurrence and multi-day duration with exclusive end', () => {
   const event = resolvedEvent('holiday', { kind: 'exact', date: '2020-10-01' })
@@ -36,4 +40,7 @@ it('fills every day in an exact range without duplicating an event', () => {
 it('uses locale week conventions with a stable fallback', () => {
   expect(firstDayOfWeek('zh-CN')).toBe(1)
   expect(firstDayOfWeek('en-US')).toBe(0)
+  expect(resolveFirstDayOfWeek('zh-CN', 'sunday')).toBe(0)
+  expect(resolveFirstDayOfWeek('en-US', 'monday')).toBe(1)
+  expect(resolveFirstDayOfWeek('zh-CN')).toBe(1)
 })

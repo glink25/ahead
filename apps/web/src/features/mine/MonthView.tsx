@@ -48,6 +48,16 @@ export function firstDayOfWeek(locale: string) {
   }
   return /^en-US\b/i.test(locale) ? 0 : 1
 }
+export function resolveFirstDayOfWeek(
+  locale: string,
+  preference?: 'sunday' | 'monday',
+) {
+  return preference === 'sunday'
+    ? 0
+    : preference === 'monday'
+      ? 1
+      : firstDayOfWeek(locale)
+}
 function startOfWeek(date: Date, firstDay: number) {
   return addDays(date, -((date.getUTCDay() - firstDay + 7) % 7))
 }
@@ -499,10 +509,12 @@ function WeekPeriod({
 export function MonthView({
   events,
   timezone,
+  weekStartsOn,
   search = '',
 }: {
   events: ResolvedEvent[]
   timezone: string
+  weekStartsOn?: 'sunday' | 'monday'
   search?: string
 }) {
   const { t, i18n } = useTranslation()
@@ -517,7 +529,7 @@ export function MonthView({
     ? (params.get('scale') as CalendarScale)
     : 'month'
   const locale = i18n.resolvedLanguage ?? i18n.language
-  const firstDay = firstDayOfWeek(locale)
+  const firstDay = resolveFirstDayOfWeek(locale, weekStartsOn)
   const [jumpToken, setJumpToken] = useState(0)
 
   const update = (date: string, nextScale = scale, forceJump = false) => {

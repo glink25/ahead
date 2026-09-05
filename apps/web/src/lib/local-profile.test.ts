@@ -27,4 +27,13 @@ describe('local profile', () => {
     expect(hidden.favorites).toEqual(['game'])
     expect(profile.hidden).toEqual([])
   })
+  it('sets and clears the synced week start preference', () => {
+    let profile = changeProfile(emptyProfile(), {
+      type: 'week-start',
+      value: 'sunday',
+    })
+    expect(profile.settings?.weekStartsOn).toBe('sunday')
+    profile = changeProfile(profile, { type: 'week-start' })
+    expect(profile.settings?.weekStartsOn).toBeUndefined()
+  })
 })

@@ -32,7 +32,8 @@
     "settings": {
       "locale": "zh-CN",
       "timezone": "Asia/Shanghai",
-      "privacyRemoteImages": true
+      "privacyRemoteImages": true,
+      "weekStartsOn": "monday"
     }
   }
 }

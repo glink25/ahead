@@ -99,6 +99,7 @@ p {
 }
 .header-right {
   justify-content: flex-end;
+  gap: 8px;
 }
 .header-left > a {
   font-size: 14px;
@@ -482,6 +483,41 @@ p {
   max-width: 804px;
   margin: auto;
 }
+.history-disclosure > summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 18px 0 8px;
+  list-style: none;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+.history-disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+.history-disclosure > summary::before,
+.history-disclosure > summary::after {
+  content: '';
+  height: 1px;
+  flex: 1;
+  background: var(--line);
+}
+.history-disclosure > summary span {
+  white-space: nowrap;
+}
+.history-disclosure > summary .lucide {
+  transition: transform 0.2s;
+}
+.history-disclosure[open] > summary .lucide {
+  transform: rotate(180deg);
+}
+.history-timeline {
+  padding-bottom: 6px;
+}
+.timeline > .empty-view {
+  height: auto;
+}
 .bucket-heading {
   position: relative;
   font-size: 13px;
@@ -847,6 +883,13 @@ p {
 }
 .setting-row:last-child {
   border-bottom: 0;
+}
+.setting-row select {
+  min-width: 0;
+  max-width: 55%;
+  border: 0;
+  background: transparent;
+  text-align: right;
 }
 .setting-row h3 {
   font-size: 16px;
@@ -1393,7 +1436,7 @@ summary .lucide {
   align-items: center;
   gap: 6px;
   min-width: 0;
-  max-width: calc(100% - 42px);
+  max-width: 100%;
 }
 .profile-switch span {
   overflow: hidden;

@@ -146,6 +146,8 @@ test('discover → scroll → favorite → swipe mine → calendar → detail �
     await page.mouse.up()
   }
   await expect(page).toHaveURL(/\/mine/)
+  await expect(page.locator('.header-right .mine-view-toggle')).toBeVisible()
+  await expect(page.locator('.header-left .mine-view-toggle')).toHaveCount(0)
   const timelineTitle = page.getByRole('heading', { name: title, exact: true })
   await expect(timelineTitle).toBeVisible()
   const timelineSection = timelineTitle.locator('xpath=ancestor::section')

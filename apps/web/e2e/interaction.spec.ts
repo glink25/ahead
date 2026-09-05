@@ -10,6 +10,55 @@ async function offlineMarket(page: Page) {
 }
 test.beforeEach(async ({ page }) => offlineMarket(page))
 
+test('past events are collapsed in the timeline but remain in the calendar', async ({
+  page,
+}) => {
+  const date = new Date()
+  date.setDate(date.getDate() - 7)
+  const past = [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, '0'),
+    String(date.getDate()).padStart(2, '0'),
+  ].join('-')
+
+  await page.goto('/studio')
+  await page.getByPlaceholder('有什么值得期待？').fill('过去的事件')
+  await page.getByRole('textbox', { name: '开始' }).fill(past)
+  await page.getByRole('button', { name: '保存', exact: true }).click()
+  await page.goto('/mine')
+  await expect(page.locator('.timeline-row')).toHaveCount(0)
+  const history = page.locator('.history-disclosure')
+  await expect(history.getByText('历史事件 · 1')).toBeVisible()
+  await history.locator('summary').click()
+  await expect(history.locator('.timeline-row')).toContainText('过去的事件')
+
+  await page.goto(`/mine?view=calendar&date=${past}`)
+  await expect(
+    page.locator('.month-group[data-active=true]').getByRole('link', {
+      name: '过去的事件',
+      exact: true,
+    }),
+  ).toBeVisible()
+})
+
+test('week start preference overrides the locale and persists', async ({ page }) => {
+  await page.goto('/settings')
+  const setting = page.getByRole('combobox', { name: '一周开始于' })
+  await expect(setting).toHaveValue('auto')
+  await setting.selectOption('sunday')
+  await expect(page.getByRole('button', { name: '撤销', exact: true })).toBeVisible()
+
+  await page.goto('/mine?view=calendar')
+  await expect(page.locator('.weekdays span').first()).toContainText('日')
+  await page.reload()
+  await expect(page.locator('.weekdays span').first()).toContainText('日')
+
+  await page.goto('/settings')
+  await page.getByRole('combobox', { name: '一周开始于' }).selectOption('monday')
+  await page.goto('/mine?view=calendar')
+  await expect(page.locator('.weekdays span').first()).toContainText('一')
+})
+
 test('nested app back pops browser history, including after refresh', async ({
   page,
 }) => {

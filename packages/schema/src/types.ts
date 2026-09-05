@@ -128,6 +128,7 @@ export interface UserData {
     locale?: string
     timezone?: string
     privacyRemoteImages?: boolean
+    weekStartsOn?: 'sunday' | 'monday'
     [key: string]: unknown
   }
   extensions?: Record<string, unknown>

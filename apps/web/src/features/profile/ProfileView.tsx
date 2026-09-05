@@ -30,6 +30,11 @@ export function ProfileView() {
 
   const { session, setSession, loading: authLoading } = useAuthSession()
   const { profile, act, refresh, loading } = useFeedStore()
+  const weekStartsOn =
+    profile.settings?.weekStartsOn === 'sunday' ||
+    profile.settings?.weekStartsOn === 'monday'
+      ? profile.settings.weekStartsOn
+      : 'auto'
   const { db, ready } = useData(),
     location = useLocation()
   const space = db?.spaces[db.active]
@@ -107,6 +112,26 @@ export function ProfileView() {
       <h2>{t('messages.display_and_privacy')}</h2>
       <div className="settings-group">
         <LanguageSetting />
+        <label className="setting-row">
+          <span>{t('messages.week_starts_on')}</span>
+          <select
+            aria-label={t('messages.week_starts_on')}
+            value={weekStartsOn}
+            onChange={(event) =>
+              act({
+                type: 'week-start',
+                value:
+                  event.target.value === 'auto'
+                    ? undefined
+                    : (event.target.value as 'sunday' | 'monday'),
+              })
+            }
+          >
+            <option value="auto">{t('messages.follow_locale')}</option>
+            <option value="sunday">{t('messages.sunday')}</option>
+            <option value="monday">{t('messages.monday')}</option>
+          </select>
+        </label>
         <label className="setting-row">
            {t('messages.load_external_images')} <input
             role="switch"

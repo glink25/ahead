@@ -12,6 +12,7 @@ export type ProfileAction =
   | { type: 'priority'; source: Subscription; priority: number }
   | { type: 'interest'; tags: string[]; amount: number }
   | { type: 'privacy'; enabled: boolean }
+  | { type: 'week-start'; value?: 'sunday' | 'monday' }
 
 export function changeProfile(profile: UserData, action: ProfileAction): UserData {
   const next = structuredClone(profile)
@@ -29,6 +30,11 @@ export function changeProfile(profile: UserData, action: ProfileAction): UserDat
     })
   } else if (action.type === 'interest') bump(action.tags, action.amount)
   else if (action.type === 'privacy') next.settings = { ...next.settings, privacyRemoteImages: action.enabled }
+  else if (action.type === 'week-start') {
+    next.settings = { ...next.settings }
+    if (action.value) next.settings.weekStartsOn = action.value
+    else delete next.settings.weekStartsOn
+  }
   else if ('id' in action) {
     const key = action.type === 'favorite' || action.type === 'unfavorite' ? 'favorites' : 'hidden'
     const items = new Set(next[key] ?? [])

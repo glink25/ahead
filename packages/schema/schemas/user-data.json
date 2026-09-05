@@ -81,7 +81,8 @@
       "properties": {
         "locale": { "type": "string" },
         "timezone": { "type": "string" },
-        "privacyRemoteImages": { "type": "boolean" }
+        "privacyRemoteImages": { "type": "boolean" },
+        "weekStartsOn": { "enum": ["sunday", "monday"] }
       }
     },
     "extensions": {

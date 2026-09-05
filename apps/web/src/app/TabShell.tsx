@@ -93,27 +93,14 @@ export function TabShell({ children }: { children: ReactNode }) {
             >
               <ArrowLeft />  {t('messages.back')} </button>
           ) : mine ? (
-            <>
-              <Link
-                className="profile-switch"
-                to="/profiles"
-                aria-label={t('messages.switch_profile')}
-              >
-                <span>{profileName(active)}</span>
-                <ChevronDown />
-              </Link>
-              <button
-                className="mine-view-toggle"
-                aria-label={
-                  calendar
-                    ? t('messages.switch_to_timeline')
-                    : t('messages.switch_to_calendar')
-                }
-                onClick={switchMineView}
-              >
-                {calendar ? <List /> : <CalendarDays />}
-              </button>
-            </>
+            <Link
+              className="profile-switch"
+              to="/profiles"
+              aria-label={t('messages.switch_profile')}
+            >
+              <span>{profileName(active)}</span>
+              <ChevronDown />
+            </Link>
           ) : null}
         </div>
         {tab ? (
@@ -135,6 +122,19 @@ export function TabShell({ children }: { children: ReactNode }) {
           <span />
         )}
         <div className="header-right">
+          {mine && (
+            <button
+              className="mine-view-toggle"
+              aria-label={
+                calendar
+                  ? t('messages.switch_to_timeline')
+                  : t('messages.switch_to_calendar')
+              }
+              onClick={switchMineView}
+            >
+              {calendar ? <List /> : <CalendarDays />}
+            </button>
+          )}
           <Link
             className="avatar-button"
             to="/settings"

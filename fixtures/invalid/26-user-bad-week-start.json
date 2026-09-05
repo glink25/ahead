@@ -1,0 +1,10 @@
+{
+  "schema": "user-data",
+  "data": {
+    "oefVersion": "0.1",
+    "kind": "user-data",
+    "id": "bad-week-start",
+    "displayName": { "en": "Bad week start" },
+    "settings": { "weekStartsOn": "saturday" }
+  }
+}
