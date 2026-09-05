@@ -67,7 +67,7 @@ export function initializeData() {
       db.migrated = true
     })
   })().catch((error) => {
-    useData.setState({ error: '无法打开本机资料，请检查浏览器存储权限' })
+    useData.setState({ error: 'messages.cannot_open_local_profiles_check_browser_storage_permissions' })
     initialization = undefined
     throw error
   })
@@ -98,7 +98,7 @@ export async function replaceLocalProfile(id: string, profile: UserData) {
 }
 export async function saveEvent(id: string, event: Event, originalId?: string) {
   if (originalId && event.id !== originalId)
-    throw new Error('编辑事件时不能更改事件 ID')
+    throw new Error('messages.the_event_id_cannot_be_changed_while_editing')
   await database.mutate(id, (records) => {
     if (
       !originalId &&
@@ -106,7 +106,7 @@ export async function saveEvent(id: string, event: Event, originalId?: string) {
         (r) => r.collection === 'events' && r.key === event.id,
       )
     )
-      throw new Error('事件 ID 已存在')
+      throw new Error('messages.this_event_id_already_exists')
     return [{ collection: 'events', key: event.id, value: event }]
   })
   changed()
@@ -122,6 +122,7 @@ export async function createLocalProfile(
   privateRepo: boolean,
   account?: string,
   bio?: string,
+  language = 'zh-CN',
 ) {
   const id = crypto.randomUUID()
   await database.transaction((db) => {
@@ -136,8 +137,8 @@ export async function createLocalProfile(
       profileChanges({
         ...emptyProfile(),
         id: 'user-' + id,
-        displayName: { 'zh-CN': name },
-        ...(bio?.trim() ? { bio: { 'zh-CN': bio.trim() } } : {}),
+        displayName: { [language]: name },
+        ...(bio?.trim() ? { bio: { [language]: bio.trim() } } : {}),
       }),
     )
   })
@@ -152,7 +153,7 @@ export async function selectProfile(
   await database.transaction((db) => {
     const space = db.spaces[id]
     if (!space || (space.account && space.account !== account))
-      throw new Error('无法使用此个人资料')
+      throw new Error('messages.cannot_use_this_profile')
     if (account && !space.account) {
       space.account = account
       space.provision ??= { repo: 'ahead-user-' + id.slice(0, 8), marker: id }
@@ -177,7 +178,7 @@ export async function selectProfile(
             value: r.value,
           })),
         )
-        db.spaces.guest = newSpace('guest', '本机资料')
+        db.spaces.guest = newSpace('guest', 'Local profile')
         applyChanges(db, db.spaces.guest, profileChanges(emptyProfile()))
       }
     }

@@ -1,3 +1,6 @@
+import { beforeAll } from 'vitest'
+import { initializeI18n, i18n } from '../i18n'
+beforeAll(async () => { await initializeI18n(); await i18n.changeLanguage('zh-CN') })
 import { it, expect } from 'vitest'
 import { countdownFor, describeTemporal, pickText } from './format'
 import { resolvedEvent } from './test-fixtures'
@@ -21,6 +24,6 @@ it('supports localized fallback, ranges, timezone and ongoing durations', () => 
 it('counts toward the next yearly occurrence instead of an expired seed date', () => {
   const event = { ...resolvedEvent('holiday', { kind: 'exact', date: '2020-10-01' }), recurrence: { freq: 'yearly' as const }, duration: { amount: 7, unit: 'days' as const } }
   expect(countdownFor(event, '2027-09-01').headline).toBe('还有 30 天')
-  expect(countdownFor(event, '2027-09-01').dateLabel).toContain('2027 年')
+  expect(countdownFor(event, '2027-09-01').dateLabel).toContain('2027年')
   expect(countdownFor(event, '2027-10-04').headline).toBe('正在进行')
 })

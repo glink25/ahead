@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import { CalendarDays, List, Plus } from 'lucide-react'
 import { useEffect, useRef } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router'
@@ -9,6 +10,8 @@ import { posterFor } from '../../lib/media'
 import { useFeedStore } from '../../stores/feed'
 
 export function MineTab() {
+  const { t } = useTranslation()
+
   const { mine, resolved } = useFeedView()
   const { feeds, profile } = useFeedStore()
   const location = useLocation(),
@@ -32,20 +35,18 @@ export function MineTab() {
     <div className="mine-view">
       <div className="mine-toolbar">
         <button
-          aria-label={calendar ? '切换时间轴' : '切换日历'}
+          aria-label={calendar ? t('messages.switch_to_timeline') : t('messages.switch_to_calendar')}
           onClick={switchView}
         >
           {calendar ? (
             <>
-              <List /> 时间轴
-            </>
+              <List />  {t('messages.timeline')} </>
           ) : (
             <>
-              <CalendarDays /> 日历
-            </>
+              <CalendarDays />  {t('messages.calendar')} </>
           )}
         </button>
-        <Link to="/following">关注</Link>
+        <Link to="/following">{t('messages.following')}</Link>
       </div>
       {calendar ? (
         <MonthView
@@ -66,17 +67,16 @@ export function MineTab() {
               <span className="empty-orbit">
                 <Plus />
               </span>
-              <h2>还没有安排</h2>
+              <h2>{t('messages.nothing_planned_yet')}</h2>
               <Link className="primary-link" to="/studio">
-                新建事件
-              </Link>
-              <Link to="/discover">去发现</Link>
+                 {t('messages.new_event')} </Link>
+              <Link to="/discover">{t('messages.explore')}</Link>
             </div>
           ) : (
             <div className="timeline">
               {mine.map((event) => {
                 const countdown = countdownFor(event)
-                const group = countdown.dateLabel || '日期待定'
+                const group = countdown.dateLabel || t('messages.date_tbd')
                 const heading = group !== previous
                 previous = group
                 const feed = feeds.find((f) =>
@@ -129,7 +129,7 @@ export function MineTab() {
           )}
         </div>
       )}
-      <Link className="create-fab" to="/studio" aria-label="新建事件">
+      <Link className="create-fab" to="/studio" aria-label={t('messages.new_event')}>
         <Plus />
       </Link>
     </div>

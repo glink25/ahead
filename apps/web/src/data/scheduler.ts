@@ -69,7 +69,7 @@ async function ensureRepository(
     const existing = await adapter.inspect(locatorFor(target))
     if (existing.description !== marker) {
       if (collision >= 3)
-        throw new Error('同名仓库已存在，请更改待创建的仓库名称')
+        throw new Error('messages.a_repository_with_this_name_already_exists_choose_another_name')
       const next = {
         ...provision,
         repo: provision.repo + '-' + crypto.randomUUID().slice(0, 4),
@@ -170,11 +170,11 @@ async function synchronize(id: string, auth: AuthSession, generation: number) {
       (link.locator !== 'github:' + space.feed.owner + '/' + space.feed.repo ||
         manifestPath(link.manifestPath) !== space.feed.path)
     ) {
-      throw new Error('个人事件的同步位置已改变，请核对资料中的关联后重试')
+      throw new Error('messages.the_personal_event_sync_destination_changed_check_the_profile_link_and_retr')
     }
     if (link?.locator && !space.feed) {
       const match = /^github:([^/]+)\/([^/]+)$/.exec(link.locator)
-      if (!match) throw new Error('个人事件流关联格式不正确')
+      if (!match) throw new Error('messages.invalid_personal_feed_link')
       await updateSpace(id, (s) => {
         s.feed = {
           owner: match[1]!,
@@ -291,9 +291,9 @@ async function synchronize(id: string, auth: AuthSession, generation: number) {
             : 'attention'
       s.error =
         status === 401
-          ? '需要重新登录'
+          ? 'messages.sign_in_required'
           : status === 403
-            ? '请检查仓库授权或稍后重试'
+            ? 'messages.check_repository_permissions_or_retry_later'
             : message
       const retrySeconds =
         Number(headers?.['retry-after']) ||

@@ -273,9 +273,9 @@ export class PublicReadClient {
           `HTTP ${response.status}：${detail || response.statusText}` +
           (limited
             ? (this.options.authenticated
-                ? '。GitHub 请求额度受限'
-                : '。GitHub 访问受限，登录可提高请求额度') +
-              `，可于 ${new Date(retryAt!).toLocaleTimeString()} 后重试`
+                ? 'messages.github_request_limit_reached'
+                : 'messages.github_access_is_limited_sign_in_for_a_higher_request_limit_2') +
+              ` (retry after ${new Date(retryAt!).toISOString()})`
             : '')
         const error = new PublicReadError(
           message,

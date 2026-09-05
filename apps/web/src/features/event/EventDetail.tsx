@@ -1,3 +1,5 @@
+import { displayMessage } from '../../i18n'
+import { useTranslation } from 'react-i18next'
 import { useData, deleteEvent } from '../../data/local'
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
@@ -16,6 +18,8 @@ import {
   HideMenu,
 } from '../discover/PosterCard'
 export function EventDetail() {
+  const { t, i18n } = useTranslation()
+
   const { id } = useParams()
   const navigate = useNavigate()
   const { db } = useData()
@@ -27,8 +31,8 @@ export function EventDetail() {
     return (
       <div className="empty-view">
         {loading
-          ? '正在加载事件…'
-          : '没有找到这个事件，内容可能已下架或暂时不可用。'}
+          ? t('messages.loading_event')
+          : t('messages.event_not_found_it_may_have_been_removed_or_be_temporarily_unavailable')}
       </div>
     )
   const own = event.sourceLocators.some((s) => s === 'personal:' + db?.active)
@@ -44,44 +48,42 @@ export function EventDetail() {
             className="primary-link"
             to={'/studio?event=' + encodeURIComponent(event.id)}
           >
-            编辑
-          </Link>
+             {t('messages.edit')} </Link>
           <button
             onClick={() => {
               if (db)
                 void deleteEvent(db.active, event.id)
                   .then(() => navigate('/mine', { replace: true }))
-                  .catch(() => setError('删除未能保存，请重试'))
+                  .catch(() => setError('messages.could_not_save_deletion_please_retry'))
             }}
           >
-            删除
-          </button>
+             {t('messages.delete')} </button>
         </div>
       )}
-      {error && <p role="alert">{error}</p>}
+      {error && <p role="alert">{displayMessage(error)}</p>}
       <div className="detail-actions">
         <FavoriteButton event={event} />
         <HideMenu event={event} />
       </div>
-      <h2>日期记录</h2>
+      <h2>{t('messages.schedule_history')}</h2>
       <ol className="schedule-timeline">
         {[...event.schedule]
           .sort((a, b) => a.recordedAt.localeCompare(b.recordedAt))
           .map((entry) => (
             <li key={entry.id}>
               <time>
-                {new Date(entry.recordedAt).toLocaleDateString('zh-CN')}
+                {new Date(entry.recordedAt).toLocaleDateString(i18n.resolvedLanguage)}
               </time>
               <h3>{describeTemporal(entry.value)}</h3>
               <p>
-                {entry.confidence && CONFIDENCE_LABELS[entry.confidence]}
+                {entry.confidence && t(CONFIDENCE_LABELS[entry.confidence])}
                 {entry.source && ' · ' + entry.source}
               </p>
               <EvidenceLinks evidence={entry.evidence} />
             </li>
           ))}
       </ol>
-      <h2>信息来源</h2>
+      <h2>{t('messages.sources')}</h2>
       <EvidenceLinks evidence={event.evidence} />
       {event.evidence
         ?.filter((e) => e.kind === 'citation' || e.kind === 'note')

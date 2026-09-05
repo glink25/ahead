@@ -51,7 +51,7 @@ let generation = 0
 let undoGeneration = 0
 let forceMarket = false
 let freshListings: MarketListing[] = []
-const localWriteError = '保存失败，请检查浏览器存储权限后重试。'
+const localWriteError = 'messages.could_not_save_check_browser_storage_permissions_and_retry'
 
 export const useFeedStore = create<FeedStore>((set, get) => {
   const updateLoading = () =>
@@ -257,7 +257,7 @@ export const useFeedStore = create<FeedStore>((set, get) => {
       const profile = get().profile
       set({
         errors: get().errors.filter(
-          (e) => e === localWriteError || e.includes('无法恢复本地数据'),
+          (e) => e === localWriteError || e.includes('messages.could_not_restore_local_data'),
         ),
         loginSuggested: false,
       })
@@ -372,7 +372,7 @@ export const useFeedStore = create<FeedStore>((set, get) => {
     },
     replaceProfile(profile) {
       const id = activeSpace()?.id
-      if (!id) throw new Error('本机资料尚未就绪')
+      if (!id) throw new Error('messages.local_profile_is_not_ready')
       void replaceLocalProfile(id, profile).catch(() =>
         set((s) => ({ errors: [...s.errors, localWriteError] })),
       )

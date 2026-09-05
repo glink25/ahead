@@ -152,13 +152,13 @@ export class MarketApi {
           }
         if (signal?.aborted || cachedOnly) return
         const snapshot = await adapter.inspect(locator)
-        if (snapshot.private) throw new Error('公开关注只支持公开用户资料')
+        if (snapshot.private) throw new Error('messages.only_public_profiles_can_be_followed_publicly')
         const file = await adapter.readFile(locator, path, {
           ref: snapshot.headSha,
         })
         const user = parseYaml<UserData>(file.content)
         if (!validator.validate('user-data', user).ok)
-          throw new Error('用户资料校验失败')
+          throw new Error('messages.profile_validation_failed')
         await this.options.storage.set('user:' + key, user).catch(() => {})
         if (!signal?.aborted)
           yield { type: 'user', user, sourceLocator: key, cached: false }
@@ -193,7 +193,7 @@ export class MarketApi {
       }
     } catch (error) {
       if (!isAbort(error) && !signal?.aborted)
-        yield this.error(error, key + ' 更新失败，保留可用内容')
+        yield this.error(error, key + 'messages.update_failed_available_content_was_preserved')
     }
   }
 
@@ -227,7 +227,7 @@ export class MarketApi {
     const cursor = options.cursor ?? crypto.randomUUID()
     let session = this.sessions.get(cursor)
     if (!session) {
-      if (options.cursor) throw new Error('市场读取会话已失效，请刷新')
+      if (options.cursor) throw new Error('messages.the_market_session_expired_please_refresh')
       session = {
         page: 1,
         done: new Set(),
@@ -313,7 +313,7 @@ export class MarketApi {
             .catch(() => {})
         } catch (error) {
           if (!isAbort(error) && !options.signal?.aborted) {
-            yield this.error(error, '市场读取失败')
+            yield this.error(error, 'messages.could_not_read_the_market')
             yield progress()
           }
           return

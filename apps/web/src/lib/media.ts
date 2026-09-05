@@ -1,3 +1,4 @@
+import { currentLanguage } from '../i18n'
 import type { ResourceLocator } from '@ahead/core'
 import { buildJsDelivrUrl } from '@ahead/github'
 import type { Event, EventMedia } from '@ahead/schema'
@@ -66,7 +67,7 @@ function localized(text: Record<string, string> | undefined, locale: string): st
  * locator, so unresolvable paths degrade to the gradient rather than 404.
  */
 export function posterFor(event: Event, options: PosterOptions = {}): PosterSource {
-  const locale = options.locale ?? 'zh-CN'
+  const locale = options.locale ?? currentLanguage()
   const gradient = gradientFor(event.id)
   const image = pickImage(event.media)
   const alt = localized(image?.alt, locale) || localized(event.title, locale)

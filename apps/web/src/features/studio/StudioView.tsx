@@ -1,3 +1,6 @@
+import { profileName } from '../../lib/profile-name'
+import { displayMessage } from '../../i18n'
+import { useTranslation } from 'react-i18next'
 import { previousUrl } from '../../app/navigation'
 import { Plus } from 'lucide-react'
 import { useNavigate, useSearchParams, useBlocker } from 'react-router'
@@ -6,7 +9,7 @@ import { personalEvents } from '../../data/model'
 import { useEffect, useRef, useState } from 'react'
 import { EventEditorState } from '@ahead/editor'
 import type { Event } from '@ahead/schema'
-import { pickText, describeTemporal } from '../../lib/format'
+import { pickText, pickLocalizedText, describeTemporal } from '../../lib/format'
 
 const localInput = (date: Date, timed: boolean) => {
   const day = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
@@ -18,7 +21,7 @@ const localInput = (date: Date, timed: boolean) => {
         String(date.getMinutes()).padStart(2, '0')
     : day
 }
-function fieldsFor(event: Event) {
+export function fieldsFor(event: Event, locale: string) {
   const entry = [...event.schedule].sort((a, b) =>
     b.recordedAt.localeCompare(a.recordedAt),
   )[0]
@@ -48,8 +51,10 @@ function fieldsFor(event: Event) {
     end = localInput(date, !allDay)
   }
   return {
-    title: pickText(event.title),
-    notes: pickText(event.description),
+    title: pickLocalizedText(event.title, locale).text,
+    titleLanguage: pickLocalizedText(event.title, locale).language,
+    notes: pickLocalizedText(event.description, locale).text,
+    notesLanguage: pickLocalizedText(event.description, locale).language,
     allDay,
     start,
     end,
@@ -58,22 +63,24 @@ function fieldsFor(event: Event) {
   }
 }
 export function StudioPage() {
+  const { t, i18n } = useTranslation()
+
   const { db, ready } = useData()
   const [params] = useSearchParams()
-  if (!ready || !db) return <div className="empty-view">正在打开资料…</div>
+  if (!ready || !db) return <div className="empty-view">{t('messages.opening_profile_2')}</div>
   const space = db.spaces[db.active]!
   const id = params.get('event')
   const event = id
     ? personalEvents(space.records).find((e) => e.id === id)
     : undefined
   if (id && !event)
-    return <div className="empty-view">没有找到可编辑的个人事件</div>
+    return <div className="empty-view">{t('messages.no_editable_personal_event_found')}</div>
   return (
     <StudioEditor
       key={space.id + ':' + (id ?? 'new')}
       initial={event}
       spaceId={space.id}
-      name={space.name}
+      name={profileName(space)}
       privateRepo={space.private}
     />
   )
@@ -89,6 +96,8 @@ function StudioEditor({
   name: string
   privateRepo: boolean
 }) {
+  const { t, i18n } = useTranslation()
+
   const navigate = useNavigate()
   const [saving, setSaving] = useState(false)
   const [dirty, setDirty] = useState(false)
@@ -111,11 +120,12 @@ function StudioEditor({
       window.removeEventListener('beforeunload', unload)
     }
   }, [dirty])
+  const [contentLanguage] = useState(() => i18n.resolvedLanguage || 'en')
   const [base, setBase] = useState<Event>(
     () =>
       initial ?? {
         id: identity,
-        title: { 'zh-CN': '' },
+        title: { [contentLanguage]: '' },
         schedule: [
           {
             id: crypto.randomUUID(),
@@ -125,7 +135,7 @@ function StudioEditor({
         ],
       },
   )
-  const [fields, setFields] = useState(() => fieldsFor(base))
+  const [fields, setFields] = useState(() => fieldsFor(base, contentLanguage))
   const [dateDirty, setDateDirty] = useState(false)
   const [mode, setMode] = useState<'form' | 'yaml'>('form')
   const [yaml, setYaml] = useState('')
@@ -141,26 +151,26 @@ function StudioEditor({
   const build = (validate = true): Event | null => {
     const next = structuredClone(base),
       issues: Record<string, string> = {}
-    if (validate && !fields.title.trim()) issues.title = '请输入事件名称'
+    if (validate && !fields.title.trim()) issues.title = 'messages.enter_an_event_name'
     if (!fields.custom) {
       if (!fields.start || !Number.isFinite(new Date(fields.start).getTime()))
-        issues.start = '请选择开始日期'
+        issues.start = 'messages.choose_a_start_date'
       if (
         fields.end &&
         (new Date(fields.end).getTime() < new Date(fields.start).getTime() ||
           (!fields.allDay && fields.end === fields.start))
       )
-        issues.end = '结束时间需晚于开始时间'
+        issues.end = 'messages.end_time_must_be_after_start_time'
     }
     if (Object.keys(issues).length) {
       setErrors(issues)
       return null
     }
-    next.title = { ...next.title, 'zh-CN': fields.title.trim() }
+    next.title = { ...next.title, [fields.titleLanguage]: fields.title.trim() }
     if (fields.notes.trim())
-      next.description = { ...next.description, 'zh-CN': fields.notes.trim() }
+      next.description = { ...next.description, [fields.notesLanguage]: fields.notes.trim() }
     else if (next.description) {
-      delete next.description['zh-CN']
+      delete next.description[fields.notesLanguage]
       if (!Object.keys(next.description).length) delete next.description
     }
     if (dateDirty && !fields.custom) {
@@ -186,7 +196,7 @@ function StudioEditor({
     if (!validate) return next
     const result = EventEditorState.fromEvent(next).validate()
     if (!result.ok) {
-      setErrors({ form: '请检查事件内容，或在高级编辑中查看详情。' })
+      setErrors({ form: 'messages.check_the_event_content_or_see_details_in_the_advanced_editor' })
       setDetails(
         result.message ??
           result.errors
@@ -203,7 +213,7 @@ function StudioEditor({
     const editor = EventEditorState.fromEvent(base).setYaml(yaml)
     const result = editor.validate()
     if (!result.ok) {
-      setErrors({ form: '内容格式有误，请检查后重试。' })
+      setErrors({ form: 'messages.invalid_content_format_check_it_and_retry' })
       setDetails(
         result.message ??
           result.errors
@@ -228,7 +238,7 @@ function StudioEditor({
       const event = readYaml()
       if (!event) return
       setBase(event)
-      setFields(fieldsFor(event))
+      setFields(fieldsFor(event, contentLanguage))
       setDateDirty(false)
       setMode('form')
     }
@@ -238,7 +248,7 @@ function StudioEditor({
     const event = mode === 'form' ? build() : readYaml()
     if (!event) return
     if (event.id !== identity) {
-      setErrors({ form: '不能更改事件 ID' })
+      setErrors({ form: 'messages.cannot_change_the_event_id' })
       return
     }
     setSaving(true)
@@ -257,7 +267,7 @@ function StudioEditor({
         form:
           error instanceof Error
             ? error.message
-            : '未能保存，请检查本机存储后重试',
+            : 'messages.could_not_save_check_local_storage_and_retry',
       })
     } finally {
       setSaving(false)
@@ -267,43 +277,40 @@ function StudioEditor({
     <section className="studio-view">
       <div className="editor-heading">
         <div>
-          <h1>{initial ? '编辑事件' : '新建事件'}</h1>
+          <h1>{initial ? t('messages.edit_event') : t('messages.new_event')}</h1>
           <p className="muted">
-            {name} · {privateRepo ? '私有' : '公开'}
+            {name} · {privateRepo ? t('messages.private') : t('messages.public')}
           </p>
         </div>
         <button className="text-button" onClick={changeMode}>
-          {mode === 'form' ? '高级编辑' : '返回表单'}
+          {mode === 'form' ? t('messages.advanced_editor') : t('messages.back_to_form')}
         </button>
       </div>
       {mode === 'form' ? (
         <div className="editor-form">
           <label className="event-title-label">
-            事件名称
-            <input
+             {t('messages.event_name')} <input
               autoFocus
               aria-invalid={Boolean(errors.title)}
               aria-describedby={errors.title ? 'title-error' : undefined}
-              placeholder="有什么值得期待？"
+              placeholder={t('messages.what_are_you_looking_forward_to')}
               value={fields.title}
               onChange={(e) => update({ title: e.target.value })}
             />
           </label>
           {errors.title && (
             <p id="title-error" className="field-error">
-              {errors.title}
+              {displayMessage(errors.title)}
             </p>
           )}
           <div className="settings-group">
             {fields.custom ? (
               <div className="settings-body">
-                此事件使用自定义日期，可在高级编辑中调整。
-              </div>
+                 {t('messages.this_event_uses_a_custom_schedule_adjust_it_in_the_advanced_editor')} </div>
             ) : (
               <>
                 <label className="setting-row">
-                  全天
-                  <input
+                   {t('messages.all_day')} <input
                     role="switch"
                     type="checkbox"
                     checked={fields.allDay}
@@ -325,9 +332,8 @@ function StudioEditor({
                   />
                 </label>
                 <label className="setting-row">
-                  开始
-                  <input
-                    aria-label="开始"
+                   {t('messages.start')} <input
+                    aria-label={t('messages.start')}
                     aria-invalid={Boolean(errors.start)}
                     type={fields.allDay ? 'date' : 'datetime-local'}
                     value={fields.start}
@@ -337,11 +343,10 @@ function StudioEditor({
                     }}
                   />
                 </label>
-                {errors.start && <p className="field-error">{errors.start}</p>}
+                {errors.start && <p className="field-error">{displayMessage(errors.start)}</p>}
                 <label className="setting-row">
-                  结束（可选）
-                  <input
-                    aria-label="结束（可选）"
+                   {t('messages.end_optional')} <input
+                    aria-label={t('messages.end_optional')}
                     aria-invalid={Boolean(errors.end)}
                     type={fields.allDay ? 'date' : 'datetime-local'}
                     value={fields.end}
@@ -351,7 +356,7 @@ function StudioEditor({
                     }}
                   />
                 </label>
-                {errors.end && <p className="field-error">{errors.end}</p>}
+                {errors.end && <p className="field-error">{displayMessage(errors.end)}</p>}
                 {!fields.allDay && (
                   <p className="editor-timezone">
                     {Intl.DateTimeFormat().resolvedOptions().timeZone}
@@ -362,12 +367,11 @@ function StudioEditor({
           </div>
           <details className="settings-group settings-disclosure">
             <summary>
-              备注
-              <Plus />
+               {t('messages.notes')} <Plus />
             </summary>
             <textarea
-              aria-label="备注"
-              placeholder="添加备注"
+              aria-label={t('messages.notes')}
+              placeholder={t('messages.add_notes')}
               value={fields.notes}
               onChange={(e) => update({ notes: e.target.value })}
             />
@@ -375,9 +379,8 @@ function StudioEditor({
         </div>
       ) : (
         <label className="yaml-editor">
-          事件 YAML
-          <textarea
-            aria-label="事件 YAML"
+           {t('messages.event_yaml')} <textarea
+            aria-label={t('messages.event_yaml')}
             spellCheck={false}
             value={yaml}
             onChange={(e) => {
@@ -390,12 +393,12 @@ function StudioEditor({
       )}
       {errors.form && (
         <p className="field-error" role="alert">
-          {errors.form}
+          {displayMessage(errors.form)}
         </p>
       )}
       {errors.form && (
         <details className="technical-details">
-          <summary>查看详情</summary>
+          <summary>{t('messages.view_details')}</summary>
           <pre>{details}</pre>
         </details>
       )}
@@ -405,7 +408,7 @@ function StudioEditor({
           disabled={saving}
           onClick={() => void save()}
         >
-          {saving ? '保存中…' : '保存'}
+          {saving ? t('messages.saving') : t('messages.save')}
         </button>
         <button
           className="primary-link"
@@ -414,8 +417,7 @@ function StudioEditor({
             if (event) setPreview(event)
           }}
         >
-          预览
-        </button>
+           {t('messages.preview')} </button>
       </div>
       {blocker.state === 'blocked' && (
         <div className="confirm-backdrop">
@@ -423,16 +425,15 @@ function StudioEditor({
             className="confirm-panel"
             role="dialog"
             aria-modal="true"
-            aria-label="未保存的事件"
+            aria-label={t('messages.unsaved_event')}
           >
-            <h2>事件尚未保存</h2>
+            <h2>{t('messages.this_event_has_not_been_saved')}</h2>
             <button
               className="primary-link"
               disabled={saving}
               onClick={() => void save(true)}
             >
-              保存并离开
-            </button>
+               {t('messages.save_and_leave')} </button>
             <button
               onClick={() => {
                 setDirty(false)
@@ -440,15 +441,14 @@ function StudioEditor({
                 blocker.proceed()
               }}
             >
-              放弃更改
-            </button>
-            <button onClick={() => blocker.reset()}>继续编辑</button>
+               {t('messages.discard_changes')} </button>
+            <button onClick={() => blocker.reset()}>{t('messages.keep_editing')}</button>
           </section>
         </div>
       )}
       {preview && (
-        <article className="event-preview" aria-label="事件预览">
-          <small>预览</small>
+        <article className="event-preview" aria-label={t('messages.event_preview')}>
+          <small>{t('messages.preview')}</small>
           <h2>{pickText(preview.title)}</h2>
           <p>
             {describeTemporal(
@@ -459,12 +459,7 @@ function StudioEditor({
           </p>
           {preview.duration && (
             <p>
-              持续 {preview.duration.amount}{' '}
-              {
-                { minutes: '分钟', hours: '小时', days: '天', weeks: '周' }[
-                  preview.duration.unit
-                ]
-              }
+               {t('duration.' + preview.duration.unit, { count: preview.duration.amount })}
             </p>
           )}
           <p>{pickText(preview.description)}</p>

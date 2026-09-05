@@ -1,3 +1,5 @@
+import { profileName } from '../lib/profile-name'
+import { useTranslation } from 'react-i18next'
 import { useEffect, useState, type ReactNode } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router'
 import { useData } from '../data/local'
@@ -8,6 +10,8 @@ import { useFeedStore } from '../stores/feed'
 import { useSwipe } from '../hooks/useSwipe'
 
 export function TabShell({ children }: { children: ReactNode }) {
+  const { t } = useTranslation()
+
   const location = useLocation(),
     navigate = useNavigate()
   const mine = location.pathname === '/mine'
@@ -18,13 +22,13 @@ export function TabShell({ children }: { children: ReactNode }) {
   const [mineUrl, setMineUrl] = useState('/mine')
   const { loading, errors, retry, loginSuggested } = useFeedStore()
   const [dismissedErrors, setDismissedErrors] = useState<string[]>([])
-  const storageError = errors.some((error) => /存储|保存|恢复本地/.test(error))
+  const storageError = errors.some((error) => /messages\.(?:cannot_open_local_profiles|could_not_save|could_not_restore_local_data)/.test(error))
   useEffect(() => {
     if (
       loading ||
       storageError ||
       !errors.length ||
-      errors.some((error) => /HTTP (403|429)|额度|访问受限/.test(error))
+      errors.some((error) => /HTTP (403|429)|messages\.github_(?:access|request)/.test(error))
     )
       return
     const timer = setTimeout(() => setDismissedErrors(errors), 6000)
@@ -70,37 +74,34 @@ export function TabShell({ children }: { children: ReactNode }) {
             <button
               className="back-button"
               onClick={back}
-              aria-label="返回上一页"
+              aria-label={t('messages.go_back')}
             >
-              <ArrowLeft /> 返回
-            </button>
+              <ArrowLeft />  {t('messages.back')} </button>
           ) : mine ? (
             <Link
               className="profile-switch"
               to="/profiles"
-              aria-label="切换个人资料"
+              aria-label={t('messages.switch_profile')}
             >
-              <span>{active?.name ?? '我的盼头'}</span>
+              <span>{profileName(active)}</span>
               <ChevronDown />
             </Link>
           ) : null}
         </div>
         {tab ? (
-          <nav className="segmented" aria-label="主导航">
+          <nav className="segmented" aria-label={t('messages.main_navigation')}>
             <Link
               to={mineUrl}
               replace={mine}
               aria-current={mine ? 'page' : undefined}
             >
-              我的
-            </Link>
+               {t('messages.mine')} </Link>
             <Link
               to="/discover"
               replace={!mine}
               aria-current={!mine ? 'page' : undefined}
             >
-              发现
-            </Link>
+               {t('messages.discover')} </Link>
           </nav>
         ) : (
           <span />
@@ -110,14 +111,14 @@ export function TabShell({ children }: { children: ReactNode }) {
             className="avatar-button"
             to="/settings"
             replace={location.pathname === '/settings'}
-            aria-label="设置"
+            aria-label={t('messages.settings')}
           >
             <Settings />
           </Link>
         </div>
       </header>
       {loading && location.pathname !== '/discover' && (
-        <div className="loading-progress" role="status" aria-label="正在更新" />
+        <div className="loading-progress" role="status" aria-label={t('messages.updating')} />
       )}
       {!!errors.length &&
         (tab || storageError) &&
@@ -125,20 +126,19 @@ export function TabShell({ children }: { children: ReactNode }) {
           <div className="error-strip" role="status">
             <span>
               {storageError
-                ? '部分更改未能保存到此设备'
+                ? t('messages.some_changes_could_not_be_saved_to_this_device')
                 : loginSuggested
-                  ? 'GitHub 访问受限，登录可提高请求额度'
-                  : '部分内容未能更新'}
+                  ? t('messages.github_access_is_limited_sign_in_for_a_higher_request_limit')
+                  : t('messages.some_content_could_not_be_updated')}
             </span>
             {!storageError && (
               <button disabled={loading} onClick={() => void retry()}>
-                重试
-              </button>
+                 {t('messages.retry')} </button>
             )}
-            {loginSuggested && <Link to="/login">登录 GitHub</Link>}
-            <Link to="/settings/experimental#diagnostics">详情</Link>
+            {loginSuggested && <Link to="/login">{t('messages.sign_in_to_github')}</Link>}
+            <Link to="/settings/experimental#diagnostics">{t('messages.details')}</Link>
             <button
-              aria-label="关闭提示"
+              aria-label={t('messages.dismiss_notification')}
               onClick={() => setDismissedErrors(errors)}
             >
               <X />

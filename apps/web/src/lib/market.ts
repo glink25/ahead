@@ -66,7 +66,7 @@ export async function loadMarketPage(
     { headers: { Accept: 'application/vnd.github+json' }, cache: 'no-store' },
   )
   if (!response.ok) {
-    throw new Error(`读取市场失败：HTTP ${response.status}`)
+    throw new Error(`HTTP ${response.status}`)
   }
 
   const issues = (await response.json()) as GitHubIssue[]

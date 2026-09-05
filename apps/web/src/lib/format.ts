@@ -1,3 +1,4 @@
+import { i18n, currentLanguage } from '../i18n'
 import { daysUntilEvent, isEventOngoing, eventInterval, type RecommendationBucket } from '@ahead/recommendation'
 import { selectCurrentSchedule, type ResolvedEvent } from '@ahead/resolver'
 import type { LocalizedText, ScheduleConfidence, TemporalValue } from '@ahead/schema'
@@ -22,45 +23,49 @@ export interface Countdown {
 }
 
 export const BUCKET_LABELS: Record<RecommendationBucket, string> = {
-  '0-7d': '一周内',
-  '7-30d': '本月',
-  '1-3m': '三个月内',
-  '3-12m': '今年',
-  '1y+': '更远以后',
-  unknown: '日期待定',
+  '0-7d': 'messages.within_a_week',
+  '7-30d': 'messages.this_month',
+  '1-3m': 'messages.within_three_months',
+  '3-12m': 'messages.this_year',
+  '1y+': 'messages.further_ahead',
+  unknown: 'messages.date_tbd',
 }
 
 export const CONFIDENCE_LABELS: Record<ScheduleConfidence, string> = {
-  confirmed: '官方确认',
-  likely: '大概率',
-  rumored: '传闻',
-  cancelled: '已取消',
+  confirmed: 'messages.confirmed',
+  likely: 'messages.likely',
+  rumored: 'messages.rumored',
+  cancelled: 'messages.cancelled',
 }
 
-const QUARTER_LABELS = ['第一季度', '第二季度', '第三季度', '第四季度'] as const
-
-export function pickText(text: LocalizedText | undefined, locale = 'zh-CN'): string {
-  if (!text) return ''
-  const language = locale.split('-')[0]!
-  return (
-    text[locale] ??
-    Object.entries(text).find(([key]) => key.split('-')[0] === language)?.[1] ??
-    Object.values(text)[0] ??
-    ''
-  )
+export function pickLocalizedText(text: LocalizedText | undefined, locale: string = currentLanguage()): { text: string; language: string } {
+  const entries = Object.entries(text ?? {})
+  const requested = locale.toLowerCase()
+  const match = entries.find(([key]) => key.toLowerCase() === requested)
+    ?? entries.find(([key]) => key.toLowerCase().split('-')[0] === requested.split('-')[0])
+    ?? entries[0]
+  return match ? { language: match[0], text: match[1] } : { language: locale, text: '' }
 }
 
-function formatDay(iso: string): string {
-  const [year, month, day] = iso.split('-')
-  if (!year || !month || !day) return iso
-  return `${year} 年 ${Number(month)} 月 ${Number(day)} 日`
+export function pickText(text: LocalizedText | undefined, locale: string = currentLanguage()): string {
+  return pickLocalizedText(text, locale).text
+}
+
+export function formatCalendarDate(date: Date, options: Intl.DateTimeFormatOptions, locale: string = currentLanguage()): string {
+  return new Intl.DateTimeFormat(locale, options).format(date)
+}
+
+function formatDay(iso: string, locale: string): string {
+  const date = new Date(iso + 'T12:00:00Z')
+  if (!Number.isFinite(date.getTime())) return iso
+  return new Intl.DateTimeFormat(locale, { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' }).format(date)
 }
 
 /** Human description of a temporal value, without any countdown. */
-export function describeTemporal(value: TemporalValue, locale = 'zh-CN'): string {
+export function describeTemporal(value: TemporalValue, locale: string = currentLanguage()): string {
   switch (value.kind) {
     case 'exact':
-      return formatDay(value.date)
+      return formatDay(value.date, locale)
     case 'datetime': {
       const date = new Date(value.dateTime)
       if (!Number.isFinite(date.getTime())) return value.dateTime
@@ -74,15 +79,15 @@ export function describeTemporal(value: TemporalValue, locale = 'zh-CN'): string
       return formatter.format(date)
     }
     case 'month':
-      return `${value.year} 年 ${value.month} 月`
+      return new Intl.DateTimeFormat(locale, { year: 'numeric', month: 'long', timeZone: 'UTC' }).format(new Date(Date.UTC(value.year, value.month - 1, 1)))
     case 'quarter':
-      return `${value.year} 年${QUARTER_LABELS[value.quarter - 1] ?? ''}`
+      return i18n.t('dates.quarter', { lng: locale, year: String(value.year), quarter: i18n.t('dates.quarters.' + value.quarter, { lng: locale }) })
     case 'year':
-      return `${value.year} 年`
+      return i18n.t('dates.year', { lng: locale, year: String(value.year) })
     case 'range':
       return `${describeTemporal(value.start, locale)} — ${describeTemporal(value.end, locale)}`
     case 'unknown':
-      return pickText(value.note, locale) || '日期待定'
+      return pickText(value.note, locale) || i18n.t('messages.date_tbd', { lng: locale })
   }
 }
 
@@ -102,29 +107,19 @@ export function precisionOf(value: TemporalValue): Precision {
 }
 
 function approximateHeadline(value: TemporalValue, days: number, locale: string): string {
-  if (days < 0) return `${describeTemporal(value, locale)}（已过去）`
-  switch (value.kind) {
-    case 'month': {
-      const months = Math.max(1, Math.round(days / 30))
-      return `大约还有 ${months} 个月`
-    }
-    case 'quarter':
-      return `预计 ${value.year} 年${QUARTER_LABELS[value.quarter - 1] ?? ''}`
-    case 'year':
-      return `预计 ${value.year} 年`
-    case 'range':
-      return `预计 ${describeTemporal(value, locale)}`
-    default:
-      return describeTemporal(value, locale)
-  }
+  const t = i18n.getFixedT(locale)
+  if (days < 0) return t('dates.past', { date: describeTemporal(value, locale) })
+  if (value.kind === 'month') return t('dates.monthsAway', { count: Math.max(1, Math.round(days / 30)) })
+  return t('dates.expected', { date: describeTemporal(value, locale) })
 }
 
-function exactHeadline(days: number): string {
+function exactHeadline(days: number, locale: string): string {
+  const t = i18n.getFixedT(locale)
   const whole = Math.ceil(days)
-  if (whole < 0) return `已过去 ${Math.abs(Math.floor(days))} 天`
-  if (whole === 0) return '就在今天'
-  if (whole === 1) return '就在明天'
-  return `还有 ${whole} 天`
+  if (whole < 0) return t('dates.daysAgo', { count: Math.abs(Math.floor(days)) })
+  if (whole === 0) return t('messages.today_2')
+  if (whole === 1) return t('messages.tomorrow')
+  return t('dates.daysAway', { count: whole })
 }
 
 /**
@@ -136,13 +131,13 @@ function exactHeadline(days: number): string {
 export function countdownFor(
   event: ResolvedEvent,
   now: Date | string = new Date(),
-  locale = 'zh-CN',
+  locale: string = currentLanguage(),
 ): Countdown {
   const clock = new Date(now)
   const schedule = event.currentSchedule ?? selectCurrentSchedule(event.schedule, clock)
   if (!schedule) {
     return {
-      headline: '日期待定',
+      headline: i18n.t('messages.date_tbd', { lng: locale }),
       dateLabel: '',
       precision: 'unknown',
       daysUntil: null,
@@ -161,7 +156,7 @@ export function countdownFor(
 
   if (precision === 'unknown' || days === null) {
     return {
-      headline: '日期待定',
+      headline: i18n.t('messages.date_tbd', { lng: locale }),
       dateLabel: precision === 'unknown' ? dateLabel : '',
       precision: 'unknown',
       daysUntil: null,
@@ -172,7 +167,7 @@ export function countdownFor(
 
   if (ongoing) {
     return {
-      headline: '正在进行',
+      headline: i18n.t('messages.ongoing', { lng: locale }),
       dateLabel,
       precision,
       daysUntil: 0,
@@ -183,7 +178,7 @@ export function countdownFor(
 
   return {
     headline:
-      precision === 'exact' ? exactHeadline(days) : approximateHeadline(schedule.value, days, locale),
+      precision === 'exact' ? exactHeadline(days, locale) : approximateHeadline(schedule.value, days, locale),
     dateLabel,
     precision,
     daysUntil: days,
@@ -196,7 +191,7 @@ export function countdownFor(
 export function describeScheduleChange(
   previous: TemporalValue,
   next: TemporalValue,
-  locale = 'zh-CN',
+  locale: string = currentLanguage(),
 ): string {
   return `${describeTemporal(previous, locale)} → ${describeTemporal(next, locale)}`
 }

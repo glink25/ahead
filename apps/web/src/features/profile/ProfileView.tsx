@@ -1,3 +1,7 @@
+import { profileName } from '../../lib/profile-name'
+import { displayMessage } from '../../i18n'
+import { LanguageSetting } from './LanguageSetting'
+import { useTranslation } from 'react-i18next'
 import { ChevronRight, RefreshCw } from 'lucide-react'
 import { useState } from 'react'
 import { Link, Navigate, useLocation } from 'react-router'
@@ -7,17 +11,20 @@ import { patProvider, oauthProvider } from '../../lib/auth'
 import { useData } from '../../data/local'
 import { forgetSession } from '../../data/session'
 import { setPaused, syncNow } from '../../data/scheduler'
-const labels = {
-  local: '仅在本机',
-  pending: '等待同步',
-  offline: '等待联网',
-  syncing: '同步中',
-  synced: '已同步',
-  auth: '需要重新登录',
-  attention: '需要处理',
-  paused: '已暂停',
-}
 export function ProfileView() {
+  const { t, i18n } = useTranslation()
+  const labels = {
+  local: t('messages.on_this_device_only'),
+  pending: t('messages.waiting_to_sync'),
+  offline: t('messages.waiting_for_connection'),
+  syncing: t('messages.syncing'),
+  synced: t('messages.synced'),
+  auth: t('messages.sign_in_required'),
+  attention: t('messages.needs_attention'),
+  paused: t('messages.paused'),
+}
+
+
   const { session, setSession } = useAuthSession()
   const { profile, act, refresh, loading } = useFeedStore()
   const { db } = useData(),
@@ -28,32 +35,31 @@ export function ProfileView() {
     return <Navigate to="/settings/experimental#diagnostics" replace />
   return (
     <section className="profile-view">
-      <h1>设置</h1>
-      <h2>个人资料</h2>
+      <h1>{t('messages.settings')}</h1>
+      <h2>{t('messages.profiles')}</h2>
       <div className="settings-group">
         <Link className="setting-row" to="/profiles">
           <span>
-            <strong>{space?.name ?? '本机资料'}</strong>
+            <strong>{profileName(space)}</strong>
             <small className="profile-meta">
-              {space?.private === false ? '公开' : '私有'}
+              {space?.private === false ? t('messages.public') : t('messages.private')}
             </small>
           </span>
           <span>
-            切换 <ChevronRight />
+             {t('messages.switch')} <ChevronRight />
           </span>
         </Link>
         <Link className="setting-row" to="/following">
-          频道与关注
-          <ChevronRight />
+           {t('messages.channels_and_following')} <ChevronRight />
         </Link>
       </div>
-      <h2>账户</h2>
+      <h2>{t('messages.account')}</h2>
       <div className="settings-group">
         <div className="setting-row">
-          <strong>{session ? '@' + session.identity.login : '尚未登录'}</strong>
+          <strong>{session ? '@' + session.identity.login : t('messages.not_signed_in')}</strong>
           {!session && (
             <Link to="/login">
-              登录 <ChevronRight />
+               {t('messages.sign_in')} <ChevronRight />
             </Link>
           )}
         </div>
@@ -69,18 +75,17 @@ export function ProfileView() {
                   ).logout(),
                 )
                 .then(() => setSession(null))
-                .catch(() => setMessage('退出未完成，请重试'))
+                .catch(() => setMessage('messages.could_not_sign_out_please_retry'))
             }}
           >
-            退出登录
-          </button>
+             {t('messages.sign_out')} </button>
         )}
       </div>
-      <h2>显示与隐私</h2>
+      <h2>{t('messages.display_and_privacy')}</h2>
       <div className="settings-group">
+        <LanguageSetting />
         <label className="setting-row">
-          加载外部图片
-          <input
+           {t('messages.load_external_images')} <input
             role="switch"
             type="checkbox"
             checked={!profile.settings?.privacyRemoteImages}
@@ -90,12 +95,12 @@ export function ProfileView() {
           />
         </label>
       </div>
-      <h2>数据与同步</h2>
+      <h2>{t('messages.data_and_sync')}</h2>
       <div className="settings-group">
         <div className="setting-row">
-          <span>{space ? labels[space.status] : '正在打开资料'}</span>
+          <span>{space ? labels[space.status] : t('messages.opening_profile')}</span>
           {space?.lastSynced && (
-            <small>{new Date(space.lastSynced).toLocaleTimeString()}</small>
+            <small>{new Date(space.lastSynced).toLocaleTimeString(i18n.resolvedLanguage)}</small>
           )}
         </div>
         {space?.account && (
@@ -104,23 +109,22 @@ export function ProfileView() {
               className="setting-row"
               onClick={() =>
                 void syncNow(space.id).catch(() =>
-                  setMessage('无法同步，请重试'),
+                  setMessage('messages.could_not_sync_please_retry'),
                 )
               }
               disabled={space.status === 'syncing' || !session}
             >
-              立即同步
-              <RefreshCw />
+               {t('messages.sync_now')} <RefreshCw />
             </button>
             <button
               className="setting-row"
               onClick={() =>
                 void setPaused(space.id, !space.paused).catch(() =>
-                  setMessage('未能保存设置'),
+                  setMessage('messages.could_not_save_settings'),
                 )
               }
             >
-              {space.paused ? '恢复自动同步' : '暂停自动同步'}
+              {space.paused ? t('messages.resume_automatic_sync') : t('messages.pause_automatic_sync')}
             </button>
           </>
         )}
@@ -129,15 +133,14 @@ export function ProfileView() {
             className="setting-row"
             to={space.status === 'auth' ? '/login' : '/profiles'}
           >
-            {space.status === 'auth' ? '重新登录' : '检查资料与仓库授权'}
+            {space.status === 'auth' ? t('messages.sign_in_again') : t('messages.check_profile_and_repository_permissions')}
             <ChevronRight />
           </Link>
         )}
         {space?.remote && (
           <details className="settings-disclosure">
             <summary>
-              同步位置
-              <ChevronRight />
+               {t('messages.sync_destination')} <ChevronRight />
             </summary>
             <div className="settings-body">
               <p>
@@ -145,7 +148,7 @@ export function ProfileView() {
               </p>
               {space.feed && (
                 <p>
-                  个人事件：{space.feed.owner}/{space.feed.repo}
+                   {t('messages.personal_events')}{space.feed.owner}/{space.feed.repo}
                 </p>
               )}
             </div>
@@ -156,19 +159,18 @@ export function ProfileView() {
           disabled={loading}
           onClick={() => void refresh()}
         >
-          更新频道内容<span>{loading ? '更新中…' : <RefreshCw />}</span>
+           {t('messages.refresh_channels')}<span>{loading ? t('messages.updating_2') : <RefreshCw />}</span>
         </button>
       </div>
       {message && (
         <p role="status" className="feedback">
-          {message}
+          {displayMessage(message)}
         </p>
       )}
-      <h2>高级</h2>
+      <h2>{t('messages.advanced')}</h2>
       <div className="settings-group">
         <Link className="setting-row" to="/settings/experimental">
-          实验性设置
-          <ChevronRight />
+           {t('messages.experimental_settings')} <ChevronRight />
         </Link>
       </div>
     </section>

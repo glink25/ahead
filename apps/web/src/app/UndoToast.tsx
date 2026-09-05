@@ -1,24 +1,27 @@
+import { useTranslation } from 'react-i18next'
 import { useEffect } from 'react'
 import { toast, Toaster } from 'sonner'
 import { Check, X, CircleAlert, LoaderCircle } from 'lucide-react'
 import { useFeedStore } from '../stores/feed'
 
 export function UndoToast() {
+  const { t, i18n } = useTranslation()
+
   const operation = useFeedStore((s) => s.undoOperation)
   useEffect(() => {
     if (!operation) return
     const id = 'undo-' + operation.id
     const expire = () => useFeedStore.getState().expireUndo(operation.id)
-    toast('已更新', {
+    toast(t('messages.updated'), {
       id,
       duration: 4500,
       action: {
-        label: '撤销',
+        label: t('messages.undo'),
         onClick: () => {
           void useFeedStore
             .getState()
             .undo(operation.id)
-            .catch(() => toast.error('撤销失败，请检查浏览器存储权限后重试'))
+            .catch(() => toast.error(t('messages.could_not_undo_check_browser_storage_permissions_and_retry')))
         },
       },
       onDismiss: expire,
@@ -27,7 +30,7 @@ export function UndoToast() {
     return () => {
       toast.dismiss(id)
     }
-  }, [operation])
+  }, [operation, t, i18n.resolvedLanguage])
   return (
     <Toaster
       position="bottom-center"
@@ -46,7 +49,7 @@ export function UndoToast() {
           color: 'var(--ink)',
           borderColor: 'var(--line)',
         },
-        closeButtonAriaLabel: '关闭提示',
+        closeButtonAriaLabel: t('messages.dismiss_notification'),
       }}
     />
   )

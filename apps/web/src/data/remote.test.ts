@@ -127,13 +127,13 @@ it('refuses visibility changes and malformed content without writing', async () 
   r.makePublic()
   await expect(
     syncDocument(r.adapter, target, 'user-data', space),
-  ).rejects.toThrow('可见性')
+  ).rejects.toThrow('messages.repository_visibility_changed_check_the_sync_destination')
   expect(r.commits()).toBe(0)
   const broken = remote()
   broken.files.set('ahead.yaml', 'invalid: true')
   await expect(
     syncDocument(broken.adapter, target, 'user-data', space),
-  ).rejects.toThrow('格式')
+  ).rejects.toThrow('messages.invalid_remote_content_nothing_was_written')
   expect(broken.commits()).toBe(0)
 })
 it('keeps shared feed identity stable across collaborator-local profile ids', async () => {

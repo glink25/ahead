@@ -29,7 +29,7 @@ export function validEvent(value: unknown): value is Event {
 }
 export function profileChanges(profile: UserData): Change[] {
   if (!validator.validate('user-data', profile).ok)
-    throw new Error('个人资料格式不正确')
+    throw new Error('messages.invalid_profile_format')
   const result: Change[] = []
   for (const key of ['id', 'displayName', 'bio'] as const)
     if (profile[key] !== undefined)
@@ -106,13 +106,13 @@ export function materializeProfile(records: Records): UserData {
     ([, value]) => value as NonNullable<UserData['patches']>,
   )
   if (!validator.validate('user-data', profile).ok)
-    throw new Error('合并后的个人资料格式不正确')
+    throw new Error('messages.invalid_merged_profile_format')
   return profile
 }
 export function personalEvents(records: Records): Event[] {
   return entries(records, 'events').map(([key, value]) => {
     if (!validEvent(value) || value.id !== key)
-      throw new Error('个人事件格式不正确')
+      throw new Error('messages.invalid_personal_event_format')
     return value
   })
 }
@@ -122,7 +122,7 @@ export function eventFeed(space: Space, records = space.records): EventFeed {
     oefVersion: '0.1',
     kind: 'event-feed',
     id: 'personal-' + space.id.replace(/[^a-z0-9._-]/gi, '-').slice(0, 90),
-    name: { 'zh-CN': space.name },
+    name: materializeProfile(space.records).displayName ?? { en: space.name },
     ...metadata,
     events: personalEvents(records),
   } as EventFeed
@@ -130,9 +130,9 @@ export function eventFeed(space: Space, records = space.records): EventFeed {
 export function documentChanges(doc: UserData | EventFeed): Change[] {
   if (doc.kind === 'user-data') return profileChanges(doc)
   if (!validator.validate('event-feed', doc).ok || doc.eventsGlob)
-    throw new Error('个人事件流需要使用内嵌事件格式')
+    throw new Error('messages.personal_feeds_must_use_inline_events')
   for (const e of doc.events ?? [])
-    if (!validEvent(e)) throw new Error('个人事件格式不正确')
+    if (!validEvent(e)) throw new Error('messages.invalid_personal_event_format')
   return [
     ...Object.entries(doc)
       .filter(([key]) => key !== 'events')

@@ -6,7 +6,7 @@ export default defineConfig({
   timeout: 30000,
   use: {
     baseURL: 'http://127.0.0.1:4489',
-    ...devices['Pixel 7'],
+    ...devices['Pixel 7'], locale: 'zh-CN',
     screenshot: 'only-on-failure',
   },
   webServer: {

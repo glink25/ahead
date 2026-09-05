@@ -48,13 +48,13 @@ async function optionalRead(
 }
 export function checkedTarget(snapshot: RepositorySnapshot, target: Target) {
   if (snapshot.private !== target.private)
-    throw new Error('仓库可见性已改变，请重新核对同步位置')
-  if (snapshot.writable === false) throw new Error('没有此仓库的写入权限')
+    throw new Error('messages.repository_visibility_changed_check_the_sync_destination')
+  if (snapshot.writable === false) throw new Error('messages.no_write_access_to_this_repository')
   if (
     target.repositoryId !== undefined &&
     snapshot.repositoryId !== target.repositoryId
   )
-    throw new Error('同步位置已改变，请重新选择资料')
+    throw new Error('messages.the_sync_destination_changed_select_your_profile_again')
 }
 export async function readDocument(
   adapter: RepositoryAdapter,
@@ -70,7 +70,7 @@ export async function readDocument(
     target.path,
     snapshot.headSha,
   )
-  if (!file && !allowMissing) throw new Error('资料文件不存在，未写入')
+  if (!file && !allowMissing) throw new Error('messages.profile_file_not_found_nothing_was_written')
   const document = file
     ? parseYaml<UserData | EventFeed>(file.content)
     : undefined
@@ -78,7 +78,7 @@ export async function readDocument(
     document &&
     (!createValidator().validate(kind, document).ok || document.kind !== kind)
   )
-    throw new Error('远端内容格式不正确，未写入')
+    throw new Error('messages.invalid_remote_content_nothing_was_written')
   const meta = await optionalRead(
     adapter,
     target,
@@ -92,7 +92,7 @@ export async function readDocument(
     envelope &&
     Object.values(envelope.records).some((r) => !collections.has(r.collection))
   )
-    throw new Error('同步元数据包含不匹配的数据集合')
+    throw new Error('messages.sync_metadata_contains_mismatched_collections')
   let records = envelope?.records ?? {}
   if (document) {
     const baseline = envelope?.projection
@@ -168,7 +168,7 @@ export async function syncDocument(
         ? materializeProfile(merged)
         : eventFeed(space, merged)
     if (!createValidator().validate(kind, document).ok)
-      throw new Error('合并后的内容不合法，未写入')
+      throw new Error('messages.invalid_merged_content_nothing_was_written')
     const envelope: RemoteEnvelope = {
       version: 1,
       records: merged,
@@ -200,5 +200,5 @@ export async function syncDocument(
       conflict = error
     }
   }
-  throw conflict ?? new Error('版本冲突，请稍后重试')
+  throw conflict ?? new Error('messages.version_conflict_please_retry_later')
 }

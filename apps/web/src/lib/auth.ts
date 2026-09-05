@@ -22,7 +22,7 @@ export function publicReadFetch() {
   return createPublicFetch(session ? async () => {
     const provider = session.providerId === oauthProvider.id ? oauthProvider : patProvider
     const credential = await provider.getCredential()
-    if (useAuthSession.getState().session?.identity.id !== session.identity.id) throw new Error('登录身份已改变，请刷新')
+    if (useAuthSession.getState().session?.identity.id !== session.identity.id) throw new Error('messages.signed_in_identity_changed_please_refresh')
     return credential.accessToken
   } : undefined)
 }

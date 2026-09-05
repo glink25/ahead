@@ -1,3 +1,25 @@
+// Keep reset isolated from application initialization and retain this language after storage is cleared.
+let preference
+try { preference = localStorage.getItem('ahead-language') } catch {}
+const candidates = [new URLSearchParams(location.search).get('lang'), preference, ...navigator.languages].filter(Boolean)
+const match = candidates.find((value) => /^(zh|en)(-|$)/i.test(value)) || 'en'
+const language = /^zh/i.test(match) ? 'zh-CN' : 'en'
+let messages
+try {
+  messages = (await import('./reset-locales/' + language + '.js')).default
+} catch {
+  document.querySelector('#status').textContent = 'Connect to the internet and retry. / 请联网后重试。'
+  const retry = document.querySelector('#retry')
+  retry.hidden = false
+  retry.onclick = () => location.reload()
+  throw new Error('Reset language unavailable')
+}
+document.documentElement.lang = language
+document.title = messages.title
+document.querySelector('h1').textContent = messages.title
+document.querySelector('#status').textContent = messages.stopping
+document.querySelector('#retry').textContent = messages.retry
+document.querySelector('#open').textContent = messages.open
 // This page deliberately imports no app modules: no scheduler or data migration can restart.
 const status = document.querySelector('#status')
 const retry = document.querySelector('#retry')
@@ -9,13 +31,13 @@ const channel =
 const peer = new URLSearchParams(location.search).has('peer')
 open.onclick = () => location.replace('/discover')
 function complete() {
-  status.textContent = '本机资料、登录状态和缓存已清空。'
+  status.textContent = messages.complete
   open.hidden = false
 }
 if (peer) {
   // A peer stays quiescent until the user explicitly reopens it.
   sessionStorage.clear()
-  status.textContent = '另一标签页正在清空本机数据，请等待清理完成。'
+  status.textContent = messages.peer
   if (channel)
     channel.onmessage = (event) => {
       if (event.data === 'complete') complete()
@@ -42,7 +64,7 @@ function deleteDatabase(name) {
   return new Promise((resolve, reject) => {
     const request = indexedDB.deleteDatabase(name)
     const timer = setTimeout(
-      () => reject(new Error('有其他标签页仍在占用数据库，请关闭它们后重试。')),
+      () => reject(new Error(messages.blocked)),
       8000,
     )
     request.onsuccess = () => {
@@ -58,7 +80,7 @@ function deleteDatabase(name) {
 async function clear() {
   retry.hidden = true
   open.hidden = true
-  status.textContent = '正在清空全部本机数据和缓存…'
+  status.textContent = messages.clearing
   try {
     localStorage.setItem('ahead-reset-in-progress', String(Date.now()))
     channel?.postMessage('prepare')
@@ -72,7 +94,7 @@ async function clear() {
     }
     if (!indexedDB.databases)
       throw new Error(
-        '当前浏览器无法枚举全部数据库，请在浏览器的网站设置中清除本站全部数据。',
+        messages.unsupported,
       )
     const databases = await indexedDB.databases()
     await Promise.all(
@@ -95,7 +117,7 @@ async function clear() {
       response.headers.get('X-Ahead-Reset') !== 'clear-cache-and-cookies'
     ) {
       throw new Error(
-        '资料已清理，但浏览器缓存清理未完成。请联网后重试；若仍失败，请在浏览器的网站设置中清除本站数据。',
+        messages.cacheFailed,
       )
     }
     for (const cookie of document.cookie.split(';')) {
@@ -109,7 +131,7 @@ async function clear() {
     location.replace('/discover')
   } catch (error) {
     status.textContent =
-      '清理未完成：' + (error instanceof Error ? error.message : String(error))
+      messages.failed + (error instanceof Error ? error.message : String(error))
     retry.hidden = false
   }
 }

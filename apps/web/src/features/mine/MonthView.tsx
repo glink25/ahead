@@ -1,8 +1,9 @@
+import { useTranslation } from 'react-i18next'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { useMemo, useState, useRef, useLayoutEffect } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { expandRecurrence, type ResolvedEvent } from '@ahead/resolver'
-import { pickText, describeTemporal } from '../../lib/format'
+import { pickText, describeTemporal, formatCalendarDate } from '../../lib/format'
 
 function dayKey(date: Date, timezone: string) {
   return new Intl.DateTimeFormat('en-CA', {
@@ -72,6 +73,8 @@ export function MonthView({
   timezone: string
   search?: string
 }) {
+  const { t } = useTranslation()
+
   const navigate = useNavigate()
   const today = dayKey(new Date(), timezone)
   const params = new URLSearchParams(search)
@@ -172,10 +175,9 @@ export function MonthView({
         <h3>
           {compact ? (
             <button onClick={() => update(keyFor(month), 'month')}>
-              {index + 1}月
-            </button>
+              {formatCalendarDate(month, { month: 'short' })} </button>
           ) : (
-            `${year} 年 ${index + 1} 月`
+            formatCalendarDate(month, { year: 'numeric', month: 'long' })
           )}
         </h3>
         <div className="month-grid">
@@ -232,23 +234,23 @@ export function MonthView({
   return (
     <section className="month-view">
       <div className="calendar-controls">
-        <div className="view-switch" aria-label="日历视图">
+        <div className="view-switch" aria-label={t('messages.calendar_view')}>
           {(['year', 'month', 'week'] as const).map((value) => (
             <button
               key={value}
               aria-pressed={scale === value}
               onClick={() => update(dateKey, value)}
             >
-              {{ year: '年', month: '月', week: '周' }[value]}
+              {{ year: t('messages.year'), month: t('messages.month'), week: t('messages.week') }[value]}
             </button>
           ))}
         </div>
-        <button onClick={() => update(today)}>今天</button>
+        <button onClick={() => update(today)}>{t('messages.today')}</button>
       </div>
       {scale === 'month' && (
         <>
           <div className="weekdays">
-            {['日', '一', '二', '三', '四', '五', '六'].map((d) => (
+            {Array.from({ length: 7 }, (_, day) => formatCalendarDate(new Date(2024, 0, 7 + day), { weekday: 'short' })).map((d) => (
               <span key={d}>{d}</span>
             ))}
           </div>
@@ -282,16 +284,16 @@ export function MonthView({
         <div className="year-scroll">
           <div className="calendar-period">
             <button
-              aria-label="上一年"
+              aria-label={t('messages.previous_year')}
               onClick={() =>
                 update(keyFor(new Date(selected.getFullYear() - 1, 0, 1)))
               }
             >
               <ChevronLeft />
             </button>
-            <h2>{selected.getFullYear()} 年</h2>
+            <h2>{formatCalendarDate(selected, { year: 'numeric' })}</h2>
             <button
-              aria-label="下一年"
+              aria-label={t('messages.next_year')}
               onClick={() =>
                 update(keyFor(new Date(selected.getFullYear() + 1, 0, 1)))
               }
@@ -310,7 +312,7 @@ export function MonthView({
         <div className="week-view">
           <div className="calendar-period">
             <button
-              aria-label="上一周"
+              aria-label={t('messages.previous_week')}
               onClick={() => {
                 const d = new Date(selected)
                 d.setDate(d.getDate() - 7)
@@ -320,10 +322,9 @@ export function MonthView({
               <ChevronLeft />
             </button>
             <h2>
-              {selected.getFullYear()} 年 {selected.getMonth() + 1} 月
-            </h2>
+              {formatCalendarDate(selected, { year: 'numeric', month: 'long' })} </h2>
             <button
-              aria-label="下一周"
+              aria-label={t('messages.next_week')}
               onClick={() => {
                 const d = new Date(selected)
                 d.setDate(d.getDate() + 7)
@@ -343,7 +344,7 @@ export function MonthView({
                   aria-pressed={keyFor(d) === dateKey}
                   onClick={() => update(keyFor(d))}
                 >
-                  <small>{['日', '一', '二', '三', '四', '五', '六'][i]}</small>
+                  <small>{Array.from({ length: 7 }, (_, day) => formatCalendarDate(new Date(2024, 0, 7 + day), { weekday: 'short' }))[i]}</small>
                   {d.getDate()}
                 </button>
               )
@@ -354,8 +355,7 @@ export function MonthView({
       {scale !== 'year' && (
         <div className="day-agenda">
           <h3>
-            {selected.getMonth() + 1}月{selected.getDate()}日
-          </h3>
+            {formatCalendarDate(selected, { month: 'long', day: 'numeric' })} </h3>
           {selectedEvents.length ? (
             selectedEvents.map((e) => (
               <Link key={e.id} to={'/events/' + encodeURIComponent(e.id)}>
@@ -363,19 +363,19 @@ export function MonthView({
               </Link>
             ))
           ) : (
-            <p>没有安排</p>
+            <p>{t('messages.nothing_planned')}</p>
           )}
         </div>
       )}
       {!!fuzzy.length && (
         <details className="fuzzy-dates">
-          <summary>待定日期 · {fuzzy.length}</summary>
+          <summary>{t('messages.unscheduled')} {fuzzy.length}</summary>
           {fuzzy.map((e) => (
             <Link key={e.id} to={'/events/' + encodeURIComponent(e.id)}>
               {pickText(e.title)} ·{' '}
               {e.currentSchedule
                 ? describeTemporal(e.currentSchedule.value)
-                : '日期待定'}
+                : t('messages.date_tbd')}
             </Link>
           ))}
         </details>

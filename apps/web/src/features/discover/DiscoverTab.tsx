@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import { LoaderCircle, Sparkles } from 'lucide-react'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useFeedView } from '../../hooks/useFeedView'
@@ -5,6 +6,8 @@ import { useFeedStore } from '../../stores/feed'
 import { PosterCard } from './PosterCard'
 
 export function DiscoverTab({ active = true }: { active?: boolean }) {
+  const { t } = useTranslation()
+
   const { discover } = useFeedView()
   const { loading, refresh, marketStatus, revision, setMarketActive } =
     useFeedStore()
@@ -131,7 +134,7 @@ export function DiscoverTab({ active = true }: { active?: boolean }) {
   }, [events, index, height, active])
   if (!events.length && loading)
     return (
-      <div className="empty-view" role="status" aria-label="正在加载">
+      <div className="empty-view" role="status" aria-label={t('messages.loading_2')}>
         <LoaderCircle className="loading-spinner" />
       </div>
     )
@@ -140,11 +143,10 @@ export function DiscoverTab({ active = true }: { active?: boolean }) {
       <div className="empty-view">
         <span className="empty-orbit"><Sparkles /></span>
         <h1>
-          {marketStatus === 'failed' ? '暂时无法加载内容' : '暂时没有事件'}
+          {marketStatus === 'failed' ? t('messages.content_is_temporarily_unavailable') : t('messages.no_events_yet')}
         </h1>
         <button onClick={() => void refresh()} disabled={loading}>
-          重新加载
-        </button>
+           {t('messages.reload')} </button>
       </div>
     )
   const from = Math.max(0, index - 2),
@@ -153,7 +155,7 @@ export function DiscoverTab({ active = true }: { active?: boolean }) {
     <div
       className="discover-scroll"
       ref={container}
-      aria-label="发现海报流"
+      aria-label={t('messages.discover_events')}
       onPointerDownCapture={() => {
         browsing.current = true
       }}

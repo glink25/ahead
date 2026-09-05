@@ -32,15 +32,15 @@ export async function syncProfile(options: {
   adapter: RepositoryAdapter; locator: string; path?: string; local: UserData; base?: UserData
 }): Promise<UserData> {
   const locator = parseLocator(options.locator)
-  if (!('owner' in locator)) throw new Error('仅支持 GitHub 用户数据仓库')
+  if (!('owner' in locator)) throw new Error('messages.only_github_user_data_repositories_are_supported')
   const path = manifestPath(options.path)
   const snapshot = await options.adapter.inspect(locator)
   const file = await options.adapter.readFile(locator, path, { ref: snapshot.headSha })
   const remote = parseYaml<UserData>(file.content)
   const validator = createValidator()
-  if (!validator.validate('user-data', remote).ok) throw new Error('远端不是有效的 UserData，未写入')
+  if (!validator.validate('user-data', remote).ok) throw new Error('messages.remote_content_is_not_valid_userdata_nothing_was_written')
   const merged = mergeProfile(remote, options.local, options.base)
-  if (!validator.validate('user-data', merged).ok) throw new Error('合并后超出协议限制，未写入')
+  if (!validator.validate('user-data', merged).ok) throw new Error('messages.merged_content_exceeds_protocol_limits_nothing_was_written')
   await options.adapter.commitFiles({
     locator, branch: snapshot.defaultBranch, expectedHeadSha: snapshot.headSha,
     message: 'Update Ahead profile',

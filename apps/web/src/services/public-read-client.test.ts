@@ -96,7 +96,7 @@ it('classifies quota errors, blocks subsequent network requests and keeps ordina
     remaining: 0,
   })
   await expect(client.fetch()(url + '/commits/main')).rejects.toThrow(
-    '登录可提高',
+    'messages.github_access_is_limited_sign_in_for_a_higher_request_limit_2',
   )
   expect(fetcher).toHaveBeenCalledTimes(1)
   const ordinary = new PublicReadClient({

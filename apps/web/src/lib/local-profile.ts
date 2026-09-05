@@ -2,7 +2,7 @@ import { createValidator, type UserData, type Subscription } from '@ahead/schema
 import { sourceKey } from '@ahead/protocol'
 
 export const emptyProfile = (): UserData => ({
-  oefVersion: '0.1', kind: 'user-data', id: 'local', displayName: { 'zh-CN': '我的盼头' },
+  oefVersion: '0.1', kind: 'user-data', id: 'local', displayName: { 'zh-CN': '我的盼头', en: 'My Ahead' },
   subscriptions: [], favorites: [], hidden: [], pins: [], interests: {},
 })
 
@@ -39,6 +39,6 @@ export function changeProfile(profile: UserData, action: ProfileAction): UserDat
     next[key] = [...items]
   }
   const result = createValidator().validate('user-data', next)
-  if (!result.ok) throw new Error('个人数据超出协议限制，操作未保存')
+  if (!result.ok) throw new Error('messages.personal_data_exceeds_protocol_limits_changes_were_not_saved')
   return next
 }

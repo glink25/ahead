@@ -11,10 +11,10 @@ export async function connectProfile(
   path = 'ahead.yaml',
 ) {
   const locator = parseLocator(address)
-  if (!('owner' in locator)) throw new Error('请输入 GitHub 仓库地址')
+  if (!('owner' in locator)) throw new Error('messages.enter_a_github_repository_address')
   const adapter = authenticatedAdapter(auth),
     snapshot = await adapter.inspect(locator)
-  if (snapshot.writable === false) throw new Error('此仓库没有写入权限')
+  if (snapshot.writable === false) throw new Error('messages.you_do_not_have_write_access_to_this_repository')
   const target: Target = {
     owner: locator.owner,
     repo: locator.repo,
@@ -84,7 +84,7 @@ export async function discoverProfiles(
         while (cursor < repositories.length && !signal.aborted) {
           const repo = repositories[cursor++]!
           if (repo.writable === false) continue
-          onProgress('正在查找个人资料…')
+          onProgress('messages.finding_profiles')
           try {
             await connectProfile(auth, 'github:' + repo.owner + '/' + repo.repo)
           } catch {

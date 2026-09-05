@@ -74,7 +74,6 @@ export function Spinner({ className, ...props }: HTMLAttributes<HTMLSpanElement>
   return (
     <span
       role="status"
-      aria-label="加载中"
       className={cx('inline-block size-5 animate-spin rounded-full border-2 border-current border-r-transparent', className)}
       {...props}
     />

@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import { ArrowUpRight, Ellipsis, Heart } from 'lucide-react'
 import { useLayoutEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
@@ -11,6 +12,8 @@ import { posterFor } from '../../lib/media'
 import { tagLabel } from '../../lib/tag-label'
 
 export function EvidenceLinks({ evidence }: { evidence?: Evidence[] }) {
+  const { t, i18n } = useTranslation()
+
   return (
     <div className="evidence-links">
       {evidence
@@ -19,7 +22,7 @@ export function EvidenceLinks({ evidence }: { evidence?: Evidence[] }) {
         )
         .map((item, index) => (
           <a key={index} href={item.value} target="_blank" rel="noreferrer">
-            {pickText(item.label) || '来源'} <ArrowUpRight />
+            {pickText(item.label) || t('messages.source')} <ArrowUpRight />
           </a>
         ))}
     </div>
@@ -27,13 +30,15 @@ export function EvidenceLinks({ evidence }: { evidence?: Evidence[] }) {
 }
 
 export function FavoriteButton({ event }: { event: ResolvedEvent }) {
+  const { t, i18n } = useTranslation()
+
   const { profile, act, ready } = useFeedStore()
   const favorite = profile.favorites?.includes(event.id) ?? false
   return (
     <IconButton
       className="icon-action"
       disabled={!ready}
-      aria-label={favorite ? '取消喜爱' : '喜爱'}
+      aria-label={favorite ? t('messages.remove_favorite') : t('messages.favorite')}
       aria-pressed={favorite}
       onClick={() =>
         act({
@@ -49,6 +54,8 @@ export function FavoriteButton({ event }: { event: ResolvedEvent }) {
 }
 
 export function FeedSourceBar({ event }: { event: ResolvedEvent }) {
+  const { t, i18n } = useTranslation()
+
   const { feeds, profile, act, ready } = useFeedStore()
   const sources = feeds.filter((f) =>
     event.sourceLocators.includes(f.sourceLocator),
@@ -78,7 +85,7 @@ export function FeedSourceBar({ event }: { event: ResolvedEvent }) {
                 act({ type: subscribed ? 'unsubscribe' : 'subscribe', source })
               }
             >
-              {subscribed ? '已订阅' : '订阅频道'}
+              {subscribed ? t('messages.subscribed') : t('messages.subscribe_to_channel')}
             </button>
           </div>
         )
@@ -88,22 +95,25 @@ export function FeedSourceBar({ event }: { event: ResolvedEvent }) {
 }
 
 export function HideMenu({ event }: { event: ResolvedEvent }) {
+  const { t, i18n } = useTranslation()
+
   const act = useFeedStore((s) => s.act)
   return (
     <details className="event-menu">
-      <summary aria-label="更多事件操作">
+      <summary aria-label={t('messages.more_event_actions')}>
         <Ellipsis />
       </summary>
       <button
         onClick={() => act({ type: 'hide', id: event.id, tags: event.tags })}
       >
-        不感兴趣
-      </button>
+         {t('messages.not_interested')} </button>
     </details>
   )
 }
 
 function EventDescription({ text }: { text: string }) {
+  const { t, i18n } = useTranslation()
+
   const [expanded, setExpanded] = useState(false)
   const [canExpand, setCanExpand] = useState(false)
   const paragraph = useRef<HTMLParagraphElement>(null)
@@ -135,7 +145,7 @@ function EventDescription({ text }: { text: string }) {
           aria-expanded={expanded}
           onClick={() => setExpanded(!expanded)}
         >
-          {expanded ? '收起' : '展开'}
+          {expanded ? t('messages.collapse') : t('messages.expand')}
         </button>
       )}
     </div>
@@ -149,6 +159,8 @@ export function PosterCard({
   event: ResolvedEvent
   index: number
 }) {
+  const { t, i18n } = useTranslation()
+
   const { feeds, profile } = useFeedStore()
   const feed = feeds.find((f) => event.sourceLocators.includes(f.sourceLocator))
   const poster = posterFor(event, {
@@ -181,7 +193,7 @@ export function PosterCard({
         <div className="poster-main">
           <div className="tag-list">
             {event.tags?.map((tag) => (
-              <TagChip key={tag}># {tagLabel(tag, event, feeds, document.documentElement.lang)}</TagChip>
+              <TagChip key={tag}># {tagLabel(tag, event, feeds, i18n.resolvedLanguage)}</TagChip>
             ))}
           </div>
           <Link to={'/events/' + encodeURIComponent(event.id)}>

@@ -47,7 +47,7 @@ it('refuses private repositories before reading or populating the public cache',
   const api = adapter(feed())
   vi.mocked(api.inspect).mockResolvedValue({ locator, headSha: sha, defaultBranch: 'main', private: true })
   const cache = new RepoCache(memory())
-  await expect(fetchFeed({ locator: 'github:a/b', adapter: api, cache })).rejects.toThrow('私有仓库')
+  await expect(fetchFeed({ locator: 'github:a/b', adapter: api, cache })).rejects.toThrow('messages.public_feeds_cannot_read_private_repositories')
   expect(api.readFile).not.toHaveBeenCalled()
   expect(await cache.readAny('github:a/b#ahead.yaml', 'ahead.yaml')).toBeUndefined()
 })

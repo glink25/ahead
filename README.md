@@ -1,25 +1,27 @@
 # Ahead / 盼头
 
-让人知道「未来还有什么值得期待」。
+English | [简体中文](README.zh-CN.md)
 
-游戏发售、一次旅行、一场演出，或自己计划的小事——盼头把这些未来事件放在一起，让你发现感兴趣的内容，订阅持续更新的事件流，收藏期待，并在时间轴与月历中安排自己的生活。
+Know what there is to look forward to.
 
-- **发现与记录**：浏览公开事件，也可以写下自己的盼头；日期尚未确定时，保留月份、季度或未知时间。
-- **属于自己的视角**：订阅、收藏和个人事件组成你的资料，支持多份公开或私密资料。
-- **开放且可携带**：事件使用开放的 OEF 协议，以 YAML / JSON 保存在 GitHub 仓库；Market 帮助发现内容，源仓库保存内容本身。
-- **离线也能继续**：首次在线缓存后，可以离线查看和编辑；登录后将本机修改同步到自己的仓库。
+A game release, a trip, a concert, or a small personal plan—Ahead brings future events together so you can discover things you care about, subscribe to continuously updated feeds, save favorites, and organize your life in a timeline or calendar.
 
-## 用 AI 编写事件流
+- **Discover and create**: Browse public events or add your own. When dates are uncertain, keep them as a month, quarter, or unknown date.
+- **Your own perspective**: Subscriptions, favorites, and personal events form your profile. Keep multiple public or private profiles.
+- **Open and portable**: Events use the open OEF protocol and live as YAML / JSON in GitHub repositories. The Market helps you discover content; source repositories hold the content itself.
+- **Keep going offline**: After the first online cache completes, browse and edit offline. Sign in to sync local changes to your repositories.
 
-把下面这句话交给能读取 GitHub 文档的 AI，替换其中的主题即可：
+## Write event feeds with AI
 
-> 根据 Ahead 协议（https://github.com/glink25/ahead/blob/main/docs/protocol/README.md），为我编写一个节假日事件流 ahead.yaml。
+Give the following prompt to an AI that can read GitHub documentation, replacing the topic as needed:
 
-[协议与示例](docs/protocol/README.md)提供格式说明及 Schema 入口。生成后可在 Studio 的 YAML 编辑器中校验；准备公开分享时，参见 [Market](docs/market/README.md)。
+> Following the Ahead protocol (https://github.com/glink25/ahead/blob/main/docs/protocol/README.md), write an ahead.yaml event feed for public holidays.
 
-## 本地运行
+[Protocol and examples](docs/protocol/README.md) explain the format and link to the schemas. Validate generated content in Studio's YAML editor. To share a feed publicly, see the [Market guide](docs/market/README.md).
 
-使用 Node.js 22 与 pnpm 9（与当前 CI 一致）：
+## Run locally
+
+Use Node.js 22 and pnpm 9, matching the current CI environment:
 
 ```bash
 pnpm install
@@ -27,8 +29,16 @@ cp apps/web/.env.example apps/web/.env
 pnpm dev
 ```
 
-配置与部署见 [Web 开发说明](apps/web/README.md)，其余入口见[文档索引](docs/README.md)。
+See [Web development](apps/web/README.md) for configuration and deployment, and the [documentation index](docs/README.md) for other guides. These linked guides are currently in Chinese.
 
-## 许可
+## Languages
+
+The app supports English and Simplified Chinese. It follows browser language preferences by default and uses English when neither language matches. Choose a language or return to following the browser in **Settings → Display and privacy → Language**. Manual preferences stay in this browser.
+
+Language packs load on demand. Once cached, a language can be used offline; switching to an uncached language requires a connection. Event content uses an existing translation when available and otherwise shows the original text.
+
+This project README is maintained in English and Simplified Chinese only, independently of any future app languages.
+
+## License
 
 [MIT](LICENSE)

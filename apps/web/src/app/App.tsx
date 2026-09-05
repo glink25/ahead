@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import { activateSession, restoreCachedIdentity } from '../data/session'
 import { useData } from '../data/local'
 import { lazy, Suspense, useEffect } from 'react'
@@ -37,10 +38,12 @@ const LoginPage = lazy(() =>
   })),
 )
 function Landing() {
+  const { t } = useTranslation()
+
   const { session, loading } = useAuthSession()
   const active = useData((s) => s.db?.active)
   return loading ? (
-    <div className="empty-view">正在加载…</div>
+    <div className="empty-view">{t('messages.loading')}</div>
   ) : (
     <Navigate
       to={
@@ -55,6 +58,8 @@ function Landing() {
   )
 }
 export function App() {
+  const { t } = useTranslation()
+
   const location = useLocation()
   const browsing =
     location.pathname === '/mine' || location.pathname === '/discover'
@@ -87,7 +92,7 @@ export function App() {
       .initialize()
       .catch(() =>
         useFeedStore.setState({
-          errors: ['无法打开本机资料，请检查浏览器存储权限'],
+          errors: ['messages.cannot_open_local_profiles_check_browser_storage_permissions'],
           loading: false,
         }),
       )
@@ -95,8 +100,7 @@ export function App() {
   if (restoringIdentity)
     return (
       <div className="empty-view" role="status">
-        正在恢复账户…
-      </div>
+         {t('messages.restoring_account')} </div>
     )
   return (
     <TabShell>
@@ -119,7 +123,7 @@ export function App() {
           <DiscoverTab active={browsing && !mine} />
         </div>
       </div>
-      <Suspense fallback={<div className="empty-view">正在打开页面…</div>}>
+      <Suspense fallback={<div className="empty-view">{t('messages.opening_page')}</div>}>
         <Routes>
           <Route path="/" element={<Landing />} />
           <Route path="/mine" element={null} />

@@ -1,3 +1,6 @@
+import { profileName } from '../../lib/profile-name'
+import { displayMessage } from '../../i18n'
+import { useTranslation } from 'react-i18next'
 import { previousUrl } from '../../app/navigation'
 import { ChevronRight, Plus } from 'lucide-react'
 import { useEffect, useState } from 'react'
@@ -13,6 +16,8 @@ import { connectProfile, discoverProfiles } from '../../data/profiles'
 import { chooseProfile } from '../../data/session'
 import { syncNow } from '../../data/scheduler'
 export function ProfilesView() {
+  const { t, i18n } = useTranslation()
+
   const { session } = useAuthSession(),
     { db } = useData()
   const navigate = useNavigate()
@@ -36,7 +41,7 @@ export function ProfilesView() {
       })
       .catch(() => {
         if (!controller.signal.aborted)
-          setMessage('暂时无法查找更多资料，可使用已缓存资料或通过地址添加')
+          setMessage('messages.cannot_find_more_profiles_right_now_use_a_cached_profile_or_add_one_by_addr')
       })
     return () => controller.abort()
   }, [session?.identity.id])
@@ -48,16 +53,16 @@ export function ProfilesView() {
         ? navigate(-1)
         : navigate('/mine', { replace: true })
     } catch {
-      setMessage('未能切换个人资料，本机数据已保留')
+      setMessage('messages.could_not_switch_profiles_local_data_has_been_preserved')
     } finally {
       setBusy(false)
     }
   }
   return (
     <section className="profiles-view">
-      <h1>个人资料</h1>
+      <h1>{t('messages.profiles')}</h1>
       <p className="muted">
-        {session ? '@' + session.identity.login : '本机资料'}
+        {session ? '@' + session.identity.login : t('messages.local_profile')}
       </p>
       <div className="profile-list">
         {profiles.map((space) => (
@@ -68,20 +73,20 @@ export function ProfilesView() {
               onClick={() => void select(space.id)}
             >
               <span>
-                <strong>{space.name}</strong>
+                <strong>{profileName(space)}</strong>
                 <small className="profile-meta">
-                  {space.private ? '私有' : '公开'}
+                  {space.private ? t('messages.private') : t('messages.public')}
                   {space.remote
                     ? ' · ' + space.remote.owner + '/' + space.remote.repo
-                    : ' · 本机'}
+                    : t('messages.local')}
                 </small>
               </span>
-              <span>{space.id === db?.active ? '当前' : <ChevronRight />}</span>
+              <span>{space.id === db?.active ? t('messages.current') : <ChevronRight />}</span>
             </button>
             {(space.provision || space.feedProvision) &&
               space.status === 'attention' && (
                 <details className="settings-disclosure">
-                  <summary>调整待创建的仓库名称</summary>
+                  <summary>{t('messages.change_the_new_repository_name')}</summary>
                   <form
                     className="settings-body"
                     onSubmit={(e) => {
@@ -109,7 +114,7 @@ export function ProfilesView() {
                           ?.repo
                       }
                     />
-                    <button className="primary-link">重试创建</button>
+                    <button className="primary-link">{t('messages.retry_creation')}</button>
                   </form>
                 </details>
               )}
@@ -121,59 +126,53 @@ export function ProfilesView() {
         open={!profiles.length}
       >
         <summary>
-          新建个人资料
-          <Plus />
+           {t('messages.new_profile')} <Plus />
         </summary>
         <form
           className="settings-body"
           onSubmit={(e) => {
             e.preventDefault()
             setBusy(true)
-            void createLocalProfile(name.trim(), privateRepo, account, bio)
+            void createLocalProfile(name.trim(), privateRepo, account, bio, i18n.resolvedLanguage || 'en')
               .then((id) => chooseProfile(id, session))
               .then(() =>
                 previousUrl()?.startsWith('/mine')
                   ? navigate(-1)
                   : navigate('/mine', { replace: true }),
               )
-              .catch(() => setMessage('未能创建资料，请检查本机存储后重试'))
+              .catch(() => setMessage('messages.could_not_create_profile_check_local_storage_and_retry'))
               .finally(() => setBusy(false))
           }}
         >
           <label>
-            名称
-            <input
+             {t('messages.name')} <input
               required
               maxLength={120}
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="例如：我的盼头、工作、游戏"
+              placeholder={t('messages.for_example_my_ahead_work_games')}
             />
           </label>
           <label>
-            简介（可选）
-            <textarea value={bio} onChange={(e) => setBio(e.target.value)} />
+             {t('messages.bio_optional')} <textarea value={bio} onChange={(e) => setBio(e.target.value)} />
           </label>
           <label className="setting-row">
-            可见性
-            <select
+             {t('messages.visibility')} <select
               value={privateRepo ? 'private' : 'public'}
               onChange={(e) => setPrivate(e.target.value === 'private')}
             >
-              <option value="private">私有</option>
-              <option value="public">公开</option>
+              <option value="private">{t('messages.private')}</option>
+              <option value="public">{t('messages.public')}</option>
             </select>
           </label>
           <button className="primary-link" disabled={busy || !name.trim()}>
-            创建并使用
-          </button>
+             {t('messages.create_and_use')} </button>
         </form>
       </details>
       {session && (
         <details className="settings-group settings-disclosure">
           <summary>
-            通过仓库地址添加
-            <Plus />
+             {t('messages.add_by_repository_address')} <Plus />
           </summary>
           <form
             className="settings-body"
@@ -183,14 +182,13 @@ export function ProfilesView() {
               void connectProfile(session, address.trim(), path.trim())
                 .then((id) => select(id))
                 .catch(() =>
-                  setMessage('无法添加资料，请检查地址、文件格式和仓库授权'),
+                  setMessage('messages.could_not_add_profile_check_the_address_file_format_and_repository_permissi'),
                 )
                 .finally(() => setBusy(false))
             }}
           >
             <label>
-              仓库地址
-              <input
+               {t('messages.repository_address')} <input
                 required
                 placeholder="github:owner/ahead-user-main"
                 value={address}
@@ -198,16 +196,14 @@ export function ProfilesView() {
               />
             </label>
             <label>
-              资料文件路径
-              <input
+               {t('messages.profile_file_path')} <input
                 required
                 value={path}
                 onChange={(e) => setPath(e.target.value)}
               />
             </label>
             <button className="primary-link" disabled={busy}>
-              添加并使用
-            </button>
+               {t('messages.add_and_use')} </button>
           </form>
         </details>
       )}
@@ -216,11 +212,10 @@ export function ProfilesView() {
         disabled={busy}
         onClick={() => void select('guest')}
       >
-        继续使用本机资料
-      </button>
+         {t('messages.continue_with_local_profile')} </button>
       {message && (
         <p className="feedback" role="status">
-          {message}
+          {displayMessage(message)}
         </p>
       )}
     </section>

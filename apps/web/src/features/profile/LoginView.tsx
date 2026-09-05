@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import { ChevronRight } from 'lucide-react'
 import { activateSession } from '../../data/session'
 import { useState, type FormEvent } from 'react'
@@ -5,6 +6,8 @@ import { Navigate } from 'react-router'
 import { useAuthSession } from '../../stores'
 import { patProvider, oauthProvider } from '../../lib/auth'
 export function LoginPage() {
+  const { t } = useTranslation()
+
   const [token, setToken] = useState('')
   const [error, setError] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -28,13 +31,12 @@ export function LoginPage() {
   if (loading)
     return (
       <div className="empty-view" role="status">
-        正在登录…
-      </div>
+         {t('messages.signing_in')} </div>
     )
   if (session) return <Navigate to="/profiles?choose=1" replace />
   return (
     <section className="login-view">
-      <h1>登录 Ahead</h1>
+      <h1>{t('messages.sign_in_to_ahead')}</h1>
       {oauthProvider.available && (
         <button
           className="primary-link"
@@ -49,18 +51,15 @@ export function LoginPage() {
               .finally(() => setBusy(false))
           }}
         >
-          使用 GitHub 登录
-        </button>
+           {t('messages.continue_with_github')} </button>
       )}
       <details className="settings-group settings-disclosure">
         <summary>
-          使用访问令牌登录
-          <ChevronRight />
+           {t('messages.sign_in_with_an_access_token')} <ChevronRight />
         </summary>
         <form className="settings-body" onSubmit={loginWithPat}>
           <label>
-            GitHub 访问令牌
-            <input
+             {t('messages.github_access_token')} <input
               type="password"
               autoComplete="off"
               value={token}
@@ -72,14 +71,13 @@ export function LoginPage() {
             disabled={busy || !token.trim()}
             type="submit"
           >
-            {busy ? '登录中…' : '登录'}
+            {busy ? t('messages.signing_in_2') : t('messages.sign_in')}
           </button>
         </form>
       </details>
       {(error || restoreError) && (
         <p className="field-error" role="alert">
-          登录未完成，请检查登录信息后重试。
-        </p>
+           {t('messages.sign_in_failed_check_your_credentials_and_retry')} </p>
       )}
     </section>
   )

@@ -35,7 +35,7 @@ export class FeedLoadError extends Error {
 function githubLocator(locator: string): ResourceLocator {
   const parsed = parseLocator(locator)
   if (parsed.scheme !== 'github' || !('owner' in parsed)) {
-    throw new FeedLoadError(`暂不支持的定位符：${locator}`, locator)
+    throw new FeedLoadError(`Unsupported locator: ${locator}`, locator)
   }
   return parsed
 }
@@ -49,7 +49,7 @@ export function assertEventFeed(
   if (!result.ok) {
     const detail =
       result.errors?.map((error) => `${error.instancePath || '/'} ${error.message}`).join('；') ??
-      'schema 校验失败'
+      'messages.schema_validation_failed'
     throw new FeedLoadError(detail, sourceLocator)
   }
   const feed = document as EventFeed
@@ -112,7 +112,7 @@ async function expandEventsGlob(
     if (!result.ok) {
       const detail =
         result.errors?.map((error) => `${error.instancePath || '/'} ${error.message}`).join('；') ??
-        'schema 校验失败'
+        'messages.schema_validation_failed'
       throw new FeedLoadError(`${path}：${detail}`, sourceLocator)
     }
     const event = document as Event
@@ -164,7 +164,7 @@ export async function fetchFeed(options: FetchFeedOptions): Promise<LoadedFeed> 
   const manifestPath = safePath(options.manifestPath ?? DEFAULT_MANIFEST_PATH)
 
   const snapshot = await options.adapter.inspect({ ...locator, ref: options.ref ?? locator.ref })
-  if (snapshot.private) throw new FeedLoadError('公开事件源不能读取私有仓库', sourceLocator)
+  if (snapshot.private) throw new FeedLoadError('messages.public_feeds_cannot_read_private_repositories', sourceLocator)
   const headSha = snapshot.headSha
   const cached = await options.cache?.read(sourceLocator, manifestPath, headSha)
   if (cached) return { sourceLocator, manifestPath, feed: assertEventFeed(cached.feed, validator, sourceLocator), headSha, locator }
