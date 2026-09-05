@@ -37,6 +37,7 @@ export function marketApi(): MarketApi {
     authenticated: Boolean(session),
     store: createIdbStore('ahead-public-api-' + suffix, 'responses'),
   })
+  const privateAdapter = session ? authenticatedAdapter(session) : undefined
   const api = new MarketApi({
     repository:
       import.meta.env.VITE_GITHUB_MARKET_REPOSITORY || 'glink25/ahead',
@@ -53,8 +54,9 @@ export function marketApi(): MarketApi {
     ),
     ...(session
       ? {
-          privateAdapter: authenticatedAdapter(session),
-          searchFetcher: publicReadFetch(),
+          privateAdapter,
+          searchCode: (query, page, perPage, signal) =>
+            privateAdapter!.searchCode(query, page, perPage, signal),
         }
       : {}),
   })

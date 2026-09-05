@@ -55,6 +55,11 @@ export type SearchEvent =
       authenticated: boolean
     }
   | { type: 'progress'; loaded: number; complete: boolean }
+interface CodeSearchResult {
+  total_count: number
+  incomplete_results: boolean
+  items: { path: string; repository: { name: string; owner: { login: string } } }[]
+}
 interface Session {
   page: number
   nextPage?: number
@@ -108,10 +113,29 @@ export class MarketApi {
       cache: RepoCache
       privateAdapter?: RepositoryAdapter
       searchFetcher?: typeof fetch
+      searchCode?: (
+        query: string,
+        page: number,
+        perPage: number,
+        signal?: AbortSignal,
+      ) => Promise<CodeSearchResult>
     },
   ) {}
 
+  private get searchAvailable() {
+    return Boolean(this.options.searchCode || this.options.searchFetcher)
+  }
+
   private async searchJson<T>(url: string, signal?: AbortSignal): Promise<T> {
+    if (this.options.searchCode) {
+      const parsed = new URL(url)
+      return this.options.searchCode(
+        parsed.searchParams.get('q') ?? '',
+        Number(parsed.searchParams.get('page') ?? 1),
+        Number(parsed.searchParams.get('per_page') ?? 100),
+        signal,
+      ) as Promise<T>
+    }
     if (!this.options.searchFetcher)
       throw new PublicReadError('messages.sign_in_to_search_github', 401, false)
     const response = await this.options.searchFetcher(url, {
@@ -136,7 +160,7 @@ export class MarketApi {
 
   private searchError(error: unknown): SearchEvent & { type: 'error' } {
     const status = error instanceof PublicReadError ? error.status : 0
-    const reason: SearchErrorReason = !this.options.searchFetcher
+    const reason: SearchErrorReason = !this.searchAvailable
       ? 'authentication-required'
       : status === 401
         ? 'authentication-expired'
@@ -154,7 +178,7 @@ export class MarketApi {
             : `messages.github_search_unavailable：${String(error)}`,
       reason,
       limited: reason === 'rate-limited',
-      authenticated: Boolean(this.options.searchFetcher),
+      authenticated: this.searchAvailable,
     }
   }
 
@@ -218,10 +242,10 @@ export class MarketApi {
     const query = options.query?.normalize('NFKC').trim()
     if ((!query && !tag) || (query && tag)) return
     if (tag && !/^[a-z0-9][a-z0-9._-]{0,63}$/u.test(tag)) {
-      yield { type: 'error', message: 'messages.invalid_tag', reason: 'search-unavailable', limited: false, authenticated: Boolean(this.options.searchFetcher) }
+      yield { type: 'error', message: 'messages.invalid_tag', reason: 'search-unavailable', limited: false, authenticated: this.searchAvailable }
       return
     }
-    if (!this.options.searchFetcher) {
+    if (!this.searchAvailable) {
       yield this.searchError(new Error('Authentication required'))
       return
     }

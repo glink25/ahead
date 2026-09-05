@@ -4,6 +4,7 @@
     "search_placeholder": "Search titles, summaries, descriptions, or tags",
     "clear_search": "Clear search",
     "search": "Search",
+    "searching": "Searching…",
     "search_results": "Event search results",
     "no_search_results": "No matching events found",
     "sign_in_to_search": "Sign in to GitHub to search events",

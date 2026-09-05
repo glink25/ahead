@@ -23,6 +23,30 @@ export class OctokitAdapter implements RepositoryAdapter {
     this.octokit = createOctokit(getAccessToken)
   }
 
+  async searchCode(q: string, page = 1, perPage = 100, signal?: AbortSignal) {
+    const response = await this.octokit.request('GET /search/code', {
+      q,
+      page,
+      per_page: perPage,
+      headers: {
+        accept: 'application/vnd.github+json',
+        'x-github-api-version': '2022-11-28',
+      },
+      request: signal ? { signal } : undefined,
+    })
+    return {
+      total_count: response.data.total_count,
+      incomplete_results: response.data.incomplete_results,
+      items: response.data.items.map((item) => ({
+        path: item.path,
+        repository: {
+          name: item.repository.name,
+          owner: { login: item.repository.owner.login },
+        },
+      })),
+    }
+  }
+
   async inspect(locator: ResourceLocator): Promise<RepositorySnapshot> {
     const repository = await this.octokit.request('GET /repos/{owner}/{repo}', {
       owner: locator.owner,

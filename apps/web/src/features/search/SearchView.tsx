@@ -1,10 +1,9 @@
 import { resolve } from '@ahead/resolver'
 import type { LoadedFeed } from '../../lib/feed-loader'
-import { Search, X } from 'lucide-react'
+import { LoaderCircle, Search, X } from 'lucide-react'
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router'
 import { useTranslation } from 'react-i18next'
-import { PageSkeleton } from '../../app/PageSkeleton'
 import { displayMessage, useFeatureTranslations } from '../../i18n'
 import { marketApi } from '../../services/market'
 import type { SearchErrorReason } from '../../services/market-api'
@@ -102,7 +101,10 @@ export function SearchView() {
       {!query && !tag ? (
         <div className="empty-view"><h1>{t('messages.search_events')}</h1></div>
       ) : loading && !events.length ? (
-        <PageSkeleton variant="poster" />
+        <div className="search-loading" role="status" aria-label={t('messages.searching')}>
+          <LoaderCircle className="loading-spinner" />
+          <span>{t('messages.searching')}</span>
+        </div>
       ) : error?.reason === 'authentication-required' || error?.reason === 'authentication-expired' ? (
         <div className="empty-view">
           <h1>{t(error.reason === 'authentication-required' ? 'messages.sign_in_to_search' : 'messages.sign_in_expired')}</h1>
