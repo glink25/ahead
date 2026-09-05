@@ -3,7 +3,6 @@ import { useFeatureTranslations } from '../../i18n'
 import { useTranslation } from 'react-i18next'
 import { Sparkles } from 'lucide-react'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { useLocation } from 'react-router'
 import { useFeedView } from '../../hooks/useFeedView'
 import { useFeedStore } from '../../stores/feed'
 import { PosterCard } from './PosterCard'
@@ -13,9 +12,8 @@ export function DiscoverTab({
 }: { active?: boolean }) {
   useFeatureTranslations('discover')
   const { t } = useTranslation()
-  const location = useLocation()
 
-  const [recommendationSeed, setRecommendationSeed] = useState(() => crypto.randomUUID())
+  const [recommendationSeed] = useState(() => crypto.randomUUID())
   const { discover } = useFeedView(recommendationSeed)
   const { loading, ready, refresh, marketStatus, revision, setMarketActive } =
     useFeedStore()
@@ -54,40 +52,32 @@ export function DiscoverTab({
   const [height, setHeight] = useState(700)
   const [cursor, setCursor] = useState(0)
   const cursorRef = useRef(0)
-  const previousPath = useRef(location.pathname)
+  const heightRef = useRef(height)
   const activeRef = useRef(active)
   activeRef.current = active
-  useEffect(() => {
-    if (location.pathname === '/discover' && previousPath.current === '/mine') {
-      order.current = []
-      browsing.current = false
-      cursorRef.current = 0
-      setCursor(0)
-      container.current?.scrollTo({ top: 0, behavior: 'instant' })
-      setRecommendationSeed(crypto.randomUUID())
-    }
-    previousPath.current = location.pathname
-  }, [location.pathname])
   useLayoutEffect(() => {
     if (active && container.current) {
       const size = container.current.clientHeight
-      if (size > 0) {
+      if (size > 0 && size !== heightRef.current) {
+        heightRef.current = size
         setHeight(size)
-        container.current.scrollTop = cursorRef.current * size
       }
     }
   }, [active])
+  useLayoutEffect(() => {
+    if (activeRef.current && container.current)
+      container.current.scrollTop = cursorRef.current * height
+  }, [height])
   const index = Math.min(cursor, Math.max(0, events.length - 1))
   useEffect(() => {
     if (!container.current) return
     const observer = new ResizeObserver(([entry]) => {
       if (entry && entry.contentRect.height > 0 && activeRef.current) {
         const size = entry.contentRect.height
-        setHeight(size)
-        container.current?.scrollTo({
-          top: cursorRef.current * size,
-          behavior: 'instant',
-        })
+        if (size !== heightRef.current) {
+          heightRef.current = size
+          setHeight(size)
+        }
       }
     })
     observer.observe(container.current)

@@ -267,7 +267,7 @@ test('empty calendar supports year and week; editor previews without saving', as
   ).toHaveText(/周?二29/)
 })
 
-test('tab navigation refreshes discovery while detail back preserves position and settings hide diagnostics', async ({
+test('navigation preserves discovery position without transient scrolling', async ({
   page,
 }) => {
   await registry(page)
@@ -279,18 +279,46 @@ test('tab navigation refreshes discovery while detail back preserves position an
     el.scrollTop = el.clientHeight
   })
   await expect(page.locator('[data-index="1"]')).toBeInViewport()
+  const discoverScroll = page.locator('.discover-scroll')
+  await discoverScroll.evaluate((el) => {
+    el.setAttribute('data-min-observed-top', String(el.scrollTop))
+    el.addEventListener('scroll', () => {
+      const previous = Number(el.getAttribute('data-min-observed-top'))
+      el.setAttribute(
+        'data-min-observed-top',
+        String(Math.min(previous, el.scrollTop)),
+      )
+    })
+  })
   await page.getByRole('link', { name: '我的', exact: true }).click()
   await page.getByRole('link', { name: '发现', exact: true }).click()
-  await expect(page.locator('[data-index="0"]')).toBeInViewport()
-  await page.locator('[data-index="0"]').getByRole('heading').click()
+  await expect(page.locator('[data-index="1"]')).toBeInViewport()
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+      ),
+  )
+  await expect
+    .poll(() =>
+      discoverScroll.evaluate(
+        (el) =>
+          Number(el.getAttribute('data-min-observed-top')) >
+          el.clientHeight * 0.5,
+      ),
+    )
+    .toBe(true)
+  await page.locator('[data-index="1"]').getByRole('heading').click()
   await page.getByRole('button', { name: '返回上一页' }).click()
-  await expect(page.locator('[data-index="0"]')).toBeInViewport()
+  await expect(page.locator('[data-index="1"]')).toBeInViewport()
   await page.getByRole('link', { name: '设置', exact: true }).click()
   await expect(
     page.getByRole('heading', { name: '设置', exact: true }),
   ).toBeVisible()
   await expect(page.getByText('暂无异常')).not.toBeVisible()
   await expect(page.getByText('权重限制在 -1 到 1。')).toHaveCount(0)
+  await page.getByRole('button', { name: '返回上一页' }).click()
+  await expect(page.locator('[data-index="1"]')).toBeInViewport()
 })
 
 test('short-screen discovery retains expandable descriptions and direct links', async ({
