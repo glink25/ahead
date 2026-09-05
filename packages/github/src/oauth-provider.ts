@@ -20,6 +20,12 @@ interface OAuthTokenResponse {
   scope?: string
 }
 
+export interface GitHubCodeSearchResult {
+  total_count: number
+  incomplete_results: boolean
+  items: { path: string; repository: { name: string; owner: { login: string } } }[]
+}
+
 export function resolveExpiresAt(
   response: OAuthTokenResponse,
   now = Date.now(),
@@ -249,6 +255,63 @@ export class GitHubOAuthProvider implements AuthProvider {
     await this.credentialStore.clear()
   }
 
+  async searchCode(
+    query: string,
+    page = 1,
+    perPage = 100,
+    signal?: AbortSignal,
+  ): Promise<GitHubCodeSearchResult> {
+    if (!this.available) throw new Error('GitHub OAuth is not configured')
+    const credential = await this.getCredential()
+    const url = new URL(`${this.authBaseUrl}/api/github/search/code`)
+    url.searchParams.set('q', query)
+    url.searchParams.set('page', String(page))
+    url.searchParams.set('per_page', String(perPage))
+    let response: Response
+    try {
+      response = await this.fetcher(url, {
+        headers: {
+          Accept: 'application/vnd.github+json',
+          Authorization: `Bearer ${credential.accessToken}`,
+        },
+        signal,
+      })
+    } catch (cause) {
+      throw new GitHubOAuthError('GitHub code search proxy request failed', {
+        kind: 'network',
+        cause,
+      })
+    }
+    const text = await response.text()
+    if (!response.ok) {
+      let detail = text.slice(0, 300)
+      try {
+        detail = (JSON.parse(text) as { message?: string }).message ?? detail
+      } catch {
+        /* Non-JSON proxy error. */
+      }
+      throw new GitHubOAuthError(
+        `GitHub code search failed with HTTP ${response.status}: ${detail}`,
+        { kind: response.status === 401 ? 'unauthenticated' : 'http', status: response.status },
+      )
+    }
+    let body: unknown
+    try {
+      body = JSON.parse(text)
+    } catch (cause) {
+      throw new GitHubOAuthError('GitHub code search returned invalid JSON', {
+        kind: 'invalid_response',
+        cause,
+      })
+    }
+    if (!isCodeSearchResult(body)) {
+      throw new GitHubOAuthError('GitHub code search returned an invalid response', {
+        kind: 'invalid_response',
+      })
+    }
+    return body
+  }
+
   private async refreshCredential(refreshToken: string): Promise<StoredOAuthCredential> {
     if (!this.available) {
       throw new Error('GitHub OAuth is not configured')
@@ -292,6 +355,17 @@ export class GitHubOAuthProvider implements AuthProvider {
     await this.credentialStore.set(stored)
     this.credential = toAuthCredential(stored)
   }
+}
+
+function isCodeSearchResult(value: unknown): value is GitHubCodeSearchResult {
+  if (!value || typeof value !== 'object') return false
+  const body = value as Partial<GitHubCodeSearchResult>
+  return typeof body.total_count === 'number' &&
+    typeof body.incomplete_results === 'boolean' &&
+    Array.isArray(body.items) && body.items.every((item) =>
+      typeof item?.path === 'string' &&
+      typeof item.repository?.name === 'string' &&
+      typeof item.repository.owner?.login === 'string')
 }
 
 function toAuthCredential(stored: StoredOAuthCredential): AuthCredential {

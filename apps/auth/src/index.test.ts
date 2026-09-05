@@ -214,4 +214,57 @@ describe('handleRequest OAuth flow', () => {
     expect(response.headers.get('Access-Control-Allow-Origin')).toBe('http://localhost:4455')
     await expect(response.json()).resolves.toEqual(tokenPayload)
   })
+
+  it('proxies an authenticated code search for an allowed frontend origin', async () => {
+    const github = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({
+      total_count: 1,
+      incomplete_results: false,
+      items: [{
+        path: 'events/launch.yaml',
+        repository: { name: 'calendar', owner: { login: 'alice' } },
+      }],
+    }), {
+      headers: {
+        'Content-Type': 'application/json',
+        'X-RateLimit-Remaining': '9',
+      },
+    }))
+    vi.stubGlobal('fetch', github)
+
+    const response = await handleRequest(new Request(
+      'https://auth.example/api/github/search/code?q=launch%20in%3Afile&page=2&per_page=50',
+      {
+        headers: {
+          Origin: 'https://ahead.linkai.work',
+          Authorization: 'Bearer ghu_access',
+        },
+      },
+    ), env)
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get('Access-Control-Allow-Origin')).toBe('https://ahead.linkai.work')
+    expect(response.headers.get('X-RateLimit-Remaining')).toBe('9')
+    const [input, init] = github.mock.calls[0]!
+    const target = new URL(String(input))
+    expect(target.origin + target.pathname).toBe('https://api.github.com/search/code')
+    expect(target.searchParams.get('q')).toBe('launch in:file')
+    expect(target.searchParams.get('page')).toBe('2')
+    expect(new Headers(init?.headers).get('Authorization')).toBe('Bearer ghu_access')
+  })
+
+  it('does not expose the code search proxy to unlisted origins', async () => {
+    const github = vi.fn()
+    vi.stubGlobal('fetch', github)
+    const response = await handleRequest(new Request(
+      'https://auth.example/api/github/search/code?q=launch',
+      {
+        headers: {
+          Origin: 'https://evil.example',
+          Authorization: 'Bearer ghu_access',
+        },
+      },
+    ), env)
+    expect(response.status).toBe(403)
+    expect(github).not.toHaveBeenCalled()
+  })
 })

@@ -184,7 +184,7 @@ describe('GitHubOAuthProvider', () => {
       refreshToken: 'ghr_old',
       expiresAt: Date.now() - 1_000,
     })
-    const fetcher = vi.fn(async () => new Response(JSON.stringify({
+    const fetcher = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({
       access_token: 'ghu_new',
       refresh_token: 'ghr_new',
       expires_in: 3600,
@@ -223,5 +223,33 @@ describe('GitHubOAuthProvider', () => {
       name: 'GitHubOAuthError',
       kind: 'network',
     })
+  })
+
+  it('uses the Auth service proxy for code search', async () => {
+    const fetcher = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({
+      total_count: 1,
+      incomplete_results: false,
+      items: [{
+        path: 'events/launch.yaml',
+        repository: { name: 'calendar', owner: { login: 'alice' } },
+      }],
+    })))
+    const provider = new GitHubOAuthProvider({
+      authBaseUrl: 'https://auth.example',
+      redirectUri: 'https://app.example/login',
+      credentialStore: memoryStore({ accessToken: 'ghu_access' }),
+      fetch: fetcher,
+    })
+
+    await expect(provider.searchCode('launch in:file', 2, 50)).resolves.toMatchObject({
+      total_count: 1,
+      items: [{ path: 'events/launch.yaml' }],
+    })
+    const [input, init] = fetcher.mock.calls[0]!
+    const url = new URL(String(input))
+    expect(url.origin + url.pathname).toBe('https://auth.example/api/github/search/code')
+    expect(url.searchParams.get('q')).toBe('launch in:file')
+    expect(url.searchParams.get('page')).toBe('2')
+    expect(new Headers(init?.headers).get('Authorization')).toBe('Bearer ghu_access')
   })
 })

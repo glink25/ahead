@@ -159,12 +159,20 @@ export class MarketApi {
   }
 
   private searchError(error: unknown): SearchEvent & { type: 'error' } {
-    const status = error instanceof PublicReadError ? error.status : 0
+    const status = error instanceof PublicReadError
+      ? error.status
+      : typeof error === 'object' && error !== null &&
+          typeof (error as { status?: unknown }).status === 'number'
+        ? (error as { status: number }).status
+        : 0
+    const limited = error instanceof PublicReadError
+      ? error.limited
+      : (status === 403 || status === 429) && /rate limit|abuse|secondary rate/iu.test(String(error))
     const reason: SearchErrorReason = !this.searchAvailable
       ? 'authentication-required'
       : status === 401
         ? 'authentication-expired'
-        : error instanceof PublicReadError && error.limited
+        : limited
           ? 'rate-limited'
           : 'search-unavailable'
     return {
