@@ -1,9 +1,9 @@
 import { PageSkeleton } from '../../app/PageSkeleton'
 import { useFeatureTranslations } from '../../i18n'
 import { useTranslation } from 'react-i18next'
-import { CalendarDays, List, Plus } from 'lucide-react'
+import { Plus } from 'lucide-react'
 import { useEffect, useRef } from 'react'
-import { Link, useLocation, useNavigate } from 'react-router'
+import { Link, useLocation } from 'react-router'
 import { useFeedView } from '../../hooks/useFeedView'
 import { countdownFor, pickText } from '../../lib/format'
 import { FavoriteButton } from '../discover/PosterCard'
@@ -17,8 +17,7 @@ export function MineTab() {
 
   const { mine, resolved } = useFeedView()
   const { feeds, profile, ready } = useFeedStore()
-  const location = useLocation(),
-    navigate = useNavigate()
+  const location = useLocation()
   const savedSearch = useRef('')
   if (location.pathname === '/mine') savedSearch.current = location.search
   const params = new URLSearchParams(savedSearch.current)
@@ -29,29 +28,10 @@ export function MineTab() {
     if (!calendar && timeline.current)
       timeline.current.scrollTop = scroll.current
   }, [calendar])
-  const switchView = () => {
-    params.set('view', calendar ? 'timeline' : 'calendar')
-    navigate('/mine?' + params, { replace: true })
-  }
   let previous = ''
   if (!ready) return <PageSkeleton variant="list" />
   return (
     <div className="mine-view">
-      <div className="mine-toolbar">
-        <button
-          aria-label={calendar ? t('messages.switch_to_timeline') : t('messages.switch_to_calendar')}
-          onClick={switchView}
-        >
-          {calendar ? (
-            <>
-              <List />  {t('messages.timeline')} </>
-          ) : (
-            <>
-              <CalendarDays />  {t('messages.calendar')} </>
-          )}
-        </button>
-        <Link to="/following">{t('messages.following')}</Link>
-      </div>
       {calendar ? (
         <MonthView
           events={mine}

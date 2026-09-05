@@ -175,6 +175,7 @@ test('discover → scroll → favorite → swipe mine → calendar → detail �
   await expect(page).toHaveURL(/\/discover/)
   await page.getByRole('link', { name: '我的', exact: true }).click()
   await expect(timelineSection.getByRole('button', { name: '取消喜爱' })).toBeVisible()
+  await expect(page.getByRole('link', { name: '关注', exact: true })).toHaveCount(0)
   await page.getByRole('button', { name: '切换日历' }).click()
   await expect(page.locator('.month-scroll')).toBeVisible()
   await page
@@ -237,11 +238,12 @@ test('empty calendar supports year and week; editor previews without saving', as
     page.getByRole('button', { name: '2028-02-29', exact: true }),
   ).toHaveAttribute('aria-pressed', 'true')
   await page.getByRole('button', { name: '年', exact: true }).click()
-  await expect(page.locator('.mini-month')).toHaveCount(12)
+  await expect(page.locator('.year-group[data-active=true] .mini-month')).toHaveCount(12)
   await page.getByRole('button', { name: '周', exact: true }).click()
   await expect(
-    page.locator('.week-strip button[aria-pressed=true]'),
+    page.locator('.week-group[data-active=true] .week-day-row button[aria-pressed=true]'),
   ).toHaveText(/周?二29/)
+  await expect(page.locator('.week-group[data-active=true] .week-day-row')).toHaveCount(7)
   await page.getByRole('link', { name: '新建事件', exact: true }).click()
   await page.getByRole('button', { name: '预览', exact: true }).click()
   await expect(page.getByText('请输入事件名称')).toBeVisible()
@@ -263,7 +265,7 @@ test('empty calendar supports year and week; editor previews without saving', as
   await expect(yaml).toHaveValue(/keep: yes/)
   await page.getByRole('button', { name: '返回上一页' }).click()
   await expect(
-    page.locator('.week-strip button[aria-pressed=true]'),
+    page.locator('.week-group[data-active=true] .week-day-row button[aria-pressed=true]'),
   ).toHaveText(/周?二29/)
 })
 
@@ -356,11 +358,46 @@ test('calendar scrolling stays bounded and Today returns to the current month', 
   await expect
     .poll(async () => {
       const snapped = await scroll.evaluate((el) => el.scrollTop)
-      const delta = snapped - initial
-      return delta >= 400 && delta <= 525
+      return snapped > initial + 250
     })
     .toBe(true)
-  await expect(page.locator('.calendar-month')).toHaveCount(5)
+  await expect(page.locator('.month-group')).toHaveCount(7)
   await page.getByRole('button', { name: '今天', exact: true }).click()
-  await expect.poll(() => scroll.evaluate((el) => el.scrollTop)).toBe(initial)
+  const today = await page.evaluate(() => {
+    const date = new Date()
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+  })
+  await expect(page).toHaveURL(new RegExp(`date=${today}`))
+  await expect(page.locator(`.month-group[data-active=true] button[aria-label="${today}"]`)).toBeVisible()
+  for (const scale of ['year', 'week'] as const) {
+    await page.goto(`/mine?view=calendar&scale=${scale}&date=2028-02-29`)
+    await page.getByRole('button', { name: '今天', exact: true }).click()
+    await expect(page).toHaveURL(new RegExp(`scale=${scale}.*date=${today}`))
+    await expect(
+      page.locator(`.${scale}-group[data-active=true] button[aria-label="${today}"]`),
+    ).toBeVisible()
+  }
+})
+
+test('year month and week calendars snap through bounded period groups', async ({ page }) => {
+  await registry(page)
+  for (const scale of ['year', 'month', 'week'] as const) {
+    await page.goto(`/mine?view=calendar&scale=${scale}&date=2028-02-29`)
+    const scroll = page.locator(`.${scale}-scroll`)
+    const active = page.locator(`.${scale}-group[data-active=true]`)
+    const initialOrdinal = Number(await active.getAttribute('data-period-ordinal'))
+    const nextTop = await active.evaluate((element) =>
+      (element.nextElementSibling as HTMLElement).offsetTop,
+    )
+    await scroll.evaluate((element, top) => {
+      element.scrollTop = top
+    }, nextTop)
+    await expect.poll(async () =>
+      Number(await page.locator(`.${scale}-group[data-active=true]`).getAttribute('data-period-ordinal')),
+    ).toBe(initialOrdinal + 1)
+    await expect(page.locator(`.${scale}-group`)).toHaveCount(7)
+  }
 })

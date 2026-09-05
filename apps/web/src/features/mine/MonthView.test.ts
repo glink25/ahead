@@ -1,5 +1,5 @@
 import { it, expect } from 'vitest'
-import { monthOccurrences } from './MonthView'
+import { firstDayOfWeek, monthOccurrences } from './MonthView'
 import { resolvedEvent } from '../../lib/test-fixtures'
 it('expands yearly recurrence and multi-day duration with exclusive end', () => {
   const event = resolvedEvent('holiday', { kind: 'exact', date: '2020-10-01' })
@@ -18,4 +18,22 @@ it('uses display timezone for datetime and does not fake fuzzy dates', () => {
   fuzzy.currentSchedule = fuzzy.schedule[0]
   const days = monthOccurrences([exact, fuzzy], 2027, 0)
   expect([...days.keys()]).toEqual(['2027-01-02'])
+})
+
+it('fills every day in an exact range without duplicating an event', () => {
+  const event = resolvedEvent('trip', {
+    kind: 'range',
+    start: { kind: 'exact', date: '2027-01-30' },
+    end: { kind: 'exact', date: '2027-02-02' },
+  })
+  event.currentSchedule = event.schedule[0]
+  expect([...monthOccurrences([event], 2027, 1).keys()]).toEqual([
+    '2027-02-01',
+    '2027-02-02',
+  ])
+})
+
+it('uses locale week conventions with a stable fallback', () => {
+  expect(firstDayOfWeek('zh-CN')).toBe(1)
+  expect(firstDayOfWeek('en-US')).toBe(0)
 })

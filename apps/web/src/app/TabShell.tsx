@@ -3,7 +3,14 @@ import { useTranslation } from 'react-i18next'
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router'
 import { useData } from '../data/local'
-import { ArrowLeft, ChevronDown, Settings, X } from 'lucide-react'
+import {
+  ArrowLeft,
+  CalendarDays,
+  ChevronDown,
+  List,
+  Settings,
+  X,
+} from 'lucide-react'
 import { useAppBack, useNavigationJournal } from './navigation'
 import { UndoToast } from './UndoToast'
 import { useFeedStore } from '../stores/feed'
@@ -16,6 +23,8 @@ export function TabShell({ children }: { children: ReactNode }) {
     navigate = useNavigate()
   const mine = location.pathname === '/mine'
   const tab = mine || location.pathname === '/discover'
+  const calendar =
+    mine && new URLSearchParams(location.search).get('view') === 'calendar'
   useNavigationJournal()
   const back = useAppBack()
   const active = useData((s) => s.db?.spaces[s.db.active])
@@ -42,6 +51,11 @@ export function TabShell({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (mine) setMineUrl(location.pathname + location.search)
   }, [location.pathname, location.search, tab, mine])
+  const switchMineView = () => {
+    const params = new URLSearchParams(location.search)
+    params.set('view', calendar ? 'timeline' : 'calendar')
+    navigate('/mine?' + params, { replace: true })
+  }
   useEffect(() => {
     const keydown = (e: KeyboardEvent) => {
       if (
@@ -79,14 +93,27 @@ export function TabShell({ children }: { children: ReactNode }) {
             >
               <ArrowLeft />  {t('messages.back')} </button>
           ) : mine ? (
-            <Link
-              className="profile-switch"
-              to="/profiles"
-              aria-label={t('messages.switch_profile')}
-            >
-              <span>{profileName(active)}</span>
-              <ChevronDown />
-            </Link>
+            <>
+              <Link
+                className="profile-switch"
+                to="/profiles"
+                aria-label={t('messages.switch_profile')}
+              >
+                <span>{profileName(active)}</span>
+                <ChevronDown />
+              </Link>
+              <button
+                className="mine-view-toggle"
+                aria-label={
+                  calendar
+                    ? t('messages.switch_to_timeline')
+                    : t('messages.switch_to_calendar')
+                }
+                onClick={switchMineView}
+              >
+                {calendar ? <List /> : <CalendarDays />}
+              </button>
+            </>
           ) : null}
         </div>
         {tab ? (
