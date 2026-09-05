@@ -1,7 +1,11 @@
 import { beforeAll, afterEach, describe, expect, it, vi } from 'vitest'
 import { i18n, initializeI18n, resolveLanguage, readLanguagePreference, changeLanguage, displayMessage, languageStorageKey } from './i18n'
-import en from './locales/en.json'
-import zh from './locales/zh-CN.json'
+const enFiles = import.meta.glob('./locales/en/*.json', { eager: true, import: 'default' }) as Record<string, Record<string, unknown>>
+const zhFiles = import.meta.glob('./locales/zh-CN/*.json', { eager: true, import: 'default' }) as Record<string, Record<string, unknown>>
+const merge = (files: Record<string, Record<string, unknown>>) =>
+  Object.assign({}, ...Object.values(files).map((resource) => resource.messages ?? {}))
+const en = { messages: merge(enFiles) }
+const zh = { messages: merge(zhFiles) }
 
 beforeAll(initializeI18n)
 afterEach(() => vi.unstubAllGlobals())

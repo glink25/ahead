@@ -1,0 +1,20 @@
+{
+  "messages": {
+    "switch_to_timeline": "切换时间轴",
+    "switch_to_calendar": "切换日历",
+    "timeline": "时间轴",
+    "calendar": "日历",
+    "nothing_planned_yet": "还没有安排",
+    "month": "月",
+    "calendar_view": "日历视图",
+    "year": "年",
+    "week": "周",
+    "today": "今天",
+    "previous_year": "上一年",
+    "next_year": "下一年",
+    "previous_week": "上一周",
+    "next_week": "下一周",
+    "nothing_planned": "没有安排",
+    "unscheduled": "待定日期 ·"
+  }
+}

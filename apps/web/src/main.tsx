@@ -11,26 +11,15 @@ const resetting = installResetListener()
 const router = createBrowserRouter([{ path: '*', element: <App /> }])
 
 if (!resetting) {
-  const root = createRoot(document.getElementById('root')!)
-  const start = () => {
-    root.render(<div className="empty-view" role="status">Loading… / 正在加载…</div>)
-    void initializeI18n().then(() => {
-      root.render(
-        <StrictMode>
-          <I18nextProvider i18n={i18n}>
-            <RouterProvider router={router} />
-          </I18nextProvider>
-        </StrictMode>,
-      )
-      if (import.meta.env.PROD) void cacheLoadedLanguages()
-    }).catch(() => root.render(
-      <div className="empty-view" role="alert">
-        <p>Could not load language. Check your connection. / 无法加载语言，请检查网络。</p>
-        <button onClick={start}>Retry / 重试</button>
-      </div>,
-    ))
-  }
-  start()
+  initializeI18n()
+  createRoot(document.getElementById('root')!).render(
+    <StrictMode>
+      <I18nextProvider i18n={i18n}>
+        <RouterProvider router={router} />
+      </I18nextProvider>
+    </StrictMode>,
+  )
+  if (import.meta.env.PROD) void cacheLoadedLanguages()
 }
 
 if (!resetting && import.meta.env.PROD && 'serviceWorker' in navigator) {

@@ -1,3 +1,5 @@
+import { PageSkeleton } from '../../app/PageSkeleton'
+import { useFeatureTranslations } from '../../i18n'
 import { useTranslation } from 'react-i18next'
 import { ArrowRight } from 'lucide-react'
 import { Link } from 'react-router'
@@ -7,6 +9,7 @@ import { pickText } from '../../lib/format'
 import { PERSONAL_FEED } from '../../data/model'
 import type { Subscription } from '@ahead/schema'
 export function FollowingView() {
+  useFeatureTranslations('following')
   const { t } = useTranslation()
   const priorities = [t('messages.lowest'), t('messages.very_low'), t('messages.low'), t('messages.default'), t('messages.high'), t('messages.very_high'), t('messages.highest')]
 
@@ -31,6 +34,7 @@ export function FollowingView() {
       l.source.resourceType === 'user-data' &&
       !followed.some((s) => sourceKey(s) === sourceKey(l.source)),
   )
+  if (!useFeedStore.getState().ready) return <PageSkeleton variant="list" />
   return (
     <section className="following-view">
       <h1>{t('messages.following')}</h1>

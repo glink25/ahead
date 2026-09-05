@@ -1,4 +1,5 @@
-import { displayMessage } from '../../i18n'
+import { PageSkeleton } from '../../app/PageSkeleton'
+import { displayMessage, useFeatureTranslations } from '../../i18n'
 import { useTranslation } from 'react-i18next'
 import { useState } from 'react'
 import { useLocation } from 'react-router'
@@ -7,12 +8,14 @@ import { useData } from '../../data/local'
 import { useFeedStore } from '../../stores/feed'
 
 export function ExperimentalView() {
+  useFeatureTranslations('settings')
   const { t, i18n } = useTranslation()
 
-  const errors = useFeedStore((s) => s.errors)
+  const { errors, ready } = useFeedStore()
   const space = useData((s) => s.db?.spaces[s.db.active])
   const location = useLocation()
   const [clearing, setClearing] = useState(false)
+  if (!ready) return <PageSkeleton variant="settings" />
   return (
     <section className="profile-view">
       <h1>{t('messages.experimental_settings')}</h1>

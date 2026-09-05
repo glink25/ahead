@@ -1,5 +1,6 @@
+import { PageSkeleton } from '../../app/PageSkeleton'
 import { profileName } from '../../lib/profile-name'
-import { displayMessage } from '../../i18n'
+import { displayMessage, useFeatureTranslations } from '../../i18n'
 import { LanguageSetting } from './LanguageSetting'
 import { useTranslation } from 'react-i18next'
 import { ChevronRight, RefreshCw } from 'lucide-react'
@@ -12,6 +13,7 @@ import { useData } from '../../data/local'
 import { forgetSession } from '../../data/session'
 import { setPaused, syncNow } from '../../data/scheduler'
 export function ProfileView() {
+  useFeatureTranslations('settings')
   const { t, i18n } = useTranslation()
   const labels = {
   local: t('messages.on_this_device_only'),
@@ -25,14 +27,15 @@ export function ProfileView() {
 }
 
 
-  const { session, setSession } = useAuthSession()
+  const { session, setSession, loading: authLoading } = useAuthSession()
   const { profile, act, refresh, loading } = useFeedStore()
-  const { db } = useData(),
+  const { db, ready } = useData(),
     location = useLocation()
   const space = db?.spaces[db.active]
   const [message, setMessage] = useState('')
   if (location.hash === '#diagnostics')
     return <Navigate to="/settings/experimental#diagnostics" replace />
+  if (!ready || authLoading) return <PageSkeleton variant="settings" />
   return (
     <section className="profile-view">
       <h1>{t('messages.settings')}</h1>

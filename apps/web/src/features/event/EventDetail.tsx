@@ -1,4 +1,5 @@
-import { displayMessage } from '../../i18n'
+import { PageSkeleton } from '../../app/PageSkeleton'
+import { displayMessage, useFeatureTranslations } from '../../i18n'
 import { useTranslation } from 'react-i18next'
 import { useData, deleteEvent } from '../../data/local'
 import { useState } from 'react'
@@ -18,6 +19,7 @@ import {
   HideMenu,
 } from '../discover/PosterCard'
 export function EventDetail() {
+  useFeatureTranslations('event')
   const { t, i18n } = useTranslation()
 
   const { id } = useParams()
@@ -25,14 +27,13 @@ export function EventDetail() {
   const { db } = useData()
   const [error, setError] = useState('')
   const { resolved } = useFeedView()
-  const loading = useFeedStore((s) => s.loading)
+  const { loading, ready } = useFeedStore()
   const event = resolved.events.find((e) => e.id === id)
+  if (!ready || (loading && !event)) return <PageSkeleton variant="detail" />
   if (!event)
     return (
       <div className="empty-view">
-        {loading
-          ? t('messages.loading_event')
-          : t('messages.event_not_found_it_may_have_been_removed_or_be_temporarily_unavailable')}
+        {t('messages.event_not_found_it_may_have_been_removed_or_be_temporarily_unavailable')}
       </div>
     )
   const own = event.sourceLocators.some((s) => s === 'personal:' + db?.active)

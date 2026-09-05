@@ -1,0 +1,24 @@
+{
+  "messages": {
+    "lowest": "最低",
+    "very_low": "很低",
+    "low": "较低",
+    "default": "默认",
+    "high": "较高",
+    "very_high": "很高",
+    "highest": "最高",
+    "channels": "频道",
+    "no_channel_subscriptions_yet": "还没有订阅频道。",
+    "untitled_channel": "未命名频道",
+    "unsubscribe": "取消订阅",
+    "recommendation_frequency": "推荐频率",
+    "channel_details": "频道详情",
+    "people": "用户",
+    "recommendations_consider_the_preferences_of_people_you_follow": "关注后，推荐会参考对方的喜好。",
+    "followed_user": "已关注用户",
+    "unfollow": "取消关注",
+    "user_details": "用户详情",
+    "no_people_to_follow_yet": "暂时没有可关注的用户",
+    "follow": "关注"
+  }
+}

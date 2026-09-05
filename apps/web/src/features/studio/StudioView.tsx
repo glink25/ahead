@@ -1,5 +1,6 @@
+import { PageSkeleton } from '../../app/PageSkeleton'
 import { profileName } from '../../lib/profile-name'
-import { displayMessage } from '../../i18n'
+import { displayMessage, useFeatureTranslations } from '../../i18n'
 import { useTranslation } from 'react-i18next'
 import { previousUrl } from '../../app/navigation'
 import { Plus } from 'lucide-react'
@@ -63,11 +64,12 @@ export function fieldsFor(event: Event, locale: string) {
   }
 }
 export function StudioPage() {
+  useFeatureTranslations('studio')
   const { t, i18n } = useTranslation()
 
   const { db, ready } = useData()
   const [params] = useSearchParams()
-  if (!ready || !db) return <div className="empty-view">{t('messages.opening_profile_2')}</div>
+  if (!ready || !db) return <PageSkeleton variant="editor" />
   const space = db.spaces[db.active]!
   const id = params.get('event')
   const event = id

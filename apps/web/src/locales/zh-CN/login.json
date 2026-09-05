@@ -1,0 +1,11 @@
+{
+  "messages": {
+    "signing_in": "正在登录…",
+    "sign_in_to_ahead": "登录 Ahead",
+    "continue_with_github": "使用 GitHub 登录",
+    "sign_in_with_an_access_token": "使用访问令牌登录",
+    "github_access_token": "GitHub 访问令牌",
+    "signing_in_2": "登录中…",
+    "sign_in_failed_check_your_credentials_and_retry": "登录未完成，请检查登录信息后重试。"
+  }
+}

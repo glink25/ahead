@@ -13,7 +13,7 @@ export function offlinePlugin(): Plugin {
           if (output.type !== 'asset') continue
           const sourceNames = [...output.names, ...output.originalFileNames]
           for (const id of sourceNames) {
-            const match = id.match(/(?:^|\/)locales\/([^/]+)\.json(?:\?url)?$/)
+            const match = id.match(/(?:^|\/)locales\/([^/]+)\/([^/]+)\.json(?:\?url)?$/)
             if (!match) continue
             const language = match[1]!
             languageAssets[language] = [...new Set([
@@ -48,9 +48,9 @@ self.addEventListener('activate', event => event.waitUntil((async () => {
   await self.clients.claim();
 })()));
 self.addEventListener('message', event => {
-  if (event.data?.type !== 'CACHE_LANGUAGE') return;
-  const files = Object.hasOwn(LANGUAGES, event.data.language) ? LANGUAGES[event.data.language] : undefined;
-  if (files) event.waitUntil(Promise.all(files.map(cachedAsset)).catch(() => {}));
+  if (event.data?.type !== 'CACHE_TRANSLATION') return;
+  const path = event.data.path;
+  if (typeof path === 'string' && LAZY_ASSETS.includes(path)) event.waitUntil(cachedAsset(path).catch(() => {}));
 });
 self.addEventListener('fetch', event => {
   const request = event.request, url = new URL(request.url);

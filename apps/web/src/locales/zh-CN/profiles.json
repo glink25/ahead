@@ -1,0 +1,23 @@
+{
+  "messages": {
+    "cannot_find_more_profiles_right_now_use_a_cached_profile_or_add_one_by_addr": "暂时无法查找更多资料，可使用已缓存资料或通过地址添加",
+    "could_not_switch_profiles_local_data_has_been_preserved": "未能切换个人资料，本机数据已保留",
+    "local": " · 本机",
+    "current": "当前",
+    "change_the_new_repository_name": "调整待创建的仓库名称",
+    "retry_creation": "重试创建",
+    "new_profile": "新建个人资料",
+    "could_not_create_profile_check_local_storage_and_retry": "未能创建资料，请检查本机存储后重试",
+    "name": "名称",
+    "for_example_my_ahead_work_games": "例如：我的盼头、工作、游戏",
+    "bio_optional": "简介（可选）",
+    "visibility": "可见性",
+    "create_and_use": "创建并使用",
+    "add_by_repository_address": "通过仓库地址添加",
+    "could_not_add_profile_check_the_address_file_format_and_repository_permissi": "无法添加资料，请检查地址、文件格式和仓库授权",
+    "repository_address": "仓库地址",
+    "profile_file_path": "资料文件路径",
+    "add_and_use": "添加并使用",
+    "continue_with_local_profile": "继续使用本机资料"
+  }
+}

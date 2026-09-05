@@ -1,0 +1,20 @@
+{
+  "messages": {
+    "switch_to_timeline": "Switch to timeline",
+    "switch_to_calendar": "Switch to calendar",
+    "timeline": "Timeline",
+    "calendar": "Calendar",
+    "nothing_planned_yet": "Nothing planned yet",
+    "month": "Month",
+    "calendar_view": "Calendar view",
+    "year": "Year",
+    "week": "Week",
+    "today": "Today",
+    "previous_year": "Previous year",
+    "next_year": "Next year",
+    "previous_week": "Previous week",
+    "next_week": "Next week",
+    "nothing_planned": "Nothing planned",
+    "unscheduled": "Unscheduled ·"
+  }
+}

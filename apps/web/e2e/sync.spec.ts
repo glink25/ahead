@@ -235,15 +235,16 @@ test('login selects profiles, auto-syncs standard manifests and keeps public/pri
     await route.fallback()
   })
   await page.reload()
-  await expect(page.getByRole('status')).toHaveText('正在恢复账户…')
+  const activeSkeleton = page.locator(
+    '.browser-pane:not([aria-hidden="true"]) .page-skeleton',
+  )
+  await expect(activeSkeleton).toBeVisible()
   await expect(
     page.getByRole('link', { name: '新建事件', exact: true }),
   ).toHaveCount(0)
   expect(registryCredentials).toHaveLength(0)
   release()
-  await expect(
-    page.getByRole('status', { name: '' }).filter({ hasText: '正在恢复账户' }),
-  ).toHaveCount(0)
+  await expect(activeSkeleton).toHaveCount(0)
   // Discovery is now demand-activated; hidden profile pages do not scan the market.
   await page.goto('/discover')
   await expect.poll(() => registryCredentials.length).toBeGreaterThan(0)

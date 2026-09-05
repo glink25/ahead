@@ -1,0 +1,9 @@
+{
+  "messages": {
+    "loading_2": "正在加载",
+    "content_is_temporarily_unavailable": "暂时无法加载内容",
+    "no_events_yet": "暂时没有事件",
+    "reload": "重新加载",
+    "discover_events": "发现海报流"
+  }
+}

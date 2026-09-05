@@ -1,0 +1,24 @@
+{
+  "messages": {
+    "lowest": "Lowest",
+    "very_low": "Very low",
+    "low": "Low",
+    "default": "Default",
+    "high": "High",
+    "very_high": "Very high",
+    "highest": "Highest",
+    "channels": "Channels",
+    "no_channel_subscriptions_yet": "No channel subscriptions yet.",
+    "untitled_channel": "Untitled channel",
+    "unsubscribe": "Unsubscribe",
+    "recommendation_frequency": "Recommendation frequency",
+    "channel_details": "Channel details",
+    "people": "People",
+    "recommendations_consider_the_preferences_of_people_you_follow": "Recommendations consider the preferences of people you follow.",
+    "followed_user": "Followed user",
+    "unfollow": "Unfollow",
+    "user_details": "User details",
+    "no_people_to_follow_yet": "No people to follow yet",
+    "follow": "Follow"
+  }
+}

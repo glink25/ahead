@@ -1,0 +1,23 @@
+{
+  "messages": {
+    "cannot_find_more_profiles_right_now_use_a_cached_profile_or_add_one_by_addr": "Cannot find more profiles right now. Use a cached profile or add one by address.",
+    "could_not_switch_profiles_local_data_has_been_preserved": "Could not switch profiles. Local data has been preserved.",
+    "local": " · Local",
+    "current": "Current",
+    "change_the_new_repository_name": "Change the new repository name",
+    "retry_creation": "Retry creation",
+    "new_profile": "New profile",
+    "could_not_create_profile_check_local_storage_and_retry": "Could not create profile. Check local storage and retry.",
+    "name": "Name",
+    "for_example_my_ahead_work_games": "For example: My Ahead, Work, Games",
+    "bio_optional": "Bio (optional)",
+    "visibility": "Visibility",
+    "create_and_use": "Create and use",
+    "add_by_repository_address": "Add by repository address",
+    "could_not_add_profile_check_the_address_file_format_and_repository_permissi": "Could not add profile. Check the address, file format, and repository permissions.",
+    "repository_address": "Repository address",
+    "profile_file_path": "Profile file path",
+    "add_and_use": "Add and use",
+    "continue_with_local_profile": "Continue with local profile"
+  }
+}

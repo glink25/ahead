@@ -1,7 +1,8 @@
-import { useTranslation } from 'react-i18next'
 import { activateSession, restoreCachedIdentity } from '../data/session'
 import { useData } from '../data/local'
 import { lazy, Suspense, useEffect } from 'react'
+import { PageLoadBoundary, PageSkeleton, type SkeletonVariant } from './PageSkeleton'
+import { hasNamespace } from '../i18n'
 import { Navigate, Route, Routes, useLocation } from 'react-router'
 import { bootstrapAuthSession } from '../auth-bootstrap'
 import { useAuthSession } from '../stores'
@@ -37,13 +38,20 @@ const LoginPage = lazy(() =>
     default: module.LoginPage,
   })),
 )
+
+function skeletonFor(path: string): SkeletonVariant {
+  if (path === '/discover') return 'poster'
+  if (path === '/settings' || path.includes('/profiles')) return 'settings'
+  if (path === '/studio') return 'editor'
+  if (path.startsWith('/events/')) return 'detail'
+  return 'list'
+}
 function Landing() {
-  const { t } = useTranslation()
 
   const { session, loading } = useAuthSession()
   const active = useData((s) => s.db?.active)
   return loading ? (
-    <div className="empty-view">{t('messages.loading')}</div>
+    <PageSkeleton variant="list" />
   ) : (
     <Navigate
       to={
@@ -58,8 +66,6 @@ function Landing() {
   )
 }
 export function App() {
-  const { t } = useTranslation()
-
   const location = useLocation()
   const browsing =
     location.pathname === '/mine' || location.pathname === '/discover'
@@ -67,8 +73,7 @@ export function App() {
   const {
     setSession,
     setLoading,
-    setRestoreError,
-    loading: restoringIdentity,
+    setRestoreError
   } = useAuthSession()
   useEffect(() => {
     const explicit =
@@ -97,11 +102,6 @@ export function App() {
         }),
       )
   }, [setSession, setLoading, setRestoreError])
-  if (restoringIdentity)
-    return (
-      <div className="empty-view" role="status">
-         {t('messages.restoring_account')} </div>
-    )
   return (
     <TabShell>
       <div
@@ -117,18 +117,23 @@ export function App() {
           inert={!mine || !browsing}
           aria-hidden={!mine || !browsing}
         >
-          <MineTab />
+          {(browsing || hasNamespace('mine')) && (
+            <PageLoadBoundary><Suspense fallback={<PageSkeleton variant="list" />}><MineTab /></Suspense></PageLoadBoundary>
+          )}
         </div>
         <div
           className="browser-pane"
           inert={mine || !browsing}
           aria-hidden={mine || !browsing}
         >
-          <DiscoverTab active={browsing && !mine} />
+          {(browsing || hasNamespace('discover')) && (
+            <PageLoadBoundary><Suspense fallback={<PageSkeleton variant="poster" />}><DiscoverTab active={browsing && !mine} /></Suspense></PageLoadBoundary>
+          )}
         </div>
       </div>
-      <Suspense fallback={<div className="empty-view">{t('messages.opening_page')}</div>}>
-        <Routes>
+      <PageLoadBoundary>
+        <Suspense fallback={<PageSkeleton variant={skeletonFor(location.pathname)} />}>
+          <Routes>
           <Route path="/" element={<Landing />} />
           <Route path="/mine" element={null} />
           <Route path="/discover" element={null} />
@@ -149,8 +154,9 @@ export function App() {
           <Route path="/me" element={<Navigate to="/settings" replace />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </Suspense>
+          </Routes>
+        </Suspense>
+      </PageLoadBoundary>
     </TabShell>
   )
 }

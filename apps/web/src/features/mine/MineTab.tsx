@@ -1,3 +1,5 @@
+import { PageSkeleton } from '../../app/PageSkeleton'
+import { useFeatureTranslations } from '../../i18n'
 import { useTranslation } from 'react-i18next'
 import { CalendarDays, List, Plus } from 'lucide-react'
 import { useEffect, useRef } from 'react'
@@ -10,10 +12,11 @@ import { posterFor } from '../../lib/media'
 import { useFeedStore } from '../../stores/feed'
 
 export function MineTab() {
+  useFeatureTranslations('mine')
   const { t } = useTranslation()
 
   const { mine, resolved } = useFeedView()
-  const { feeds, profile } = useFeedStore()
+  const { feeds, profile, ready } = useFeedStore()
   const location = useLocation(),
     navigate = useNavigate()
   const savedSearch = useRef('')
@@ -31,6 +34,7 @@ export function MineTab() {
     navigate('/mine?' + params, { replace: true })
   }
   let previous = ''
+  if (!ready) return <PageSkeleton variant="list" />
   return (
     <div className="mine-view">
       <div className="mine-toolbar">

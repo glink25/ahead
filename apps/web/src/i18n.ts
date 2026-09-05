@@ -1,12 +1,15 @@
 import i18next from 'i18next'
+import { useTranslation } from 'react-i18next'
 import { initReactI18next } from 'react-i18next'
 import LanguageDetector from 'i18next-browser-languagedetector'
 import resourcesToBackend from 'i18next-resources-to-backend'
-import zhCNUrl from './locales/zh-CN.json?url'
-import enUrl from './locales/en.json?url'
+import enCore from './locales/en/core.json'
+import zhCore from './locales/zh-CN/core.json'
 
 export const languages = ['zh-CN', 'en'] as const
+export const featureNamespaces = ['discover', 'mine', 'event', 'following', 'profiles', 'settings', 'login', 'studio'] as const
 export type AppLanguage = (typeof languages)[number]
+export type FeatureNamespace = (typeof featureNamespaces)[number]
 export type LanguagePreference = AppLanguage | 'auto'
 export const languageStorageKey = 'ahead-language'
 
@@ -31,76 +34,110 @@ export function browserLanguage(): AppLanguage {
   return resolveLanguage(Array.isArray(detected) ? detected : detected ? [detected] : [])
 }
 export const i18n = i18next.createInstance()
-const resources = {
-  'zh-CN': zhCNUrl,
-  en: enUrl,
-}
-const loaded = new Set<AppLanguage>()
-let initialization: Promise<void> | undefined
+const resourceUrls = import.meta.glob(['./locales/*/*.json', '!./locales/*/core.json'], {
+  eager: true,
+  import: 'default',
+  query: '?url&no-inline',
+}) as Record<string, string>
+const namespacePromises = new Map<string, Promise<void>>()
+const loadedNamespaces = new Map<AppLanguage, Set<string>>([
+  ['en', new Set(['core', 'event', 'settings', 'studio'])],
+  ['zh-CN', new Set(['core', 'event', 'settings', 'studio'])],
+])
+const loadedPaths = new Set<string>()
+let initialized = false
 let changeVersion = 0
 export function currentLanguage(): AppLanguage {
   return resolveLanguage([i18n.resolvedLanguage || i18n.language || 'en'])
+}
+export function hasNamespace(namespace: FeatureNamespace, language = currentLanguage()) {
+  return loadedNamespaces.get(language)?.has(namespace) ?? false
+}
+function resourceUrl(language: AppLanguage, namespace: FeatureNamespace) {
+  return resourceUrls[`./locales/${language}/${namespace}.json`]
+}
+async function fetchNamespace(language: AppLanguage, namespace: FeatureNamespace) {
+  const url = resourceUrl(language, namespace)
+  if (!url) throw new Error(`Unsupported translation namespace: ${language}/${namespace}`)
+  const response = await fetch(url)
+  if (!response.ok) throw new Error(`Translation HTTP ${response.status}`)
+  i18n.addResourceBundle(language, 'translation', await response.json(), true, true)
+  loadedNamespaces.get(language)!.add(namespace)
+  loadedPaths.add(new URL(url, location.href).pathname)
+}
+export function ensureNamespace(namespace: FeatureNamespace, language = currentLanguage()): Promise<void> {
+  if (loadedNamespaces.get(language)?.has(namespace)) return Promise.resolve()
+  const key = `${language}/${namespace}`
+  let promise = namespacePromises.get(key)
+  if (!promise) {
+    promise = fetchNamespace(language, namespace).catch((error) => {
+      namespacePromises.delete(key)
+      throw error
+    })
+    namespacePromises.set(key, promise)
+  }
+  return promise
+}
+export function useFeatureTranslations(namespace: FeatureNamespace) {
+  const { i18n: instance } = useTranslation()
+  const language = resolveLanguage([instance.resolvedLanguage || instance.language])
+  if (!loadedNamespaces.get(language)?.has(namespace)) throw ensureNamespace(namespace, language)
 }
 
 /** Reconcile resources loaded before the service worker took control. */
 export async function cacheLoadedLanguages() {
   if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return
   const registration = await navigator.serviceWorker.ready
-  for (const language of loaded)
-    registration.active?.postMessage({ type: 'CACHE_LANGUAGE', language })
+  const active = registration.active
+  for (const path of loadedPaths) active?.postMessage({ type: 'CACHE_TRANSLATION', path })
+  active?.postMessage({ type: 'CACHE_TRANSLATION', path: `/reset-locales/${currentLanguage()}.js` })
 }
 function updateDocument() {
   if (typeof document === 'undefined') return
   document.documentElement.lang = currentLanguage()
   document.title = i18n.t('language.appTitle')
 }
-async function loadLanguage(language: AppLanguage): Promise<Record<string, unknown>> {
-  if (!languages.includes(language)) throw new Error('Unsupported language')
-  if (import.meta.env.MODE === 'test') {
-    const resource = language === 'zh-CN'
-      ? await import('./locales/zh-CN.json')
-      : await import('./locales/en.json')
-    loaded.add(language)
-    return resource.default
-  }
-  const response = await fetch(resources[language])
-  if (!response.ok) throw new Error(`Language HTTP ${response.status}`)
-  loaded.add(language)
-  return response.json()
-}
-export function initializeI18n(): Promise<void> {
-  initialization ??= (async () => {
-    const preference = readLanguagePreference()
-    await i18n
-      .use(detector)
-      .use(initReactI18next)
-      .use(resourcesToBackend(async (language: string) => {
-        return loadLanguage(language as AppLanguage)
-      }))
-      .init({
-        lng: preference === 'auto' ? browserLanguage() : preference,
-        supportedLngs: [...languages],
-        load: 'currentOnly',
-        fallbackLng: false,
-        interpolation: { escapeValue: false },
-        react: { useSuspense: true },
-      })
-    if (!i18n.hasResourceBundle(i18n.language, 'translation'))
-      throw new Error('Language resources unavailable')
-    i18n.on('languageChanged', updateDocument)
-    updateDocument()
-  })().catch((error) => { initialization = undefined; throw error })
-  return initialization
+
+/** Core translations are bundled, so initialization finishes before React mounts. */
+export function initializeI18n(): void {
+  if (initialized) return
+  initialized = true
+  const preference = readLanguagePreference()
+  void i18n
+    .use(detector)
+    .use(initReactI18next)
+    .use(resourcesToBackend(async (language: string, namespace: string) => {
+      await ensureNamespace(namespace as FeatureNamespace, resolveLanguage([language]))
+      return i18n.getResourceBundle(language, 'translation')
+    }))
+    .init({
+      initAsync: false,
+      lng: preference === 'auto' ? browserLanguage() : preference,
+      resources: {
+        en: { translation: enCore },
+        'zh-CN': { translation: zhCore },
+      },
+      ns: ['translation'],
+      defaultNS: 'translation',
+      supportedLngs: [...languages],
+      load: 'currentOnly',
+      fallbackLng: false,
+      interpolation: { escapeValue: false },
+      react: { useSuspense: true },
+    })
+  i18n.on('languageChanged', updateDocument)
+  updateDocument()
 }
 
-/** Load first, then commit. A failed or superseded request cannot change the UI. */
+/** Load visible feature resources first, then commit the language change. */
 export async function changeLanguage(preference: LanguagePreference): Promise<void> {
+  if (preference !== 'auto' && !languages.includes(preference))
+    throw new Error('Unsupported language')
   const version = ++changeVersion
   const language = preference === 'auto' ? browserLanguage() : preference
-  if (!i18n.hasResourceBundle(language, 'translation')) {
-    const resource = await loadLanguage(language)
-    i18n.addResourceBundle(language, 'translation', resource, true, true)
-  }
+  const visible = [...(loadedNamespaces.get(currentLanguage()) ?? [])]
+    .filter((value): value is FeatureNamespace => value !== 'core')
+  await Promise.all(visible.map((namespace) => ensureNamespace(namespace, language)))
   if (version !== changeVersion) return
   await i18n.changeLanguage(language)
   try {
@@ -110,7 +147,6 @@ export async function changeLanguage(preference: LanguagePreference): Promise<vo
   if (import.meta.env.PROD) void cacheLoadedLanguages()
 }
 
-/** Error codes remain stable in stores and are translated at the display boundary. */
 export function displayMessage(value: string): string {
   return value.replace(/messages\.[a-z0-9_]+/g, (key) => String(i18n.t(key)))
 }

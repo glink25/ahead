@@ -1,18 +1,23 @@
+import { PageSkeleton } from '../../app/PageSkeleton'
+import { useFeatureTranslations } from '../../i18n'
 import { useTranslation } from 'react-i18next'
-import { LoaderCircle, Sparkles } from 'lucide-react'
+import { Sparkles } from 'lucide-react'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useLocation } from 'react-router'
 import { useFeedView } from '../../hooks/useFeedView'
 import { useFeedStore } from '../../stores/feed'
 import { PosterCard } from './PosterCard'
 
-export function DiscoverTab({ active = true }: { active?: boolean }) {
+export function DiscoverTab({
+  active = true,
+}: { active?: boolean }) {
+  useFeatureTranslations('discover')
   const { t } = useTranslation()
   const location = useLocation()
 
   const [recommendationSeed, setRecommendationSeed] = useState(() => crypto.randomUUID())
   const { discover } = useFeedView(recommendationSeed)
-  const { loading, refresh, marketStatus, revision, setMarketActive } =
+  const { loading, ready, refresh, marketStatus, revision, setMarketActive } =
     useFeedStore()
   useEffect(() => {
     const update = () =>
@@ -147,12 +152,8 @@ export function DiscoverTab({ active = true }: { active?: boolean }) {
     window.addEventListener('keydown', keydown)
     return () => window.removeEventListener('keydown', keydown)
   }, [events, index, height, active])
-  if (!events.length && loading)
-    return (
-      <div className="empty-view" role="status" aria-label={t('messages.loading_2')}>
-        <LoaderCircle className="loading-spinner" />
-      </div>
-    )
+  if (!ready || (!events.length && loading))
+    return <PageSkeleton variant="poster" />
   if (!events.length)
     return (
       <div className="empty-view">

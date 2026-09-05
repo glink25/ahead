@@ -1,0 +1,9 @@
+{
+  "messages": {
+    "loading_2": "Loading",
+    "content_is_temporarily_unavailable": "Content is temporarily unavailable",
+    "no_events_yet": "No events yet",
+    "reload": "Reload",
+    "discover_events": "Discover events"
+  }
+}

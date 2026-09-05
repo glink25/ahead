@@ -4,6 +4,22 @@ test.use({ locale: 'en-US' })
 test.beforeEach(async ({ page }) => {
   await page.route('https://api.github.com/**', (route) => route.fulfill({ json: [] }))
 })
+test('mounts the app shell immediately while a first page namespace loads', async ({ page }) => {
+  let release!: () => void
+  const gate = new Promise<void>((resolve) => { release = resolve })
+  await page.route('**/locales/en/profiles.json', async (route) => {
+    if (new URL(route.request().url()).search) return route.continue()
+    await gate
+    await route.continue()
+  })
+  await page.goto('/profiles', { waitUntil: 'domcontentloaded' })
+  await expect(page.getByRole('link', { name: 'Settings', exact: true })).toBeVisible()
+  await expect(page.locator('.page-skeleton')).toBeVisible()
+  await expect(page.getByText(/Loading…|正在加载…|Restoring account|正在恢复账户/)).toHaveCount(0)
+  await page.screenshot({ path: test.info().outputPath('settings-skeleton.png'), fullPage: true })
+  release()
+  await expect(page.getByRole('heading', { name: 'Profiles', exact: true })).toBeVisible()
+})
 test('uses browser language, switches immediately, persists, and returns to browser mode', async ({ page }) => {
   const requested: string[] = []
   page.on('request', (request) => requested.push(request.url()))

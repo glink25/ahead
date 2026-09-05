@@ -1,3 +1,5 @@
+import { PageSkeleton } from '../../app/PageSkeleton'
+import { useFeatureTranslations } from '../../i18n'
 import { useTranslation } from 'react-i18next'
 import { ChevronRight } from 'lucide-react'
 import { activateSession } from '../../data/session'
@@ -6,6 +8,7 @@ import { Navigate } from 'react-router'
 import { useAuthSession } from '../../stores'
 import { patProvider, oauthProvider } from '../../lib/auth'
 export function LoginPage() {
+  useFeatureTranslations('login')
   const { t } = useTranslation()
 
   const [token, setToken] = useState('')
@@ -28,11 +31,7 @@ export function LoginPage() {
       setBusy(false)
     }
   }
-  if (loading)
-    return (
-      <div className="empty-view" role="status">
-         {t('messages.signing_in')} </div>
-    )
+  if (loading) return <PageSkeleton variant="settings" />
   if (session) return <Navigate to="/profiles?choose=1" replace />
   return (
     <section className="login-view">

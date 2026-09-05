@@ -1,5 +1,6 @@
+import { PageSkeleton } from '../../app/PageSkeleton'
 import { profileName } from '../../lib/profile-name'
-import { displayMessage } from '../../i18n'
+import { displayMessage, useFeatureTranslations } from '../../i18n'
 import { useTranslation } from 'react-i18next'
 import { previousUrl } from '../../app/navigation'
 import { ChevronRight, Plus } from 'lucide-react'
@@ -16,10 +17,11 @@ import { connectProfile, discoverProfiles } from '../../data/profiles'
 import { chooseProfile } from '../../data/session'
 import { syncNow } from '../../data/scheduler'
 export function ProfilesView() {
+  useFeatureTranslations('profiles')
   const { t, i18n } = useTranslation()
 
   const { session } = useAuthSession(),
-    { db } = useData()
+    { db, ready } = useData()
   const navigate = useNavigate()
   const [name, setName] = useState(''),
     [privateRepo, setPrivate] = useState(true)
@@ -58,6 +60,7 @@ export function ProfilesView() {
       setBusy(false)
     }
   }
+  if (!ready || !db) return <PageSkeleton variant="settings" />
   return (
     <section className="profiles-view">
       <h1>{t('messages.profiles')}</h1>

@@ -1394,3 +1394,45 @@ summary .lucide {
   .browser-pages { transition: none; }
   .loading-spinner.lucide { animation: none; }
 }
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.page-skeleton {
+  position: relative;
+  width: min(100%, 760px);
+  min-height: 100%;
+  margin: 0 auto;
+  padding: 36px 24px;
+  overflow: hidden;
+}
+.skeleton-title,
+.skeleton-block,
+.skeleton-block i,
+.skeleton-poster {
+  display: block;
+  border-radius: 14px;
+  background: linear-gradient(100deg, var(--panel) 20%, #e7e9e3 42%, var(--panel) 64%);
+  background-size: 300% 100%;
+  animation: skeleton-shimmer 1.5s ease-in-out infinite;
+}
+.skeleton-title { width: 38%; height: 34px; margin: 20px 0 34px; }
+.skeleton-block { height: 112px; margin: 16px 0; padding: 22px; border: 1px solid var(--line); }
+.skeleton-block i { width: 55%; height: 12px; margin-bottom: 13px; background: #dfe2db; }
+.skeleton-block i:nth-child(2) { width: 82%; }
+.skeleton-block i:nth-child(3) { width: 66%; }
+.skeleton-poster { position: absolute; inset: 0; border-radius: 0; }
+.page-skeleton.skeleton-poster { padding: 0; }
+.skeleton-editor .skeleton-block:nth-child(3) { height: 210px; }
+.skeleton-detail .skeleton-title { width: 62%; height: 48px; }
+@keyframes skeleton-shimmer { to { background-position-x: -300%; } }
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-title, .skeleton-block, .skeleton-block i, .skeleton-poster { animation: none; }
+}
