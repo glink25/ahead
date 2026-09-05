@@ -2,6 +2,8 @@ import { CdnReadAdapter } from '@ahead/github'
 import { parseLocator, parseYaml, sourceKey } from '@ahead/protocol'
 import {
   createValidator,
+  type Event,
+  type EventFeed,
   type Subscription,
   type UserData,
 } from '@ahead/schema'
@@ -9,12 +11,14 @@ import {
   assertEventFeed,
   fetchFeed,
   loadFeedFromListing,
+  matchesEventsGlob,
   type LoadedFeed,
 } from '../lib/feed-loader'
 import { loadMarketPage, type MarketListing } from '../lib/market'
 import { RepoCache } from '../lib/repo-cache'
 import type { KeyValueStore } from '../lib/idb'
 import type { RepositoryAdapter } from '@ahead/core'
+import { assertDurationFitsRecurrence } from '@ahead/resolver'
 import {
   isAbort,
   PublicReadClient,
@@ -35,6 +39,22 @@ export type MarketEvent =
   | ReadEvent
   | { type: 'listings'; listings: MarketListing[]; cached: boolean }
   | { type: 'progress'; cursor: string; loaded: number; complete: boolean }
+export type SearchErrorReason =
+  | 'authentication-required'
+  | 'authentication-expired'
+  | 'rate-limited'
+  | 'search-unavailable'
+  | 'incomplete-results'
+export type SearchEvent =
+  | { type: 'feed'; feed: LoadedFeed; cached: boolean }
+  | {
+      type: 'error'
+      message: string
+      reason: SearchErrorReason
+      limited: boolean
+      authenticated: boolean
+    }
+  | { type: 'progress'; loaded: number; complete: boolean }
 interface Session {
   page: number
   nextPage?: number
@@ -73,6 +93,13 @@ export class MarketApi {
       signal?: AbortSignal
     }) => this.readSources(options.sources, options),
   }
+  readonly search = {
+    stream: (options: {
+      query?: string
+      tag?: string
+      signal?: AbortSignal
+    }) => this.searchStream(options),
+  }
   constructor(
     private options: {
       repository: string
@@ -80,8 +107,222 @@ export class MarketApi {
       storage: KeyValueStore
       cache: RepoCache
       privateAdapter?: RepositoryAdapter
+      searchFetcher?: typeof fetch
     },
   ) {}
+
+  private async searchJson<T>(url: string, signal?: AbortSignal): Promise<T> {
+    if (!this.options.searchFetcher)
+      throw new PublicReadError('messages.sign_in_to_search_github', 401, false)
+    const response = await this.options.searchFetcher(url, {
+      headers: { Accept: 'application/vnd.github+json' },
+      cache: 'no-store',
+      signal,
+    })
+    if (!response.ok) {
+      const remainingHeader = response.headers.get('x-ratelimit-remaining')
+      const remaining = remainingHeader === null ? undefined : Number(remainingHeader)
+      const limited = response.status === 429 ||
+        (response.status === 403 && remaining === 0)
+      throw new PublicReadError(
+        `HTTP ${response.status}: ${(await response.text()).slice(0, 300)}`,
+        response.status,
+        true,
+        limited,
+      )
+    }
+    return response.json() as Promise<T>
+  }
+
+  private searchError(error: unknown): SearchEvent & { type: 'error' } {
+    const status = error instanceof PublicReadError ? error.status : 0
+    const reason: SearchErrorReason = !this.options.searchFetcher
+      ? 'authentication-required'
+      : status === 401
+        ? 'authentication-expired'
+        : error instanceof PublicReadError && error.limited
+          ? 'rate-limited'
+          : 'search-unavailable'
+    return {
+      type: 'error',
+      message: reason === 'authentication-required'
+        ? 'messages.sign_in_to_search_github'
+        : reason === 'authentication-expired'
+          ? 'messages.github_sign_in_expired'
+          : reason === 'rate-limited'
+            ? 'messages.github_search_rate_limited'
+            : `messages.github_search_unavailable：${String(error)}`,
+      reason,
+      limited: reason === 'rate-limited',
+      authenticated: Boolean(this.options.searchFetcher),
+    }
+  }
+
+  private candidateRequestError(error: unknown): PublicReadError | undefined {
+    if (error instanceof PublicReadError) return error
+    const status = typeof error === 'object' && error !== null &&
+      typeof (error as { status?: unknown }).status === 'number'
+      ? (error as { status: number }).status
+      : undefined
+    if (status === 401)
+      return new PublicReadError(String(error), status, true)
+    if ((status === 403 || status === 429) && /rate limit|abuse|secondary rate/iu.test(String(error)))
+      return new PublicReadError(String(error), status, true, true)
+    return undefined
+  }
+
+  private async repositoryReader(owner: string, repo: string) {
+    const locator = { scheme: 'github' as const, owner, repo }
+    if (!this.options.privateAdapter)
+      throw new PublicReadError('messages.sign_in_to_search_github', 401, false)
+    const snapshot = await this.options.privateAdapter.inspect(locator)
+    return { locator, snapshot, adapter: this.options.privateAdapter }
+  }
+
+  private async manifestPaths(
+    owner: string,
+    repo: string,
+    ref: string,
+    adapter: RepositoryAdapter,
+    signal?: AbortSignal,
+  ): Promise<{ path: string; feed: EventFeed }[]> {
+    const q = encodeURIComponent(`\"event-feed\" \"oefVersion\" repo:${owner}/${repo} in:file`)
+    const data = await this.searchJson<{
+      items: { path: string }[]
+    }>(`https://api.github.com/search/code?q=${q}&per_page=100`, signal)
+    const manifests: { path: string; feed: EventFeed }[] = []
+    for (const item of data.items) {
+      if (signal?.aborted) break
+      try {
+        const file = await adapter.readFile({ scheme: 'github', owner, repo }, item.path, { ref })
+        const document = parseYaml<unknown>(file.content)
+        if (validator.validate('event-feed', document).ok) {
+          assertEventFeed(document, validator, `github:${owner}/${repo}`)
+          manifests.push({ path: item.path, feed: document as EventFeed })
+        }
+      } catch (error) {
+        const requestError = this.candidateRequestError(error)
+        if (requestError) throw requestError
+        /* Search candidates are untrusted and may have changed. */
+      }
+    }
+    return manifests
+  }
+
+  private async *searchStream(options: {
+    query?: string
+    tag?: string
+    signal?: AbortSignal
+  }): AsyncGenerator<SearchEvent> {
+    const tag = options.tag?.trim().toLowerCase()
+    const query = options.query?.normalize('NFKC').trim()
+    if ((!query && !tag) || (query && tag)) return
+    if (tag && !/^[a-z0-9][a-z0-9._-]{0,63}$/u.test(tag)) {
+      yield { type: 'error', message: 'messages.invalid_tag', reason: 'search-unavailable', limited: false, authenticated: Boolean(this.options.searchFetcher) }
+      return
+    }
+    if (!this.options.searchFetcher) {
+      yield this.searchError(new Error('Authentication required'))
+      return
+    }
+    const terms = tag
+      ? [tag, 'tags', 'title', 'schedule']
+      : [...query!.split(/\s+/u), 'title', 'schedule']
+    const escaped = terms.map((term) => `\"${term.replace(/["\\]/gu, '\\$&')}\"`).join(' ')
+    const searchQuery = `${escaped} in:file`
+    const seenFiles = new Set<string>()
+    const seenSources = new Set<string>()
+    const manifestCache = new Map<string, Promise<{ path: string; feed: EventFeed }[]>>()
+    const repositoryCache = new Map<string, ReturnType<MarketApi['repositoryReader']>>()
+    let page = 1
+    let loaded = 0
+    let incomplete = false
+    try {
+      while (page <= 10 && !options.signal?.aborted) {
+        const url = `https://api.github.com/search/code?q=${encodeURIComponent(searchQuery)}&per_page=100&page=${page}`
+        const data = await this.searchJson<{
+          total_count: number
+          incomplete_results: boolean
+          items: { path: string; repository: { name: string; owner: { login: string } } }[]
+        }>(url, options.signal)
+        incomplete ||= data.incomplete_results
+        if (!data.items.length) break
+        for (const item of data.items) {
+          if (options.signal?.aborted) return
+          const owner = item.repository.owner.login
+          const repo = item.repository.name
+          const fileKey = `${owner}/${repo}:${item.path}`.toLowerCase()
+          if (seenFiles.has(fileKey)) continue
+          seenFiles.add(fileKey)
+          try {
+            const repositoryKey = `${owner}/${repo}`.toLowerCase()
+            let repository = repositoryCache.get(repositoryKey)
+            if (!repository) {
+              repository = this.repositoryReader(owner, repo)
+              repositoryCache.set(repositoryKey, repository)
+            }
+            const { locator, snapshot, adapter } = await repository
+            const file = await adapter.readFile(locator, item.path, { ref: snapshot.headSha })
+            const document = parseYaml<unknown>(file.content)
+            const candidates: { path: string; feed: EventFeed }[] = []
+            if (validator.validate('event-feed', document).ok) {
+              candidates.push({ path: item.path, feed: assertEventFeed(document, validator, `github:${owner}/${repo}`) })
+            } else if (validator.validate('event', document).ok) {
+              const event = document as Event
+              assertDurationFitsRecurrence(event.duration, event.recurrence)
+              const repoKey = `${owner}/${repo}@${snapshot.headSha}`.toLowerCase()
+              let manifests = manifestCache.get(repoKey)
+              if (!manifests) {
+                manifests = this.manifestPaths(owner, repo, snapshot.headSha, adapter, options.signal)
+                manifestCache.set(repoKey, manifests)
+              }
+              for (const manifest of await manifests)
+                if (matchesEventsGlob(item.path, manifest.feed.eventsGlob)) candidates.push(manifest)
+            }
+            for (const candidate of candidates) {
+              const source = { locator: `github:${owner}/${repo}`, manifestPath: candidate.path, kind: 'event-feed' as const }
+              const key = sourceKey(source)
+              if (seenSources.has(key)) continue
+              const full = await fetchFeed({
+                ...source,
+                adapter,
+                ref: snapshot.headSha,
+                allowPrivate: snapshot.private,
+                ...(snapshot.private ? {} : { cache: this.options.cache }),
+              })
+              const normalized = query?.toLocaleLowerCase()
+              const events = (full.feed.events ?? []).filter((event) => {
+                if (tag) return event.tags?.includes(tag) ?? false
+                const text = [
+                  ...Object.values(event.title),
+                  ...Object.values(event.summary ?? {}),
+                  ...Object.values(event.description ?? {}),
+                  ...(event.tags ?? []),
+                ].join('\n').normalize('NFKC').toLocaleLowerCase()
+                return normalized!.split(/\s+/u).every((part) => text.includes(part))
+              })
+              if (!events.length) continue
+              seenSources.add(key)
+              loaded += events.length
+              yield { type: 'feed', feed: { ...full, feed: { ...full.feed, events } }, cached: false }
+              yield { type: 'progress', loaded, complete: false }
+            }
+          } catch (error) {
+            const requestError = this.candidateRequestError(error)
+            if (requestError) throw requestError
+            /* Invalid, inaccessible and stale candidates are omitted. */
+          }
+        }
+        if (page * 100 >= data.total_count) break
+        page++
+      }
+      if (incomplete)
+        yield { type: 'error', message: 'messages.github_search_results_incomplete', reason: 'incomplete-results', limited: false, authenticated: true }
+      yield { type: 'progress', loaded, complete: true }
+    } catch (error) {
+      if (!isAbort(error) && !options.signal?.aborted) yield this.searchError(error)
+    }
+  }
 
   private error(error: unknown, prefix: string): ReadEvent & { type: 'error' } {
     return {

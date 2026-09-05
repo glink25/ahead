@@ -1,0 +1,18 @@
+{
+  "messages": {
+    "search_events": "Search events",
+    "search_placeholder": "Search titles, summaries, descriptions, or tags",
+    "clear_search": "Clear search",
+    "search": "Search",
+    "search_results": "Event search results",
+    "no_search_results": "No matching events found",
+    "sign_in_to_search": "Sign in to GitHub to search events",
+    "sign_in_expired": "Your GitHub sign-in expired. Please sign in again.",
+    "sign_in_to_search_github": "Sign in to GitHub to search",
+    "github_sign_in_expired": "Your GitHub sign-in expired. Please sign in again.",
+    "github_search_rate_limited": "The GitHub search limit was reached. Try again later.",
+    "github_search_unavailable": "GitHub search is temporarily unavailable",
+    "github_search_results_incomplete": "GitHub may have returned incomplete search results",
+    "invalid_tag": "The tag is invalid"
+  }
+}

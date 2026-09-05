@@ -58,7 +58,7 @@ export function assertEventFeed(
 }
 
 /** Matches a glob such as `events/**\/*.yaml` against repository tree paths. */
-function globToRegExp(glob: string): RegExp {
+export function globToRegExp(glob: string): RegExp {
   let pattern = ''
   for (let index = 0; index < glob.length; index += 1) {
     const char = glob[index]!
@@ -80,6 +80,10 @@ function globToRegExp(glob: string): RegExp {
     pattern += char.replace(/[.+?^${}()|[\]\\]/gu, '\\$&')
   }
   return new RegExp(`^${pattern}$`, 'u')
+}
+
+export function matchesEventsGlob(path: string, glob = DEFAULT_EVENTS_GLOB): boolean {
+  return globToRegExp(glob).test(path)
 }
 
 /**

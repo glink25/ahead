@@ -346,6 +346,66 @@ p {
   border-radius: 16px;
   padding: 4px 10px;
 }
+.poster .tag-list .search-tag {
+  color: inherit;
+}
+.poster .tag-list .search-tag:focus-visible span {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+.search-view {
+  height: 100%;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  background: var(--surface);
+}
+.search-form {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px max(20px, calc((100% - 1080px) / 2));
+  border-bottom: 1px solid var(--line);
+}
+.search-form > .lucide {
+  width: 18px;
+  color: var(--muted);
+}
+.search-form input {
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  background: transparent;
+  font-size: 16px;
+}
+.search-form button {
+  flex: none;
+  padding: 7px 10px;
+  border-radius: 14px;
+  background: var(--surface);
+}
+.search-form button .lucide {
+  width: 17px;
+}
+.search-results {
+  min-height: 0;
+}
+.search-results .poster-slot {
+  height: 100%;
+}
+.search-warning {
+  position: sticky;
+  top: 8px;
+  z-index: 3;
+  width: fit-content;
+  max-width: calc(100% - 32px);
+  margin: 8px auto -40px;
+  padding: 8px 12px;
+  border-radius: 16px;
+  background: #201f1ddd;
+  color: #fff;
+  font-size: 12px;
+}
 .description-block {
   margin-top: 16px;
   max-width: 580px;

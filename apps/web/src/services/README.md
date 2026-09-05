@@ -2,6 +2,8 @@
 
 页面和 store 通过 [marketApi()](market.ts)读取市场与公开源。服务负责解析、校验、版本固定、缓存和请求调度，UI 不直接管理 GitHub 请求或源缓存。
 
+`MarketApi.search.stream()` 使用已登录用户的 GitHub Code Search 召回候选文件，再在 API 层定位所属 EventFeed、固定仓库版本并完成协议校验。搜索不要求资源登记在 Market；公开源可以进入提交级缓存，私有搜索响应和内容不持久化。GitHub 返回 `incomplete_results` 时，已验证结果仍会交付，同时产生结果不完整警告。
+
 接口与事件类型直接查看 [MarketApi](market-api.ts)，传输与限流实现查看 [PublicReadClient](public-read-client.ts)。
 
 ## 消费约定

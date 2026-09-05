@@ -157,14 +157,19 @@ function EventDescription({ text }: { text: string }) {
 export function PosterCard({
   event,
   index,
+  availableFeeds,
+  eventHref,
 }: {
   event: ResolvedEvent
   index: number
+  availableFeeds?: ReturnType<typeof useFeedStore.getState>['feeds']
+  eventHref?: string
 }) {
   const { t, i18n } = useTranslation()
 
   const { feeds, profile } = useFeedStore()
-  const feed = feeds.find((f) => event.sourceLocators.includes(f.sourceLocator))
+  const visibleFeeds = availableFeeds ?? feeds
+  const feed = visibleFeeds.find((f) => event.sourceLocators.includes(f.sourceLocator))
   const poster = posterFor(event, {
     locator: feed?.locator,
     headSha: feed?.headSha,
@@ -195,10 +200,17 @@ export function PosterCard({
         <div className="poster-main">
           <div className="tag-list">
             {event.tags?.map((tag) => (
-              <TagChip key={tag}># {tagLabel(tag, event, feeds, i18n.resolvedLanguage)}</TagChip>
+              <Link
+                className="search-tag"
+                key={tag}
+                to={'/search?tag=' + encodeURIComponent(tag)}
+                onPointerDown={(e) => e.stopPropagation()}
+              >
+                <TagChip># {tagLabel(tag, event, visibleFeeds, i18n.resolvedLanguage)}</TagChip>
+              </Link>
             ))}
           </div>
-          <Link to={'/events/' + encodeURIComponent(event.id)}>
+          <Link to={eventHref ?? '/events/' + encodeURIComponent(event.id)}>
             <h1>{pickText(event.title)}</h1>
           </Link>
           <Countdown className={'countdown ' + countdown.precision}>
@@ -214,7 +226,7 @@ export function PosterCard({
           <EvidenceLinks evidence={event.evidence} />
         </div>
         <footer>
-          <FeedSourceBar event={event} />
+          <FeedSourceBar event={event} availableFeeds={availableFeeds} />
           <div className="poster-actions">
             <FavoriteButton event={event} />
             <HideMenu event={event} />

@@ -51,7 +51,12 @@ export function marketApi(): MarketApi {
         createIdbStore('ahead-repo-cache', 'feeds'),
       ),
     ),
-    ...(session ? { privateAdapter: authenticatedAdapter(session) } : {}),
+    ...(session
+      ? {
+          privateAdapter: authenticatedAdapter(session),
+          searchFetcher: publicReadFetch(),
+        }
+      : {}),
   })
   current = { identity, api }
   return api

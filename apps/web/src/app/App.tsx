@@ -44,6 +44,9 @@ const ChannelDetail = lazy(() =>
 const PersonDetail = lazy(() =>
   import('../features/share/PersonDetail').then((module) => ({ default: module.PersonDetail })),
 )
+const SearchView = lazy(() =>
+  import('../features/search/SearchView').then((module) => ({ default: module.SearchView })),
+)
 
 function skeletonFor(path: string): SkeletonVariant {
   if (path === '/discover') return 'poster'
@@ -147,6 +150,7 @@ export function App() {
           <Route path="/channels/view" element={<ChannelDetail />} />
           <Route path="/people/view" element={<PersonDetail />} />
           <Route path="/following" element={<FollowingView />} />
+          <Route path="/search" element={<SearchView />} />
           <Route path="/studio" element={<StudioPage />} />
           <Route path="/profiles" element={<ProfilesView />} />
           <Route

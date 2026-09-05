@@ -7,7 +7,7 @@ import enCore from './locales/en/core.json'
 import zhCore from './locales/zh-CN/core.json'
 
 export const languages = ['zh-CN', 'en'] as const
-export const featureNamespaces = ['discover', 'mine', 'event', 'following', 'profiles', 'settings', 'login', 'studio'] as const
+export const featureNamespaces = ['discover', 'mine', 'event', 'following', 'profiles', 'settings', 'login', 'studio', 'search'] as const
 export type AppLanguage = (typeof languages)[number]
 export type FeatureNamespace = (typeof featureNamespaces)[number]
 export type LanguagePreference = AppLanguage | 'auto'

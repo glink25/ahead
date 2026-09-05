@@ -9,6 +9,7 @@ import {
   ChevronDown,
   List,
   Settings,
+  Search as SearchIcon,
   X,
 } from 'lucide-react'
 import { useAppBack, useNavigationJournal } from './navigation'
@@ -122,6 +123,15 @@ export function TabShell({ children }: { children: ReactNode }) {
           <span />
         )}
         <div className="header-right">
+          {location.pathname === '/discover' && (
+            <Link
+              className="avatar-button"
+              to="/search"
+              aria-label={t('messages.search_events')}
+            >
+              <SearchIcon />
+            </Link>
+          )}
           {mine && (
             <button
               className="mine-view-toggle"
