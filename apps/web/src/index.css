@@ -171,6 +171,9 @@ p {
   display: flex;
   transition: transform 0.28s cubic-bezier(0.22, 0.8, 0.3, 1);
 }
+.tab-stage[data-swiping='true'] .browser-pages {
+  transition: none;
+}
 .browser-pane {
   width: 50%;
   height: 100%;
@@ -621,14 +624,17 @@ p {
 .month-scroll {
   flex: 1;
   min-height: 150px;
+  position: relative;
   overflow-y: auto;
   overflow-anchor: none;
   overscroll-behavior: contain;
+  scroll-snap-type: y mandatory;
 }
 .calendar-month {
   height: 450px;
   overflow: hidden;
   padding-top: 14px;
+  scroll-snap-align: start;
 }
 .calendar-month h3 {
   font-size: 20px;
@@ -1382,5 +1388,6 @@ summary .lucide {
 }
 @keyframes spinner-turn { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) {
+  .browser-pages { transition: none; }
   .loading-spinner.lucide { animation: none; }
 }

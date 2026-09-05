@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next'
 import { useEffect } from 'react'
 import { toast, Toaster } from 'sonner'
-import { Check, X, CircleAlert, LoaderCircle } from 'lucide-react'
+import { Check, CircleAlert, LoaderCircle } from 'lucide-react'
 import { useFeedStore } from '../stores/feed'
 
 export function UndoToast() {
@@ -34,14 +34,12 @@ export function UndoToast() {
   return (
     <Toaster
       position="bottom-center"
-      closeButton
       icons={{
         success: <Check />,
         error: <CircleAlert />,
         warning: <CircleAlert />,
         info: <CircleAlert />,
         loading: <LoaderCircle />,
-        close: <X />,
       }}
       toastOptions={{
         style: {
@@ -49,7 +47,6 @@ export function UndoToast() {
           color: 'var(--ink)',
           borderColor: 'var(--line)',
         },
-        closeButtonAriaLabel: t('messages.dismiss_notification'),
       }}
     />
   )

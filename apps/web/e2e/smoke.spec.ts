@@ -115,18 +115,24 @@ test('discover → scroll → favorite → swipe mine → calendar → detail �
   const second = page.locator('[data-index="1"]')
   await second.getByRole('button', { name: '喜爱', exact: true }).click()
   const title = await second.getByRole('heading').innerText()
+  const heading = await second.getByRole('heading').boundingBox()
+  if (!heading) throw new Error('Discover heading has no bounding box')
+  const swipeStart = {
+    x: heading.x + Math.min(20, heading.width / 2),
+    y: heading.y + heading.height / 2,
+  }
   // Exercise Pointer Events axis locking rather than replacing the gesture with navigation.
-  // Use a real pointer so browser capture and axis locking are exercised.
+  // Start on the event link to verify a horizontal gesture wins over its click.
   if (isMobile) {
     const touch = await page.context().newCDPSession(page)
     await touch.send('Input.dispatchTouchEvent', {
       type: 'touchStart',
-      touchPoints: [{ x: 90, y: 220 }],
+      touchPoints: [swipeStart],
     })
-    for (let x = 110; x <= 290; x += 20)
+    for (let dx = 20; dx <= 200; dx += 20)
       await touch.send('Input.dispatchTouchEvent', {
         type: 'touchMove',
-        touchPoints: [{ x, y: 224 }],
+        touchPoints: [{ x: swipeStart.x + dx, y: swipeStart.y + 4 }],
       })
     await touch.send('Input.dispatchTouchEvent', {
       type: 'touchEnd',
@@ -134,15 +140,41 @@ test('discover → scroll → favorite → swipe mine → calendar → detail �
     })
     await touch.detach()
   } else {
-    await page.mouse.move(90, 220)
+    await page.mouse.move(swipeStart.x, swipeStart.y)
     await page.mouse.down()
-    await page.mouse.move(280, 224, { steps: 8 })
+    await page.mouse.move(swipeStart.x + 200, swipeStart.y + 4, { steps: 8 })
     await page.mouse.up()
   }
   await expect(page).toHaveURL(/\/mine/)
-  await expect(
-    page.getByRole('heading', { name: title, exact: true }),
-  ).toBeVisible()
+  const timelineTitle = page.getByRole('heading', { name: title, exact: true })
+  await expect(timelineTitle).toBeVisible()
+  const timelineSection = timelineTitle.locator('xpath=ancestor::section')
+  await expect(timelineSection.locator('.bucket-heading')).toContainText(
+    /还有|已过去|就在今天|就在明天|正在进行/,
+  )
+  await expect(timelineSection.locator('.timeline-copy small')).toContainText(
+    String(new Date().getFullYear()),
+  )
+  const favorite = timelineSection.getByRole('button', {
+    name: '取消喜爱',
+    exact: true,
+  })
+  const favoriteBox = await favorite.boundingBox()
+  if (!favoriteBox) throw new Error('Favorite button has no bounding box')
+  await page.mouse.move(
+    favoriteBox.x + favoriteBox.width / 2,
+    favoriteBox.y + favoriteBox.height / 2,
+  )
+  await page.mouse.down()
+  await page.mouse.move(
+    favoriteBox.x + favoriteBox.width / 2 - 200,
+    favoriteBox.y + favoriteBox.height / 2 + 3,
+    { steps: 8 },
+  )
+  await page.mouse.up()
+  await expect(page).toHaveURL(/\/discover/)
+  await page.getByRole('link', { name: '我的', exact: true }).click()
+  await expect(timelineSection.getByRole('button', { name: '取消喜爱' })).toBeVisible()
   await page.getByRole('button', { name: '切换日历' }).click()
   await expect(page.locator('.month-scroll')).toBeVisible()
   await page
@@ -209,7 +241,7 @@ test('empty calendar supports year and week; editor previews without saving', as
   await page.getByRole('button', { name: '周', exact: true }).click()
   await expect(
     page.locator('.week-strip button[aria-pressed=true]'),
-  ).toHaveText('二29')
+  ).toHaveText(/周?二29/)
   await page.getByRole('link', { name: '新建事件', exact: true }).click()
   await page.getByRole('button', { name: '预览', exact: true }).click()
   await expect(page.getByText('请输入事件名称')).toBeVisible()
@@ -232,10 +264,10 @@ test('empty calendar supports year and week; editor previews without saving', as
   await page.getByRole('button', { name: '返回上一页' }).click()
   await expect(
     page.locator('.week-strip button[aria-pressed=true]'),
-  ).toHaveText('二29')
+  ).toHaveText(/周?二29/)
 })
 
-test('tab and detail navigation preserve discovery position and settings hide diagnostics', async ({
+test('tab navigation refreshes discovery while detail back preserves position and settings hide diagnostics', async ({
   page,
 }) => {
   await registry(page)
@@ -249,10 +281,10 @@ test('tab and detail navigation preserve discovery position and settings hide di
   await expect(page.locator('[data-index="1"]')).toBeInViewport()
   await page.getByRole('link', { name: '我的', exact: true }).click()
   await page.getByRole('link', { name: '发现', exact: true }).click()
-  await expect(page.locator('[data-index="1"]')).toBeInViewport()
-  await page.locator('[data-index="1"]').getByRole('heading').click()
+  await expect(page.locator('[data-index="0"]')).toBeInViewport()
+  await page.locator('[data-index="0"]').getByRole('heading').click()
   await page.getByRole('button', { name: '返回上一页' }).click()
-  await expect(page.locator('[data-index="1"]')).toBeInViewport()
+  await expect(page.locator('[data-index="0"]')).toBeInViewport()
   await page.getByRole('link', { name: '设置', exact: true }).click()
   await expect(
     page.getByRole('heading', { name: '设置', exact: true }),
@@ -291,11 +323,15 @@ test('calendar scrolling stays bounded and Today returns to the current month', 
   await expect(scroll).toBeVisible()
   const initial = await scroll.evaluate((el) => el.scrollTop)
   await scroll.evaluate((el) => {
-    el.scrollTop += 900
+    el.scrollTop += 620
   })
   await expect
-    .poll(() => scroll.evaluate((el) => el.scrollTop))
-    .toBe(initial + 900)
+    .poll(async () => {
+      const snapped = await scroll.evaluate((el) => el.scrollTop)
+      const delta = snapped - initial
+      return delta >= 400 && delta <= 525
+    })
+    .toBe(true)
   await expect(page.locator('.calendar-month')).toHaveCount(5)
   await page.getByRole('button', { name: '今天', exact: true }).click()
   await expect.poll(() => scroll.evaluate((el) => el.scrollTop)).toBe(initial)

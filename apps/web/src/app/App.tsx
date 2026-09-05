@@ -106,7 +106,11 @@ export function App() {
     <TabShell>
       <div
         className={'browser-pages' + (!browsing ? ' browsing-hidden' : '')}
-        style={{ transform: mine ? 'translateX(0)' : 'translateX(-50%)' }}
+        style={{
+          transform: mine
+            ? 'translateX(var(--tab-swipe-offset, 0px))'
+            : 'translateX(calc(-50% + var(--tab-swipe-offset, 0px)))',
+        }}
       >
         <div
           className="browser-pane"

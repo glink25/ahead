@@ -76,7 +76,7 @@ export function MineTab() {
             <div className="timeline">
               {mine.map((event) => {
                 const countdown = countdownFor(event)
-                const group = countdown.dateLabel || t('messages.date_tbd')
+                const group = countdown.headline
                 const heading = group !== previous
                 previous = group
                 const feed = feeds.find((f) =>
@@ -113,7 +113,9 @@ export function MineTab() {
                         className="timeline-copy"
                         to={'/events/' + encodeURIComponent(event.id)}
                       >
-                        <small>{countdown.headline}</small>
+                        <small>
+                          {countdown.dateLabel || t('messages.date_tbd')}
+                        </small>
                         <h3>{pickText(event.title)}</h3>
                         <p>
                           {pickText(event.summary) ||

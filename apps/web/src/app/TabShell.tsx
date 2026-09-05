@@ -1,6 +1,6 @@
 import { profileName } from '../lib/profile-name'
 import { useTranslation } from 'react-i18next'
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useState, type CSSProperties, type ReactNode } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router'
 import { useData } from '../data/local'
 import { ArrowLeft, ChevronDown, Settings, X } from 'lucide-react'
@@ -34,10 +34,11 @@ export function TabShell({ children }: { children: ReactNode }) {
     const timer = setTimeout(() => setDismissedErrors(errors), 6000)
     return () => clearTimeout(timer)
   }, [errors, loading, storageError])
-  const { offset, handlers } = useSwipe((direction) => {
-    if (tab && (direction === 'left' ? mine : !mine))
-      navigate(direction === 'left' ? '/discover' : mineUrl)
-  })
+  const { offset, dragging, handlers } = useSwipe(
+    (direction) =>
+      navigate(direction === 'left' ? '/discover' : mineUrl),
+    { left: tab && mine, right: tab && !mine },
+  )
   useEffect(() => {
     if (mine) setMineUrl(location.pathname + location.search)
   }, [location.pathname, location.search, tab, mine])
@@ -148,12 +149,10 @@ export function TabShell({ children }: { children: ReactNode }) {
       <main
         className={tab ? 'tab-stage' : 'overlay-stage'}
         {...(tab ? handlers : {})}
+        data-swiping={tab && dragging ? 'true' : undefined}
         style={
           tab
-            ? {
-                transform: 'translateX(' + offset + 'px)',
-                transition: offset ? 'none' : undefined,
-              }
+            ? ({ '--tab-swipe-offset': offset + 'px' } as CSSProperties)
             : undefined
         }
       >

@@ -144,7 +144,7 @@ test('full reset requires confirmation and clears old databases, storage, caches
   ).toBeVisible()
 })
 
-test('a newer undo replaces the old one and manual dismissal expires it', async ({
+test('a newer undo replaces the old one and swipe dismissal expires it', async ({
   page,
 }) => {
   await page.goto('/settings')
@@ -162,10 +162,16 @@ test('a newer undo replaces the old one and manual dismissal expires it', async 
   await page.getByRole('button', { name: '撤销', exact: true }).click()
   await expect(setting).not.toBeChecked()
   await setting.click()
-  await page
-    .locator('[data-sonner-toast]')
-    .getByRole('button', { name: '关闭提示' })
-    .click()
+  const toast = page.locator('[data-sonner-toast][data-front="true"]')
+  await expect(toast.getByRole('button', { name: '关闭提示' })).toHaveCount(0)
+  const box = await toast.boundingBox()
+  if (!box) throw new Error('Undo toast has no bounding box')
+  await page.mouse.move(box.x + box.width / 2, box.y + 4)
+  await page.mouse.down()
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height + 70, {
+    steps: 4,
+  })
+  await page.mouse.up()
   await expect(
     page.getByRole('button', { name: '撤销', exact: true }),
   ).toHaveCount(0)

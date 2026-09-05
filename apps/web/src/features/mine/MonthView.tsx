@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
-import { useMemo, useState, useRef, useLayoutEffect } from 'react'
+import { useEffect, useMemo, useState, useRef, useLayoutEffect } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { expandRecurrence, type ResolvedEvent } from '@ahead/resolver'
 import { pickText, describeTemporal, formatCalendarDate } from '../../lib/format'
@@ -97,6 +97,14 @@ export function MonthView({
   const [top, setTop] = useState(12 * MONTH_HEIGHT)
   const viewport = useRef<HTMLDivElement>(null)
   const correction = useRef<number | null>(null)
+  const jumpTo = (scrollTop: number) => {
+    const element = viewport.current
+    if (!element) return
+    element.style.scrollSnapType = 'none'
+    element.scrollTop = scrollTop
+    void element.offsetHeight
+    element.style.removeProperty('scroll-snap-type')
+  }
   const fromMonth = (index: number) =>
     new Date(Math.floor(index / 12), index % 12, 1)
   const update = (date: string, nextScale = scale) => {
@@ -114,17 +122,18 @@ export function MonthView({
       setCount(25)
       correction.current = 12 * MONTH_HEIGHT
     } else {
-      viewport.current.scrollTop = (selectedMonth - origin) * MONTH_HEIGHT
-      setTop(viewport.current.scrollTop)
+      const target = (selectedMonth - origin) * MONTH_HEIGHT
+      correction.current = target
+      setTop(target)
     }
   }, [dateKey, scale, navigation])
-  useLayoutEffect(() => {
+  useEffect(() => {
     if (correction.current !== null && viewport.current) {
-      viewport.current.scrollTop = correction.current
+      jumpTo(correction.current)
       setTop(correction.current)
       correction.current = null
     }
-  }, [origin, count])
+  }, [origin, count, top, navigation])
   const first = Math.max(0, Math.floor(top / MONTH_HEIGHT) - 1)
   const last = Math.min(count, first + 5)
   const fuzzy = events.filter(
