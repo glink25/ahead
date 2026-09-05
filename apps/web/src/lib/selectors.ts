@@ -1,11 +1,12 @@
 import { sourceKey } from '@ahead/protocol'
-import { daysUntilEvent, recommend } from '@ahead/recommendation'
+import { daysUntilEvent, recommendMarket } from '@ahead/recommendation'
 import type { ResolvedProfile } from '@ahead/resolver'
 
-export function selectDiscover(profile: ResolvedProfile, marketSources: ReadonlySet<string>, now = new Date()) {
-  return recommend({
+export function selectDiscover(profile: ResolvedProfile, marketSources: ReadonlySet<string>, now = new Date(), seed = 'stable') {
+  return recommendMarket({
     events: profile.events.filter((event) => event.sourceLocators.some((source) => marketSources.has(source))),
-    profile, now,
+    profile, now, seed,
+    categoryFor: (event) => event.sourceLocators.filter((source) => marketSources.has(source)).sort()[0] ?? event.id,
   }).map((item) => item.event)
 }
 

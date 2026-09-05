@@ -6,7 +6,7 @@ import { resolve } from '@ahead/resolver'
 import { sourceKey } from '@ahead/protocol'
 import { useFeedStore } from '../stores/feed'
 import { selectDiscover, selectMine } from '../lib/selectors'
-export function useFeedView() {
+export function useFeedView(marketSeed = 'stable') {
   const { feeds, profile, listings, users } = useFeedStore()
   const db = useData((s) => s.db)
   const space = db?.spaces[db.active]
@@ -25,6 +25,6 @@ export function useFeedView() {
       resolved.events = [...resolved.events.filter((e) => !ids.has(e.id)), ...own.map((event) => ({ ...event, currentSchedule: selectCurrentSchedule(event.schedule, now), sourceLocators: ['personal:' + space.id], provenance: [] }))]
     }
     const market = new Set(listings.filter((l) => l.source.resourceType === 'event-feed').map((l) => sourceKey(l.source)))
-    return { resolved, discover: selectDiscover(resolved, market, now), mine: selectMine(resolved, now) }
-  }, [feeds, profile, listings, users, now, space])
+    return { resolved, discover: selectDiscover(resolved, market, now, marketSeed), mine: selectMine(resolved, now) }
+  }, [feeds, profile, listings, users, now, space, marketSeed])
 }

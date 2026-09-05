@@ -36,6 +36,71 @@ function temporalDate(value: TemporalValue): Date | undefined {
   }
 }
 
+function defaultEnd(start: Date, value: TemporalValue): Date | undefined {
+  const end = new Date(start)
+  switch (value.kind) {
+    case 'exact':
+      end.setUTCDate(end.getUTCDate() + 1)
+      return end
+    case 'datetime':
+      return end
+    case 'month':
+      end.setUTCMonth(end.getUTCMonth() + 1)
+      return end
+    case 'quarter':
+      end.setUTCMonth(end.getUTCMonth() + 3)
+      return end
+    case 'year':
+      end.setUTCFullYear(end.getUTCFullYear() + 1)
+      return end
+    case 'range': {
+      const rangeEnd = temporalDate(value.end)
+      return rangeEnd ? defaultEnd(rangeEnd, value.end) : undefined
+    }
+    case 'unknown':
+      return undefined
+  }
+}
+
+/** Exclusive end of an event, or undefined while it is ongoing/future/unknown. */
+export function eventEndedAt(event: ResolvedEvent, now: Date | string): Date | undefined {
+  const clock = new Date(now)
+  if (!Number.isFinite(clock.getTime())) return undefined
+  const schedule = event.currentSchedule ?? selectCurrentSchedule(event.schedule, clock)
+  if (!schedule) return undefined
+  const seed = temporalDate(schedule.value)
+  if (!seed || !Number.isFinite(seed.getTime())) return undefined
+
+  if (event.recurrence) {
+    const horizon = new Date(clock)
+    horizon.setUTCFullYear(horizon.getUTCFullYear() + 100)
+    const occurrences = expandRecurrence(event, {
+      from: seed,
+      to: horizon,
+      max: event.recurrence.count ?? 100_000,
+    })
+    let latestEnd: Date | undefined
+    for (const occurrence of occurrences) {
+      const start = new Date(occurrence.start)
+      const end = occurrence.end
+        ? new Date(occurrence.end)
+        : defaultEnd(start, schedule.value)
+      if (!end) return undefined
+      if (end > clock) return undefined
+      latestEnd = end
+    }
+    return latestEnd
+  }
+
+  const durationEnd = resolveOccurrenceEnd(
+    seed.toISOString(),
+    event.duration,
+    schedule.value.kind,
+  )
+  const end = durationEnd ? new Date(durationEnd) : defaultEnd(seed, schedule.value)
+  return end && end <= clock ? end : undefined
+}
+
 export function eventInterval(
   event: ResolvedEvent,
   now: Date | string,

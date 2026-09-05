@@ -8,7 +8,8 @@ import { PosterCard } from './PosterCard'
 export function DiscoverTab({ active = true }: { active?: boolean }) {
   const { t } = useTranslation()
 
-  const { discover } = useFeedView()
+  const [recommendationSeed, setRecommendationSeed] = useState(() => crypto.randomUUID())
+  const { discover } = useFeedView(recommendationSeed)
   const { loading, refresh, marketStatus, revision, setMarketActive } =
     useFeedStore()
   useEffect(() => {
@@ -46,8 +47,20 @@ export function DiscoverTab({ active = true }: { active?: boolean }) {
   const [height, setHeight] = useState(700)
   const [cursor, setCursor] = useState(0)
   const cursorRef = useRef(0)
+  const previousActive = useRef(active)
   const activeRef = useRef(active)
   activeRef.current = active
+  useEffect(() => {
+    if (active && !previousActive.current) {
+      order.current = []
+      browsing.current = false
+      cursorRef.current = 0
+      setCursor(0)
+      container.current?.scrollTo({ top: 0, behavior: 'instant' })
+      setRecommendationSeed(crypto.randomUUID())
+    }
+    previousActive.current = active
+  }, [active])
   useLayoutEffect(() => {
     if (active && container.current) {
       const size = container.current.clientHeight
