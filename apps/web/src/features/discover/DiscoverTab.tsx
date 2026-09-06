@@ -15,7 +15,7 @@ export function DiscoverTab({
 
   const [recommendationSeed] = useState(() => crypto.randomUUID())
   const { discover } = useFeedView(recommendationSeed)
-  const { loading, ready, refresh, marketStatus, revision, setMarketActive, reportDiscoverVisible } =
+  const { loading, ready, refresh, marketStatus, revision, setMarketActive } =
     useFeedStore()
   useEffect(() => {
     const update = () =>
@@ -29,18 +29,23 @@ export function DiscoverTab({
   }, [active, setMarketActive])
   // Keep the current browsing session stable when a favorite changes ranking.
   const order = useRef<string[]>([])
-  const lockedCount = useRef(0)
+  const browsing = useRef(false)
   const previousRevision = useRef(revision)
   const events = useMemo(() => {
     if (previousRevision.current !== revision) {
       previousRevision.current = revision
       order.current = []
-      lockedCount.current = 0
+      browsing.current = false
     }
     const map = new Map(discover.map((e) => [e.id, e]))
-    const stable = order.current.slice(0, lockedCount.current).filter((id) => map.has(id))
-    const known = new Set(stable)
-    order.current = [...stable, ...discover.filter((event) => !known.has(event.id)).map((event) => event.id)]
+    const known = new Set(order.current)
+    order.current = browsing.current
+      ? [
+          ...order.current.filter((id) => map.has(id)),
+          ...discover.filter((e) => !known.has(e.id)).map((e) => e.id),
+        ]
+      : discover.map((event) => event.id)
+    if (order.current.length) browsing.current = true
     return order.current.map((id) => map.get(id)!)
   }, [discover, revision])
   const container = useRef<HTMLDivElement>(null)
@@ -88,9 +93,6 @@ export function DiscoverTab({
             const next = Number((entry.target as HTMLElement).dataset.index)
             cursorRef.current = next
             setCursor(next)
-            lockedCount.current = Math.max(lockedCount.current, next + 4)
-            const event = events[next]
-            if (event) reportDiscoverVisible(event.id, next, events.length)
           }
       },
       { root, threshold: 0.6 },
@@ -99,7 +101,7 @@ export function DiscoverTab({
       .querySelectorAll('[data-index]')
       .forEach((node) => observer.observe(node))
     return () => observer.disconnect()
-  }, [index, events, height, reportDiscoverVisible])
+  }, [index, events.length, height])
   useEffect(() => {
     const keydown = (e: KeyboardEvent) => {
       if (!active) return
@@ -161,12 +163,12 @@ export function DiscoverTab({
       ref={container}
       aria-label={t('messages.discover_events')}
       onPointerDownCapture={() => {
-        lockedCount.current = Math.max(lockedCount.current, cursorRef.current + 4)
+        browsing.current = true
       }}
       onScroll={(e) => {
         if (!active) return
+        if (e.currentTarget.scrollTop > 0) browsing.current = true
         const next = Math.round(e.currentTarget.scrollTop / height)
-        lockedCount.current = Math.max(lockedCount.current, next + 4)
         cursorRef.current = next
         setCursor(next)
       }}

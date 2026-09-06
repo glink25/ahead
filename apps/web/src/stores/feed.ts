@@ -16,9 +16,6 @@ import type { LoadedFeed } from '../lib/feed-loader'
 import { marketApi } from '../services/market'
 import type { ReadEvent } from '../services/market-api'
 import { isAbort } from '../services/public-read-client'
-import type { ExposureSignal } from '@ahead/recommendation'
-import type { DiscoverMarketSession, MarketEvent } from '../services/market-api'
-import { discoverHistory } from '../services/discover-history'
 
 export type MarketStatus =
   'idle' | 'initial' | 'appending' | 'paused' | 'complete' | 'failed'
@@ -34,7 +31,6 @@ interface FeedStore {
   marketStatus: MarketStatus
   marketLoaded: number
   marketActive: boolean
-  exposures: Record<string, ExposureSignal>
   revision: number
   undoProfile?: UserData
   undoOperation?: { id: string; spaceId: string }
@@ -43,37 +39,33 @@ interface FeedStore {
   refresh(options?: { force?: boolean; restart?: boolean }): Promise<void>
   retry(): Promise<void>
   setMarketActive(active: boolean): void
-  reportDiscoverVisible(eventId: string, index: number, available: number): void
   act(action: ProfileAction): void
   undo(id?: string): Promise<void>
   replaceProfile(profile: UserData): void
 }
 let initializing: Promise<void> | undefined
+let marketController: AbortController | undefined
 let sourcesController: AbortController | undefined
+let cursor: string | undefined
 let generation = 0
 let undoGeneration = 0
-let marketSession: DiscoverMarketSession | undefined
-const sessionSeen = new Set<string>()
+let forceMarket = false
+let freshListings: MarketListing[] = []
 const localWriteError = 'messages.could_not_save_check_browser_storage_permissions_and_retry'
 
 export const useFeedStore = create<FeedStore>((set, get) => {
-  const updateLoading = () => set((state) => ({
-    loading: Boolean(sourcesController) || state.marketStatus === 'initial' || state.marketStatus === 'appending',
-  }))
+  const updateLoading = () =>
+    set({ loading: Boolean(marketController || sourcesController) })
   const receive = (event: ReadEvent) => {
     if (event.type === 'feed')
-      set((s) => {
-        const feeds = [
+      set((s) => ({
+        feeds: [
           ...s.feeds.filter(
             (f) => f.sourceLocator !== event.feed.sourceLocator,
           ),
           event.feed,
-        ]
-        const market = new Set(s.listings.filter((item) => item.source.resourceType === 'event-feed').map((item) => sourceKey(item.source)))
-        const retainedMarket = feeds.filter((feed) => market.has(feed.sourceLocator)).slice(-40)
-        const retained = new Set(retainedMarket.map((feed) => feed.sourceLocator))
-        return { feeds: feeds.filter((feed) => !market.has(feed.sourceLocator) || retained.has(feed.sourceLocator)) }
-      })
+        ],
+      }))
     if (event.type === 'user')
       set((s) => ({
         users: [
@@ -88,24 +80,72 @@ export const useFeedStore = create<FeedStore>((set, get) => {
           s.loginSuggested || (event.limited && event.authenticated === false),
       }))
   }
-  const receiveMarket = (event: MarketEvent) => {
-    if (event.type === 'listings') set((state) => ({
-      listings: [...new Map([...state.listings, ...event.listings].map((item) => [sourceKey(item.source), item])).values()].slice(-60),
-    }))
-    else if (event.type === 'progress') set({ marketLoaded: event.loaded })
-    else receive(event)
+  const pump = async () => {
+    if (
+      marketController ||
+      !get().marketActive ||
+      !get().ready ||
+      useAuthSession.getState().loading ||
+      get().marketStatus === 'complete'
+    )
+      return
+    const controller = new AbortController(),
+      round = generation
+    marketController = controller
+    set({ marketStatus: get().feeds.length ? 'appending' : 'initial' })
+    updateLoading()
+    let failed = false
+    try {
+      const stream = marketApi().market.stream({
+        cursor,
+        refresh: forceMarket,
+        signal: controller.signal,
+      })
+      for await (const event of stream) {
+        if (controller.signal.aborted || round !== generation) break
+        if (event.type === 'listings') {
+          if (!event.cached) freshListings = event.listings
+          set((s) => ({
+            listings: [
+              ...new Map(
+                [...s.listings, ...event.listings].map((l) => [
+                  sourceKey(l.source),
+                  l,
+                ]),
+              ).values(),
+            ],
+          }))
+        } else if (event.type === 'progress') {
+          cursor = event.cursor
+          set({ marketLoaded: event.loaded })
+          if (event.complete)
+            set({ marketStatus: 'complete', listings: freshListings })
+        } else {
+          receive(event)
+          if (event.type === 'error') failed = true
+          if (event.type === 'feed') set({ marketStatus: 'appending' })
+        }
+      }
+      if (
+        round === generation &&
+        !controller.signal.aborted &&
+        get().marketStatus !== 'complete'
+      )
+        set({ marketStatus: failed ? 'failed' : 'paused' })
+    } catch (error) {
+      if (!isAbort(error) && round === generation) {
+        set((s) => ({
+          marketStatus: 'failed',
+          errors: [...s.errors, String(error)],
+        }))
+      }
+    } finally {
+      if (marketController === controller) {
+        marketController = undefined
+        updateLoading()
+      }
+    }
   }
-  const ensureMarketSession = () => marketSession ??= marketApi().market.openSession({
-    receive: receiveMarket,
-    status: (status) => {
-      set({ marketStatus: status === 'restoring' ? 'initial' : status === 'expanding' ? 'appending' : status })
-      updateLoading()
-    },
-    available: () => {
-      const market = new Set(get().listings.filter((item) => item.source.resourceType === 'event-feed').map((item) => sourceKey(item.source)))
-      return get().feeds.filter((feed) => market.has(feed.sourceLocator)).reduce((total, feed) => total + (feed.feed.events?.length ?? 0), 0)
-    },
-  })
   return {
     profile: emptyProfile(),
     feeds: [],
@@ -118,7 +158,6 @@ export const useFeedStore = create<FeedStore>((set, get) => {
     marketStatus: 'idle',
     marketLoaded: 0,
     marketActive: false,
-    exposures: {},
     revision: 0,
     initialize() {
       initializing ??= (async () => {
@@ -127,7 +166,6 @@ export const useFeedStore = create<FeedStore>((set, get) => {
         set({
           profile: materializeProfile(initial.spaces[initial.active]!.records),
           ready: true,
-          exposures: await discoverHistory().snapshot(),
         })
         let previousActive = initial.active
         let previousSubscriptions = JSON.stringify(get().profile.subscriptions)
@@ -139,9 +177,6 @@ export const useFeedStore = create<FeedStore>((set, get) => {
               current.session?.providerId !== previous.session?.providerId)
           ) {
             undoGeneration++
-            marketSession?.close()
-            marketSession = undefined
-            sessionSeen.clear()
             set({
               feeds: [],
               listings: [],
@@ -149,7 +184,6 @@ export const useFeedStore = create<FeedStore>((set, get) => {
               undoProfile: undefined,
               undoOperation: undefined,
             })
-            void discoverHistory().snapshot().then((exposures) => set({ exposures }))
             void get().refresh({ force: false })
           }
         })
@@ -181,20 +215,23 @@ export const useFeedStore = create<FeedStore>((set, get) => {
     },
     setMarketActive(active) {
       set({ marketActive: active })
-      ensureMarketSession().setActive(active)
-    },
-    reportDiscoverVisible(eventId, index, available) {
-      ensureMarketSession().reportVisible(index, available)
-      if (sessionSeen.has(eventId)) return
-      sessionSeen.add(eventId)
-      void discoverHistory().record(eventId).then((exposures) => set({ exposures }))
+      if (!active) {
+        marketController?.abort()
+        marketController = undefined
+        if (
+          get().marketStatus === 'initial' ||
+          get().marketStatus === 'appending'
+        )
+          set({ marketStatus: 'paused' })
+        updateLoading()
+      } else if (get().marketStatus !== 'failed') void pump()
     },
     async retry() {
       set({
         errors: get().errors.filter((e) => e === localWriteError),
         loginSuggested: false,
       })
-      if (get().marketStatus === 'failed') await ensureMarketSession().retry()
+      if (get().marketStatus === 'failed') await pump()
       else await get().refresh({ force: false })
     },
     async refresh(options = {}) {
@@ -202,7 +239,11 @@ export const useFeedStore = create<FeedStore>((set, get) => {
       const restart = options.restart ?? true
       if (restart) {
         generation++
-        sessionSeen.clear()
+        marketController?.abort()
+        marketController = undefined
+        cursor = undefined
+        freshListings = []
+        forceMarket = options.force ?? true
         set((s) => ({
           revision: s.revision + 1,
           marketLoaded: 0,
@@ -223,6 +264,19 @@ export const useFeedStore = create<FeedStore>((set, get) => {
       updateLoading()
       const api = marketApi()
       try {
+        const snapshot = await api.market.snapshot()
+        if (round !== generation || controller.signal.aborted) return
+        if (snapshot)
+          set((s) => ({
+            listings: [
+              ...new Map(
+                [...snapshot, ...s.listings].map((l) => [
+                  sourceKey(l.source),
+                  l,
+                ]),
+              ).values(),
+            ],
+          }))
         const personal = profile.extensions?.[PERSONAL_FEED] as
           Subscription | undefined
         const sources = (await api.relatedSources(profile)).filter(
@@ -257,8 +311,7 @@ export const useFeedStore = create<FeedStore>((set, get) => {
             }
           }
         }
-        await readSources()
-        if (restart && get().marketActive) await ensureMarketSession().refresh()
+        await Promise.all([readSources(), pump()])
       } catch (error) {
         if (
           !isAbort(error) &&
