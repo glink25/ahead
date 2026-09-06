@@ -37,7 +37,7 @@ function market(events: ResolvedEvent[], seed = 'seed', interests: Record<string
 }
 
 describe('market recommendations', () => {
-  it('drops old events and inserts at most one recent event after nine primary items', () => {
+  it('drops old events and uses recent past only to fill the target runway', () => {
     const future = Array.from({ length: 18 }, (_, index) =>
       event(`future-${index}`, { kind: 'exact', date: '2026-10-01' }, `feed-${index % 3}`),
     )
@@ -49,30 +49,59 @@ describe('market recommendations', () => {
     ]
     const ids = market(events).map((item) => item.eventId)
     expect(ids).not.toContain('old')
-    expect(ids[9]).toMatch(/^recent-/)
-    expect(ids[19]).toMatch(/^recent-/)
+    expect(ids.slice(0, 18).every((id) => id.startsWith('future-'))).toBe(true)
+    expect(ids.slice(18).every((id) => id.startsWith('recent-'))).toBe(true)
     expect(ids.filter((id) => id.startsWith('recent-'))).toHaveLength(2)
   })
 
-  it('shows no past event when fewer than nine primary items exist', () => {
+  it('fills a shortage with recent past content', () => {
     const events = [
       ...Array.from({ length: 8 }, (_, index) => event(`future-${index}`, { kind: 'year', year: 2027 })),
       event('recent', { kind: 'exact', date: '2026-09-03' }, 'past'),
     ]
-    expect(market(events).map((item) => item.eventId)).not.toContain('recent')
+    expect(market(events).map((item) => item.eventId).at(-1)).toBe('recent')
   })
 
-  it('avoids the last two categories while three are available', () => {
+  it('avoids consecutive sources while alternatives are available', () => {
     const events = ['a', 'b', 'c'].flatMap((category) =>
       Array.from({ length: 4 }, (_, index) =>
         event(`${category}-${index}`, { kind: 'year', year: 2027 }, category),
       ),
     )
     const categories = market(events).map((item) => item.event.sourceLocators[0])
-    for (let index = 2; index < 9; index += 1) {
+    for (let index = 1; index < 9; index += 1) {
       expect(categories[index]).not.toBe(categories[index - 1])
-      expect(categories[index]).not.toBe(categories[index - 2])
     }
+  })
+
+  it('makes time dominant for representative near and far events', () => {
+    const events = [
+      event('today', { kind: 'exact', date: '2026-09-05' }, 'general'),
+      event('next-week', { kind: 'exact', date: '2026-09-12' }, 'general'),
+      event('next-year-liked', { kind: 'exact', date: '2027-09-05' }, 'liked', ['space']),
+    ]
+    expect(market(events, 'time', { space: 1 }).map((item) => item.eventId)).toEqual([
+      'today', 'next-week', 'next-year-liked',
+    ])
+  })
+
+  it('penalizes repeated exposure without affecting imminent events', () => {
+    const events = [
+      event('soon', { kind: 'exact', date: '2026-09-06' }),
+      event('later-seen', { kind: 'exact', date: '2026-10-05' }, 'seen'),
+      event('later-fresh', { kind: 'exact', date: '2026-10-05' }, 'fresh'),
+    ]
+    const result = recommendMarket({
+      events, profile: profile(events), now: NOW, seed: 'exposure',
+      categoryFor: (item) => item.sourceLocators[0]!,
+      exposureFor: (item) => item.id === 'soon' || item.id === 'later-seen'
+        ? { shownCount: 10, lastShownAt: NOW }
+        : undefined,
+    })
+    expect(result[0]?.eventId).toBe('soon')
+    expect(result.findIndex((item) => item.eventId === 'later-fresh')).toBeLessThan(
+      result.findIndex((item) => item.eventId === 'later-seen'),
+    )
   })
 
   it('is stable for one seed and favors interested categories across sessions', () => {
