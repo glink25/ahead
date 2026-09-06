@@ -1,5 +1,6 @@
 oefVersion: "0.1"
 kind: event-feed
+oefSearch: oef-search-v1
 id: ahead-minimal
 name:
   zh-CN: 最小示例事件源

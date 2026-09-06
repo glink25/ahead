@@ -1,5 +1,6 @@
 oefVersion: "0.1"
 kind: event-feed
+oefSearch: oef-search-v1
 id: ahead-i18n-demo
 name:
   zh-CN: 多语言示例

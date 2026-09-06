@@ -15,6 +15,7 @@ Schema 是结构约束的权威源；TypeScript 类型用于程序接入，[sche
 ## 核心语义
 
 - **Event** 是一件具体的事；**EventFeed** 汇集事件；**UserData** 保存个人订阅、收藏和偏好。
+- `oefSearch: oef-search-v1` 是可选的全局搜索召回标记。缺少它不影响协议有效性，但文件不会被 Ahead 的 GitHub Code Search 搜索召回；使用 `eventsGlob` 的独立 Event 文件需要分别标记。
 - Feed 可以内嵌 `events`，或用 `eventsGlob` 引用同仓库文件，不组合其他 Feed。UserData 可以订阅事件流或其他用户资料；关注用户在 Ahead 中参考其公开收藏，不继承其订阅。
 - 标题等多语言文本使用语言代码到文本的映射，例如 `title: { zh-CN: 示例活动 }`。
 - `schedule` 保存开始时间及其变化记录；日期不确定时使用相应精度，不虚构精确日期。当前条目的选择顺序见 [schedule 实现](../../packages/resolver/src/schedule.ts)。
@@ -30,6 +31,7 @@ Schema 是结构约束的权威源；TypeScript 类型用于程序接入，[sche
 ```yaml
 oefVersion: "0.1"
 kind: event-feed
+oefSearch: oef-search-v1
 id: demo-events
 name:
   zh-CN: 示例活动

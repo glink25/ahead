@@ -258,8 +258,8 @@ export class MarketApi {
       return
     }
     const terms = tag
-      ? [tag, 'tags', 'title', 'schedule']
-      : [...query!.split(/\s+/u), 'title', 'schedule']
+      ? [tag, 'tags', 'oefSearch', 'oef-search-v1']
+      : [...query!.split(/\s+/u), 'oefSearch', 'oef-search-v1']
     const escaped = terms.map((term) => `\"${term.replace(/["\\]/gu, '\\$&')}\"`).join(' ')
     const searchQuery = `${escaped} in:file`
     const seenFiles = new Set<string>()
@@ -297,10 +297,12 @@ export class MarketApi {
             const file = await adapter.readFile(locator, item.path, { ref: snapshot.headSha })
             const document = parseYaml<unknown>(file.content)
             const candidates: { path: string; feed: EventFeed }[] = []
-            if (validator.validate('event-feed', document).ok) {
+            if (validator.validate('event-feed', document).ok &&
+              (document as EventFeed).oefSearch === 'oef-search-v1') {
               candidates.push({ path: item.path, feed: assertEventFeed(document, validator, `github:${owner}/${repo}`) })
             } else if (validator.validate('event', document).ok) {
               const event = document as Event
+              if (event.oefSearch !== 'oef-search-v1') continue
               assertDurationFitsRecurrence(event.duration, event.recurrence)
               const repoKey = `${owner}/${repo}@${snapshot.headSha}`.toLowerCase()
               let manifests = manifestCache.get(repoKey)

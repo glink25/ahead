@@ -231,10 +231,10 @@ it('keeps a larger traversal bounded to three source readers and consumes one pa
 })
 
 it('searches an inline feed and filters its events in the API layer', async () => {
-  const source = feed([
+  const source = { ...feed([
     { ...feed().events![0]!, id: 'match', title: { en: 'Game release' }, tags: ['games'] },
     { ...feed().events![0]!, id: 'other', title: { en: 'Concert' } },
-  ])
+  ]), oefSearch: 'oef-search-v1' as const }
   const searchFetcher = vi.fn(async (_input: RequestInfo | URL) => new Response(JSON.stringify({
     total_count: 1,
     incomplete_results: false,
@@ -246,11 +246,14 @@ it('searches an inline feed and filters its events in the API layer', async () =
     feed: { manifestPath: 'custom/feed.json', feed: { events: [{ id: 'match' }] } },
   })
   expect(events.at(-1)).toMatchObject({ type: 'progress', complete: true })
-  expect(decodeURIComponent(new URL(String(searchFetcher.mock.calls[0]![0])).searchParams.get('q')!)).toContain('"game"')
+  const query = decodeURIComponent(new URL(String(searchFetcher.mock.calls[0]![0])).searchParams.get('q')!)
+  expect(query).toContain('"game"')
+  expect(query).toContain('"oefSearch"')
+  expect(query).toContain('"oef-search-v1"')
 })
 
-it('maps a standalone event to an arbitrary eventsGlob manifest for tag search', async () => {
-  const event = { ...feed().events![0]!, id: 'game', title: { en: 'Launch' }, tags: ['games'] }
+it('maps a marked standalone event to an arbitrary eventsGlob manifest for tag search', async () => {
+  const event = { ...feed().events![0]!, oefSearch: 'oef-search-v1' as const, id: 'game', title: { en: 'Launch' }, tags: ['games'] }
   const manifest = { ...feed([]), eventsGlob: 'content/*.json' }
   const searchFetcher = vi.fn(async (input: RequestInfo | URL) => {
     const query = decodeURIComponent(new URL(String(input)).searchParams.get('q')!)
@@ -271,6 +274,19 @@ it('maps a standalone event to an arbitrary eventsGlob manifest for tag search',
     feed: { manifestPath: 'feeds/ahead.json', feed: { events: [{ id: 'game' }] } },
   })
   expect(searchFetcher).toHaveBeenCalledTimes(2)
+})
+
+it('rejects a search hit whose marker is not on the document root', async () => {
+  const source = { ...feed(), extensions: { oefSearch: 'oef-search-v1' } }
+  const searchFetcher = vi.fn(async () => new Response(JSON.stringify({
+    total_count: 1,
+    incomplete_results: false,
+    items: [{ path: 'feed.json', repository: { name: 'repo', owner: { login: 'alice' } } }],
+  })))
+  const events = []
+  for await (const item of searchSetup({ 'feed.json': source }, searchFetcher).search.stream({ query: 'game' })) events.push(item)
+  expect(events.some((item) => item.type === 'feed')).toBe(false)
+  expect(events.at(-1)).toMatchObject({ type: 'progress', complete: true, loaded: 0 })
 })
 
 it('reports that GitHub authentication is required before searching', async () => {

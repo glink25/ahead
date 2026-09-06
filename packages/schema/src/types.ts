@@ -63,6 +63,8 @@ export interface EventMedia {
 }
 
 export interface Event {
+  /** Opts this document into GitHub Code Search discovery. */
+  oefSearch?: 'oef-search-v1'
   id: string
   title: LocalizedText
   summary?: LocalizedText
@@ -81,6 +83,8 @@ export interface Event {
 export interface EventFeed {
   oefVersion: '0.1'
   kind: 'event-feed'
+  /** Opts this document into GitHub Code Search discovery. */
+  oefSearch?: 'oef-search-v1'
   id: string
   name: LocalizedText
   description?: LocalizedText
