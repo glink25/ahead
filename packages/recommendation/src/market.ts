@@ -1,117 +1,107 @@
-import type { ResolvedEvent } from '@ahead/resolver'
-import { recommend, type Recommendation, type RecommendOptions } from './recommend.js'
-import { eventEndedAt } from './score.js'
+import { assignBucket } from './buckets.js'
+import { DEFAULT_MARKET_RECOMMENDATION_CONFIG } from './market-config.js'
+import { rerankDiversity } from './market-diversity.js'
+import { classifyLifecycle } from './market-lifecycle.js'
+import {
+  scoreAffinity,
+  scoreExposure,
+  scoreFreshness,
+  scoreTemporalUrgency,
+} from './market-score.js'
+import type {
+  MarketRecommendation,
+  MarketRecommendOptions,
+  RecommendationConfigV2,
+} from './market-types.js'
+import { daysUntilEvent } from './score.js'
 
-export interface MarketRecommendOptions extends RecommendOptions {
-  seed: string
-  categoryFor: (event: ResolvedEvent) => string
-  recentPastDays?: number
-}
+export * from './market-config.js'
+export * from './market-diversity.js'
+export * from './market-lifecycle.js'
+export * from './market-score.js'
+export * from './market-types.js'
 
-function randomFor(seed: string): () => number {
-  let state = 2166136261
-  for (let index = 0; index < seed.length; index += 1) {
-    state ^= seed.charCodeAt(index)
-    state = Math.imul(state, 16777619)
+/** Compose the independently testable recommendation stages into a stable list. */
+export function composeRecommendation(
+  options: MarketRecommendOptions,
+): MarketRecommendation[] {
+  const config: RecommendationConfigV2 = {
+    ...DEFAULT_MARKET_RECOMMENDATION_CONFIG,
+    ...options.config,
+    version: 'v2',
   }
-  return () => {
-    state += 0x6d2b79f5
-    let value = state
-    value = Math.imul(value ^ (value >>> 15), value | 1)
-    value ^= value + Math.imul(value ^ (value >>> 7), value | 61)
-    return ((value ^ (value >>> 14)) >>> 0) / 4294967296
-  }
-}
-
-function categoryWeight(items: readonly Recommendation[], interests: Readonly<Record<string, number>>): number {
-  if (!items.length) return 1
-  const affinity = items.reduce(
-    (total, item) =>
-      total + (item.event.tags ?? []).reduce((sum, tag) => sum + (interests[tag] ?? 0), 0),
-    0,
-  ) / items.length
-  return Math.exp(Math.max(-2, Math.min(2, affinity)))
-}
-
-function diversify(
-  items: readonly Recommendation[],
-  options: Pick<MarketRecommendOptions, 'seed' | 'categoryFor' | 'profile'>,
-): Recommendation[] {
-  const groups = new Map<string, Recommendation[]>()
-  for (const item of items) {
-    const category = options.categoryFor(item.event)
-    const group = groups.get(category) ?? []
-    group.push(item)
-    groups.set(category, group)
-  }
-  const weights = new Map(
-    [...groups].map(([category, group]) => [category, categoryWeight(group, options.profile.interests)]),
-  )
-  const random = randomFor(options.seed)
-  const recent: string[] = []
-  const result: Recommendation[] = []
-
-  while (result.length < items.length) {
-    const available = [...groups.keys()].filter((category) => groups.get(category)!.length > 0).sort()
-    const cooldown = available.length >= 3 ? 2 : available.length === 2 ? 1 : 0
-    let candidates = available.filter((category) => !recent.slice(-cooldown).includes(category))
-    if (!candidates.length) candidates = available
-    const total = candidates.reduce((sum, category) => sum + weights.get(category)!, 0)
-    let draw = random() * total
-    let selected = candidates[candidates.length - 1]!
-    for (const category of candidates) {
-      draw -= weights.get(category)!
-      if (draw <= 0) {
-        selected = category
-        break
-      }
-    }
-    result.push(groups.get(selected)!.shift()!)
-    recent.push(selected)
-  }
-  return result
-}
-
-/** Market-only recommendations: future-first, lightly nostalgic, and category-diverse. */
-export function recommendMarket(options: MarketRecommendOptions): Recommendation[] {
-  const now = new Date(options.now)
-  const recentPastDays = options.recentPastDays ?? 7
-  const main: ResolvedEvent[] = []
-  const recentPast: ResolvedEvent[] = []
+  const hidden = new Set(options.profile.hidden)
+  const primary: MarketRecommendation[] = []
+  const past: MarketRecommendation[] = []
 
   for (const event of options.events) {
-    const endedAt = eventEndedAt(event, now)
-    if (!endedAt) {
-      main.push(event)
+    if (
+      hidden.has(event.id) ||
+      event.status === 'archived' ||
+      event.status === 'cancelled'
+    )
       continue
+    const lifecycle = classifyLifecycle(
+      event,
+      options.now,
+      config.recentPastDays,
+    )
+    if (lifecycle === 'expired') continue
+    const daysUntil = daysUntilEvent(event, options.now)
+    const temporal = scoreTemporalUrgency(daysUntil, lifecycle, config)
+    const affinity =
+      scoreAffinity(event, options.profile) * config.affinityWeight
+    const freshness = scoreFreshness(event, options.now) * config.freshnessWeight
+    const exposure = scoreExposure(
+      options.exposureFor?.(event),
+      daysUntil,
+      lifecycle,
+      options.now,
+      config,
+    )
+    const item: MarketRecommendation = {
+      eventId: event.id,
+      event,
+      daysUntil,
+      bucket: assignBucket(daysUntil),
+      rank: 0,
+      lifecycle,
+      score: temporal + affinity + freshness - exposure,
+      components: {
+        temporal,
+        affinity,
+        freshness,
+        exposure,
+        diversity: 0,
+      },
     }
-    const age = (now.getTime() - endedAt.getTime()) / 86_400_000
-    if (age <= recentPastDays) recentPast.push(event)
+    ;(lifecycle === 'recent-past' ? past : primary).push(item)
   }
 
-  const base = { profile: options.profile, now, config: options.config }
-  const primary = diversify(recommend({ ...base, events: main }), options)
-  const pastLimit = Math.min(recentPast.length, Math.floor(primary.length / 9))
-  const past = diversify(recommend({ ...base, events: recentPast }), {
-    ...options,
-    seed: `${options.seed}:past`,
-  }).slice(0, pastLimit)
+  const sort = (items: MarketRecommendation[]) =>
+    rerankDiversity(
+      items.sort(
+        (left, right) =>
+          right.score - left.score ||
+          left.eventId.localeCompare(right.eventId),
+      ),
+      options.categoryFor,
+      config,
+    )
+  const ranked = [
+    ...sort(primary.filter((item) => item.lifecycle !== 'unknown')),
+    ...sort(primary.filter((item) => item.lifecycle === 'unknown')),
+  ]
+  if (ranked.length < config.targetSize)
+    ranked.push(
+      ...sort(past).slice(0, config.targetSize - ranked.length),
+    )
+  return ranked.map((item, index) => ({ ...item, rank: index + 1 }))
+}
 
-  const result: Recommendation[] = []
-  let pastIndex = 0
-  for (let index = 0; index < primary.length; index += 1) {
-    result.push(primary[index]!)
-    if ((index + 1) % 9 === 0 && pastIndex < past.length) {
-      const previousCategory = options.categoryFor(primary[index]!.event)
-      const nextCategory = primary[index + 1] ? options.categoryFor(primary[index + 1]!.event) : undefined
-      const swapIndex = past.findIndex((item, candidateIndex) =>
-        candidateIndex >= pastIndex &&
-        options.categoryFor(item.event) !== previousCategory &&
-        options.categoryFor(item.event) !== nextCategory,
-      )
-      if (swapIndex > pastIndex) [past[pastIndex], past[swapIndex]] = [past[swapIndex]!, past[pastIndex]!]
-      result.push(past[pastIndex++]!)
-    }
-  }
-  return result.map((item, index) => ({ ...item, rank: index + 1 }))
+/** Discover recommendations. Pure and deterministic for an input seed. */
+export function recommendMarket(
+  options: MarketRecommendOptions,
+): MarketRecommendation[] {
+  return composeRecommendation(options)
 }

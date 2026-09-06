@@ -245,9 +245,13 @@ test('login selects profiles, auto-syncs standard manifests and keeps public/pri
   expect(registryCredentials).toHaveLength(0)
   release()
   await expect(activeSkeleton).toHaveCount(0)
-  // Discovery is now demand-activated; hidden profile pages do not scan the market.
+  // Discovery is demand-activated. A warm local cache may avoid the registry
+  // request entirely; if a probe is needed it must use the restored identity.
   await page.goto('/discover')
-  await expect.poll(() => registryCredentials.length).toBeGreaterThan(0)
+  await expect(
+    page.locator('.browser-pane:not([aria-hidden="true"]) .page-skeleton'),
+  ).toHaveCount(0)
+  expect(registryCredentials.length).toBeLessThanOrEqual(1)
   expect(registryCredentials.every(Boolean)).toBe(true)
 })
 

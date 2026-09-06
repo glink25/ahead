@@ -1,11 +1,25 @@
 import { sourceKey } from '@ahead/protocol'
-import { daysUntilEvent, recommendMarket } from '@ahead/recommendation'
+import { classifyLifecycle, daysUntilEvent, recommendMarket, type ExposureSignal } from '@ahead/recommendation'
 import type { ResolvedProfile } from '@ahead/resolver'
 
-export function selectDiscover(profile: ResolvedProfile, marketSources: ReadonlySet<string>, now = new Date(), seed = 'stable') {
+export function selectDiscover(profile: ResolvedProfile, marketSources: ReadonlySet<string>, now = new Date(), seed = 'stable', exposures: Readonly<Record<string, ExposureSignal>> = {}) {
+  const candidates = profile.events
+    .filter((event) => event.sourceLocators.some((source) => marketSources.has(source)))
+    .filter((event) => classifyLifecycle(event, now) !== 'expired')
+    .sort((left, right) => {
+      const key = (event: typeof left) => {
+        const lifecycle = classifyLifecycle(event, now)
+        if (lifecycle === 'recent-past') return Number.MAX_VALUE
+        const days = daysUntilEvent(event, now)
+        return days === null ? Number.MAX_VALUE - 1 : Math.max(0, days)
+      }
+      return key(left) - key(right) || left.id.localeCompare(right.id)
+    })
+    .slice(0, 200)
   return recommendMarket({
-    events: profile.events.filter((event) => event.sourceLocators.some((source) => marketSources.has(source))),
+    events: candidates,
     profile, now, seed,
+    exposureFor: (event) => exposures[event.id],
     categoryFor: (event) => event.sourceLocators.filter((source) => marketSources.has(source)).sort()[0] ?? event.id,
   }).map((item) => item.event)
 }

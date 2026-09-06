@@ -6,6 +6,8 @@
 
 接口与事件类型直接查看 [MarketApi](market-api.ts)，传输与限流实现查看 [PublicReadClient](public-read-client.ts)。
 
+Discover 通过 `MarketApi.market.openSession()` 消费市场。页面只报告当前可见位置；本地恢复、6 小时一次的新品探测、低水位判断、单页扩容、分页游标和 Feed 懒加载全部封装在 API 会话内。推荐计算独立位于 `@ahead/recommendation`，不包含网络或存储逻辑。
+
 ## 消费约定
 
 - 快照可先展示本地内容；流式更新按源身份幂等合并，取消消费使用 AbortSignal。

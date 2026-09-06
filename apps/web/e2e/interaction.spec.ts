@@ -26,7 +26,7 @@ test('past events are collapsed in the timeline but remain in the calendar', asy
   await page.getByRole('textbox', { name: '开始' }).fill(past)
   await page.getByRole('button', { name: '保存', exact: true }).click()
   await page.goto('/mine')
-  await expect(page.locator('.timeline-row')).toHaveCount(0)
+  await expect(page.locator('.timeline-row:visible')).toHaveCount(0)
   const history = page.locator('.history-disclosure')
   await expect(history.getByText('历史事件 · 1')).toBeVisible()
   await history.locator('summary').click()

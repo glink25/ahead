@@ -23,6 +23,10 @@ export class RepoCache {
     return `${sourceLocator}|${manifestPath}|${headSha ?? 'unpinned'}`
   }
 
+  private versionsKey(sourceLocator: string, manifestPath: string): string {
+    return `versions:${sourceLocator}|${manifestPath}`
+  }
+
   async read(
     sourceLocator: string,
     manifestPath: string,
@@ -37,10 +41,20 @@ export class RepoCache {
 
   async write(entry: Omit<CachedFeed, 'storedAt'>): Promise<void> {
     try {
-      await this.store.set(this.key(entry.sourceLocator, entry.manifestPath, entry.headSha), {
+      const key = this.key(entry.sourceLocator, entry.manifestPath, entry.headSha)
+      await this.store.set(key, {
         ...entry,
         storedAt: new Date().toISOString(),
       })
+      const versions = await this.store.update<string[]>(
+        this.versionsKey(entry.sourceLocator, entry.manifestPath),
+        (previous) => [key, ...(previous ?? []).filter((item) => item !== key)].slice(0, 2),
+      )
+      const prefix = `${entry.sourceLocator}|${entry.manifestPath}|`
+      const stale = (await this.store.keys()).filter(
+        (candidate) => candidate.startsWith(prefix) && !versions.includes(candidate),
+      )
+      await Promise.all(stale.map((candidate) => this.store.delete(candidate)))
     } catch {
       // A full or unavailable IndexedDB must not break rendering.
     }
