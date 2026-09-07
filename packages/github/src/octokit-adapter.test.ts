@@ -9,6 +9,9 @@ it('uses the authenticated Octokit transport for code search', async () => {
     expect(url.pathname).toBe('/search/code')
     expect(url.searchParams.get('q')).toBe('games title schedule in:file')
     expect(new Headers(init?.headers).get('authorization')).toBe('Bearer token')
+    expect(init?.cache).toBeUndefined()
+    expect(new Headers(init?.headers).has('cache-control')).toBe(false)
+    expect(new Headers(init?.headers).has('pragma')).toBe(false)
     return new Response(JSON.stringify({
       total_count: 1,
       incomplete_results: false,

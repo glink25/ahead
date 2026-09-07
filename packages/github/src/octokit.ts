@@ -10,10 +10,12 @@ export type AheadOctokit = InstanceType<typeof Octokit>
 export function createOctokit(getAccessToken: () => Promise<string>): AheadOctokit {
   const octokit = new AheadOctokit({
     request: {
-      // Branch heads and permissions are mutable. A cached pre-write response
-      // can make a newly synced manifest appear missing after a reload.
+      // Do not force Request.cache here. In Chromium, `no-store` adds
+      // Cache-Control and Pragma request headers; GitHub's CORS preflight does
+      // not allow those headers. GitHub response cache directives remain in
+      // control, while immutable content is cached by the application at SHA.
       fetch: (input: RequestInfo | URL, init?: RequestInit) =>
-        globalThis.fetch(input, { ...init, cache: 'no-store' }),
+        globalThis.fetch(input, init),
     },
     throttle: {
       onRateLimit: (_retryAfter, _options, _octokit, retryCount) => retryCount < 1,
