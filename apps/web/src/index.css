@@ -754,7 +754,11 @@ p {
   overflow-anchor: none;
   overscroll-behavior: contain;
   scroll-snap-type: y mandatory;
-  scrollbar-gutter: stable;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.calendar-scroll::-webkit-scrollbar {
+  display: none;
 }
 .calendar-group {
   min-height: 100%;
@@ -785,13 +789,21 @@ p {
   border-radius: 50%;
   font-size: 12px;
 }
-.day-cell > button.today {
+.day-cell > button.today,
+.week-day-row > button.today {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  box-shadow: inset 0 0 0 1px #91a576;
   color: #65843e;
   font-weight: 800;
 }
-.day-cell > button.selected-day {
+.day-cell > button.selected-day,
+.week-day-row > button.selected-day {
   background: var(--ink);
   color: var(--surface);
+}
+.day-cell > button.today.selected-day,
+.week-day-row > button.today.selected-day {
+  box-shadow: inset 0 0 0 2px #a8be86;
 }
 .day-events {
   height: 28px;
@@ -805,9 +817,10 @@ p {
   overflow: hidden;
   text-overflow: ellipsis;
   padding: 0 3px;
-  background: color-mix(in srgb, var(--accent) 28%, transparent);
   border-radius: 3px;
   margin: 0 2px;
+  color: #fff;
+  text-shadow: 0 1px 2px #0008;
 }
 .event-overflow {
   font-size: 8px;
@@ -864,7 +877,8 @@ p {
   width: 4px;
   height: 4px;
   border-radius: 50%;
-  background: #91a576;
+  background-position: center;
+  background-size: cover;
 }
 .event-dots small {
   font-size: 7px;
@@ -883,9 +897,9 @@ p {
   white-space: nowrap;
   padding: 5px 8px;
   border-radius: 8px;
-  background: color-mix(in srgb, var(--accent) 24%, transparent);
   font-size: 10px;
-  color: var(--muted);
+  color: #fff;
+  text-shadow: 0 1px 2px #0008;
 }
 .year-approximate-events {
   max-height: 54px;
@@ -922,7 +936,6 @@ p {
   font-size: 18px;
 }
 .week-day-row > button.selected-day {
-  background: var(--ink);
   color: var(--surface);
 }
 .week-day-row > button.selected-day small {
@@ -943,11 +956,12 @@ p {
   gap: 3px;
   padding: 8px 10px;
   border-radius: 10px;
-  background: var(--panel);
-  border: 1px solid var(--line);
+  border: 1px solid #ffffff26;
+  color: #fff;
+  text-shadow: 0 1px 3px #000c;
 }
 .week-event small {
-  color: #849953;
+  color: #e8f4d8;
   font-size: 10px;
 }
 .week-event strong {
@@ -960,8 +974,12 @@ p {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--muted);
+  color: #ffffffe0;
   font-size: 10px;
+}
+.calendar-event-artwork {
+  background-position: center;
+  background-size: cover;
 }
 .week-empty {
   align-self: center;

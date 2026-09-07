@@ -5,16 +5,43 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type ReactNode,
 } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { expandRecurrence, type ResolvedEvent } from '@ahead/resolver'
 import type { TemporalValue } from '@ahead/schema'
 import { pickText, describeTemporal, formatCalendarDate } from '../../lib/format'
+import type { PosterSource } from '../../lib/media'
 
 const DAY = 86400000
 const WINDOW_RADIUS = 3
 type CalendarScale = 'year' | 'month' | 'week'
+
+function eventArtwork(
+  poster: PosterSource,
+  variant: 'artwork' | 'solid' | 'dot' = 'artwork',
+): CSSProperties {
+  if (variant === 'solid') {
+    return { background: poster.gradient[1] }
+  }
+  const gradient = `linear-gradient(145deg, ${poster.gradient.join(', ')})`
+  const layers = [
+    variant === 'artwork' ? 'linear-gradient(#07100bcc, #07100be6)' : '',
+    poster.url ? `url(${JSON.stringify(poster.url)})` : '',
+    gradient,
+  ].filter(Boolean)
+  return {
+    backgroundColor: poster.gradient[1],
+    backgroundImage: layers.join(', '),
+  }
+}
+
+function dayClass(key: string, selectedDate: string | undefined, today: string) {
+  return [key === selectedDate ? 'selected-day' : '', key === today ? 'today' : '']
+    .filter(Boolean)
+    .join(' ')
+}
 
 function parseKey(value: string) {
   return new Date(value + 'T00:00:00.000Z')
@@ -302,9 +329,11 @@ type PeriodProps = {
   events: ResolvedEvent[]
   timezone: string
   locale: string
-  dateKey: string
+  selectedDate?: string
   today: string
   onSelect: (key: string, scale?: CalendarScale) => void
+  onNavigate: (key: string, scale: CalendarScale) => void
+  posterForEvent: (event: ResolvedEvent) => PosterSource
 }
 
 function MonthPeriod({
@@ -313,9 +342,10 @@ function MonthPeriod({
   timezone,
   locale,
   firstDay,
-  dateKey,
+  selectedDate,
   today,
   onSelect,
+  posterForEvent,
 }: PeriodProps & { month: Date; firstDay: number }) {
   const year = month.getUTCFullYear()
   const index = month.getUTCMonth()
@@ -335,7 +365,12 @@ function MonthPeriod({
       {!!approximate.length && (
         <div className="approximate-events">
           {approximate.map((event) => (
-            <Link key={event.id} to={'/events/' + encodeURIComponent(event.id)}>
+            <Link
+              className="calendar-event-artwork"
+              key={event.id}
+              style={eventArtwork(posterForEvent(event), 'solid')}
+              to={'/events/' + encodeURIComponent(event.id)}
+            >
               {pickText(event.title)} · {describeTemporal(event.currentSchedule!.value)}
             </Link>
           ))}
@@ -349,16 +384,21 @@ function MonthPeriod({
           return (
             <div className="day-cell" key={key}>
               <button
-                className={`${key === dateKey ? 'selected-day ' : ''}${key === today ? 'today' : ''}`}
+                className={dayClass(key, selectedDate, today)}
                 aria-label={key}
-                aria-pressed={key === dateKey}
+                aria-pressed={key === selectedDate}
                 onClick={() => onSelect(key)}
               >
                 {i + 1}
               </button>
               <div className="day-events">
                 {list.slice(0, 2).map((event) => (
-                  <Link key={event.id} to={'/events/' + encodeURIComponent(event.id)}>
+                  <Link
+                    className="calendar-event-artwork"
+                    key={event.id}
+                    style={eventArtwork(posterForEvent(event), 'solid')}
+                    to={'/events/' + encodeURIComponent(event.id)}
+                  >
                     {pickText(event.title)}
                   </Link>
                 ))}
@@ -378,9 +418,11 @@ function YearPeriod({
   timezone,
   locale,
   firstDay,
-  dateKey,
+  selectedDate,
   today,
   onSelect,
+  onNavigate,
+  posterForEvent,
 }: PeriodProps & { yearDate: Date; firstDay: number }) {
   const year = yearDate.getUTCFullYear()
   const approximate = useMemo(
@@ -397,7 +439,12 @@ function YearPeriod({
       {!!approximate.length && (
         <div className="approximate-events year-approximate-events">
           {approximate.map((event) => (
-            <Link key={event.id} to={'/events/' + encodeURIComponent(event.id)}>
+            <Link
+              className="calendar-event-artwork"
+              key={event.id}
+              style={eventArtwork(posterForEvent(event))}
+              to={'/events/' + encodeURIComponent(event.id)}
+            >
               {pickText(event.title)} · {describeTemporal(event.currentSchedule!.value)}
             </Link>
           ))}
@@ -411,7 +458,7 @@ function YearPeriod({
           return (
             <section className="mini-month" key={monthIndex}>
               <h3>
-                <button onClick={() => onSelect(keyFor(month), 'month')}>
+                <button onClick={() => onNavigate(keyFor(month), 'month')}>
                   {calendarLabel(month, { month: 'short' }, locale)}
                 </button>
               </h3>
@@ -423,9 +470,9 @@ function YearPeriod({
                   return (
                     <div className="day-cell" key={key}>
                       <button
-                        className={`${key === dateKey ? 'selected-day ' : ''}${key === today ? 'today' : ''}`}
+                        className={dayClass(key, selectedDate, today)}
                         aria-label={key}
-                        aria-pressed={key === dateKey}
+                        aria-pressed={key === selectedDate}
                         onClick={() => onSelect(key, 'month')}
                       >
                         {i + 1}
@@ -436,7 +483,13 @@ function YearPeriod({
                           role="img"
                           aria-label={list.map((event) => pickText(event.title)).join(', ')}
                         >
-                          {list.slice(0, 3).map((event) => <i key={event.id} aria-hidden />)}
+                          {list.slice(0, 3).map((event) => (
+                            <i
+                              key={event.id}
+                              style={eventArtwork(posterForEvent(event), 'dot')}
+                              aria-hidden
+                            />
+                          ))}
                           {list.length > 3 && <small aria-hidden>+{list.length - 3}</small>}
                         </span>
                       )}
@@ -457,9 +510,10 @@ function WeekPeriod({
   events,
   timezone,
   locale,
-  dateKey,
+  selectedDate,
   today,
   onSelect,
+  posterForEvent,
 }: PeriodProps & { week: Date }) {
   const days = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(week, i)), [week])
   const occurrences = useMemo(() => eventsForDays(events, days, timezone), [days, events, timezone])
@@ -477,9 +531,9 @@ function WeekPeriod({
           return (
             <section className={`week-day-row${key === today ? ' today' : ''}`} key={key}>
               <button
-                className={key === dateKey ? 'selected-day' : ''}
+                className={dayClass(key, selectedDate, today)}
                 aria-label={key}
-                aria-pressed={key === dateKey}
+                aria-pressed={key === selectedDate}
                 onClick={() => onSelect(key)}
               >
                 <small>{calendarLabel(day, { weekday: 'short' }, locale)}</small>
@@ -490,7 +544,12 @@ function WeekPeriod({
                   const time = eventTime(event, timezone, locale)
                   const summary = pickText(event.summary) || pickText(event.description)
                   return (
-                    <Link className="week-event" key={event.id} to={'/events/' + encodeURIComponent(event.id)}>
+                    <Link
+                      className="week-event calendar-event-artwork"
+                      key={event.id}
+                      style={eventArtwork(posterForEvent(event))}
+                      to={'/events/' + encodeURIComponent(event.id)}
+                    >
                       {time && <small>{time}</small>}
                       <strong>{pickText(event.title)}</strong>
                       {summary && <span>{summary}</span>}
@@ -510,11 +569,13 @@ export function MonthView({
   events,
   timezone,
   weekStartsOn,
+  posterForEvent,
   search = '',
 }: {
   events: ResolvedEvent[]
   timezone: string
   weekStartsOn?: 'sunday' | 'monday'
+  posterForEvent: (event: ResolvedEvent) => PosterSource
   search?: string
 }) {
   const { t, i18n } = useTranslation()
@@ -523,7 +584,7 @@ export function MonthView({
   const params = new URLSearchParams(search)
   const rawDate = params.get('date') ?? today
   const parsed = parseKey(rawDate)
-  const dateKey = /^\d{4}-\d{2}-\d{2}$/.test(rawDate) &&
+  const viewDate = /^\d{4}-\d{2}-\d{2}$/.test(rawDate) &&
     Number.isFinite(parsed.getTime()) && keyFor(parsed) === rawDate ? rawDate : today
   const scale: CalendarScale = ['year', 'week'].includes(params.get('scale') ?? '')
     ? (params.get('scale') as CalendarScale)
@@ -531,8 +592,9 @@ export function MonthView({
   const locale = i18n.resolvedLanguage ?? i18n.language
   const firstDay = resolveFirstDayOfWeek(locale, weekStartsOn)
   const [jumpToken, setJumpToken] = useState(0)
+  const [selectedDate, setSelectedDate] = useState<string>()
 
-  const update = (date: string, nextScale = scale, forceJump = false) => {
+  const navigateCalendar = (date: string, nextScale = scale, forceJump = false) => {
     const next = new URLSearchParams(search)
     next.set('view', 'calendar')
     next.set('scale', nextScale)
@@ -540,11 +602,15 @@ export function MonthView({
     if (forceJump) setJumpToken((value) => value + 1)
     navigate('/mine?' + next, { replace: true })
   }
+  const selectDate = (date: string, nextScale?: CalendarScale) => {
+    setSelectedDate(date)
+    if (nextScale) navigateCalendar(date, nextScale)
+  }
   const onPeriodChange = (start: Date) => {
-    const selected = parseKey(dateKey)
-    const samePeriod = periodOrdinal(scale, selected, firstDay) === periodOrdinal(scale, start, firstDay)
-    const nextDate = samePeriod ? dateKey : keyFor(start)
-    if (nextDate !== dateKey) update(nextDate)
+    const current = parseKey(viewDate)
+    const samePeriod = periodOrdinal(scale, current, firstDay) === periodOrdinal(scale, start, firstDay)
+    const nextDate = samePeriod ? viewDate : keyFor(start)
+    if (nextDate !== viewDate) navigateCalendar(nextDate)
   }
   const weekdays = Array.from({ length: 7 }, (_, index) => {
     const sunday = new Date(Date.UTC(2024, 0, 7))
@@ -559,12 +625,15 @@ export function MonthView({
       <div className="calendar-controls">
         <div className="view-switch" aria-label={t('messages.calendar_view')}>
           {(['year', 'month', 'week'] as const).map((value) => (
-            <button key={value} aria-pressed={scale === value} onClick={() => update(dateKey, value)}>
+            <button key={value} aria-pressed={scale === value} onClick={() => navigateCalendar(viewDate, value)}>
               {{ year: t('messages.year'), month: t('messages.month'), week: t('messages.week') }[value]}
             </button>
           ))}
         </div>
-        <button onClick={() => update(today, scale, true)}>{t('messages.today')}</button>
+        <button onClick={() => {
+          setSelectedDate(today)
+          navigateCalendar(today, scale, true)
+        }}>{t('messages.today')}</button>
       </div>
       {scale === 'month' && (
         <div className="weekdays">
@@ -574,24 +643,27 @@ export function MonthView({
       <PeriodScroller
         key={`${scale}-${firstDay}`}
         scale={scale}
-        dateKey={dateKey}
+        dateKey={viewDate}
         firstDay={firstDay}
         jumpToken={jumpToken}
         onPeriodChange={onPeriodChange}
         renderPeriod={(period) => scale === 'year' ? (
           <YearPeriod
             yearDate={period} events={events} timezone={timezone} locale={locale}
-            firstDay={firstDay} dateKey={dateKey} today={today} onSelect={update}
+            firstDay={firstDay} selectedDate={selectedDate} today={today}
+            onSelect={selectDate} onNavigate={navigateCalendar} posterForEvent={posterForEvent}
           />
         ) : scale === 'month' ? (
           <MonthPeriod
             month={period} events={events} timezone={timezone} locale={locale}
-            firstDay={firstDay} dateKey={dateKey} today={today} onSelect={update}
+            firstDay={firstDay} selectedDate={selectedDate} today={today}
+            onSelect={selectDate} onNavigate={navigateCalendar} posterForEvent={posterForEvent}
           />
         ) : (
           <WeekPeriod
             week={period} events={events} timezone={timezone} locale={locale}
-            dateKey={dateKey} today={today} onSelect={update}
+            selectedDate={selectedDate} today={today}
+            onSelect={selectDate} onNavigate={navigateCalendar} posterForEvent={posterForEvent}
           />
         )}
       />

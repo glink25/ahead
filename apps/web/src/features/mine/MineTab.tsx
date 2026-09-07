@@ -37,6 +37,16 @@ export function MineTab() {
   }, [calendar])
   if (!hydrated) return <PageSkeleton variant="list" />
   const { history, current } = partitionTimelineEvents(mine)
+  const posterForEvent = (event: ResolvedEvent) => {
+    const feed = feeds.find((item) =>
+      event.sourceLocators.includes(item.sourceLocator),
+    )
+    return posterFor(event, {
+      locator: feed?.locator,
+      headSha: feed?.headSha,
+      allowRemoteImages: !profile.settings?.privacyRemoteImages,
+    })
+  }
   const empty = (
     <div className="empty-view">
       <span className="empty-orbit">
@@ -56,14 +66,7 @@ export function MineTab() {
       const group = countdown.headline
       const heading = group !== previous
       previous = group
-      const feed = feeds.find((f) =>
-        event.sourceLocators.includes(f.sourceLocator),
-      )
-      const poster = posterFor(event, {
-        locator: feed?.locator,
-        headSha: feed?.headSha,
-        allowRemoteImages: !profile.settings?.privacyRemoteImages,
-      })
+      const poster = posterForEvent(event)
       return (
         <section key={event.id}>
           {heading && <h2 className="bucket-heading">{group}</h2>}
@@ -107,6 +110,7 @@ export function MineTab() {
           events={mine}
           timezone={resolved.timezone}
           weekStartsOn={weekStartsOn}
+          posterForEvent={posterForEvent}
           search={savedSearch.current}
         />
       ) : (
