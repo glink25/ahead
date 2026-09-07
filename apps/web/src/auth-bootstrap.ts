@@ -1,39 +1,18 @@
 import type { AuthProvider, AuthSession } from '@ahead/core'
 import { describeOAuthError, GitHubOAuthError } from '@ahead/github'
 
-export const OAUTH_RETURN_STORAGE_KEY = '_ahead_oauth_res'
-
 export interface AuthBootstrapResult {
   session: AuthSession | null
   error: string | null
 }
 
-interface StoredOAuthReturn {
-  url?: string
-}
-
-function readLegacyOAuthReturnUrl(): string | null {
-  const raw = localStorage.getItem(OAUTH_RETURN_STORAGE_KEY)
-  if (!raw) return null
-  localStorage.removeItem(OAUTH_RETURN_STORAGE_KEY)
-  try {
-    const parsed = JSON.parse(raw) as StoredOAuthReturn | string
-    if (typeof parsed === 'string') return parsed
-    return parsed.url ?? null
-  } catch {
-    return raw.includes('github_authorized=') ? raw : null
-  }
-}
-
-/** Prefer the live URL; fall back to the legacy localStorage stash. */
-export function resolveOAuthReturnUrl(
+function resolveOAuthReturnUrl(
   href = globalThis.location?.href ?? '',
 ): string | null {
-  if (href.includes('github_authorized=')) return href
-  return readLegacyOAuthReturnUrl()
+  return href.includes('github_authorized=') ? href : null
 }
 
-export function clearOAuthReturnParams(href = globalThis.location?.href ?? ''): void {
+function clearOAuthReturnParams(href = globalThis.location?.href ?? ''): void {
   if (!href.includes('github_authorized=') || !globalThis.history?.replaceState) return
   const cleaned = new URL(href)
   cleaned.searchParams.delete('github_authorized')

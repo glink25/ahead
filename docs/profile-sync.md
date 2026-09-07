@@ -20,4 +20,4 @@
 
 个人事件当前写入内嵌 events 的 Feed。已有 eventsGlob Personal Feed、外部改变 Feed 关联等不支持的状态会停止写入，避免覆盖。旧客户端可读取标准 OEF 当前状态，但不能参与同步历史合并。
 
-应用外壳的离线条件见 [Web 开发](../apps/web/README.md)，验证入口见[核心链路验证](core-path-verification.md)。
+应用外壳的离线条件见 [Web 开发](../apps/web/README.md)。

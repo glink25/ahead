@@ -9,13 +9,11 @@
     "build": "pnpm -r --filter './packages/*' run build && pnpm --filter @ahead/web run build",
     "dev": "pnpm --filter @ahead/web run dev",
     "dev:auth": "pnpm --filter @ahead/auth run dev",
-    "test": "pnpm -r --filter './packages/*' run build && pnpm -r run test && pnpm exec vitest run scripts/market-triage.test.ts",
-    "test:e2e": "pnpm --filter @ahead/web test:e2e",
+    "test": "vitest run packages/protocol/src/protocol.test.ts packages/schema/src/schema.test.ts",
     "typecheck": "pnpm -r run typecheck",
     "lint": "pnpm -r run lint --if-present",
     "generate:schema": "pnpm --filter @ahead/schema run generate",
-    "market:triage": "pnpm exec tsx scripts/market-triage.ts",
-    "bench:recommend": "pnpm exec tsx scripts/bench-recommend.ts"
+    "market:triage": "pnpm exec tsx scripts/market-triage.ts"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

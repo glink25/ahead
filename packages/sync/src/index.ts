@@ -64,8 +64,6 @@ export interface Database {
   spaces: Record<string, Space>
   active: string
   selected: Record<string, string>
-  migrated?: boolean
-  migrationBackup?: unknown
   guestBackups?: Records[]
 }
 export interface AtomicStorage {

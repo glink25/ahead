@@ -54,19 +54,7 @@ export function changed() {
 }
 let initialization: Promise<void> | undefined
 export function initializeData() {
-  initialization ??= (async () => {
-    const old = await createIdbStore(
-      'ahead-local-profile',
-      'data',
-    ).get<UserData>('profile')
-    await database.transaction((db) => {
-      if (db.migrated) return
-      db.migrationBackup = old
-      const profile = old ?? emptyProfile()
-      applyChanges(db, db.spaces.guest!, profileChanges(profile))
-      db.migrated = true
-    })
-  })().catch((error) => {
+  initialization ??= database.reload().then(() => undefined).catch((error) => {
     useData.setState({ error: 'messages.cannot_open_local_profiles_check_browser_storage_permissions' })
     initialization = undefined
     throw error

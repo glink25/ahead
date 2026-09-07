@@ -1,7 +1,6 @@
 import type { RepositoryAdapter, ResourceLocator } from '@ahead/core'
 import { parseLocator, parseYaml, sourceKey, manifestPath as safePath } from '@ahead/protocol'
 import { createValidator, type EventFeed, type Event, type OefValidator } from '@ahead/schema'
-import type { MarketListing } from './market'
 import { RepoCache } from './repo-cache'
 import { assertDurationFitsRecurrence } from '@ahead/resolver'
 
@@ -124,27 +123,6 @@ async function expandEventsGlob(
     events.push(event)
   }
   return { ...feed, events }
-}
-
-/**
- * Reads a feed straight from the market Issue body.
- *
- * Legacy migration fallback only. New listings carry metadata, not events.
- */
-export function loadFeedFromListing(
-  listing: MarketListing,
-  validator: OefValidator = createValidator(),
-): LoadedFeed | null {
-  if (listing.source.resourceType !== 'event-feed' || !listing.manifest) return null
-  const sourceLocator = sourceKey(listing.source)
-  const manifestPath = safePath(listing.source.manifestPath)
-  const feed = assertEventFeed(parseYaml<unknown>(listing.manifest), validator, sourceLocator)
-  return {
-    sourceLocator,
-    manifestPath,
-    feed,
-    locator: githubLocator(listing.source.locator),
-  }
 }
 
 export interface FetchFeedOptions {

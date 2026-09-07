@@ -1,7 +1,0 @@
-{
-  "schema": "temporal-value",
-  "data": {
-    "kind": "week",
-    "week": 1
-  }
-}

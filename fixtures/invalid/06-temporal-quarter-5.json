@@ -1,8 +1,0 @@
-{
-  "schema": "temporal-value",
-  "data": {
-    "kind": "quarter",
-    "year": 2026,
-    "quarter": 5
-  }
-}

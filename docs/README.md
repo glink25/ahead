@@ -8,4 +8,3 @@
 | [Market](market/README.md) | 发布、审核与下架事件源和公开资料 |
 | [资料与同步](profile-sync.md) | 本地保存、多资料隔离与同步冲突 |
 | [浏览器服务](../apps/web/src/services/README.md) | 公开源读取的调用边界 |
-| [核心链路验证](core-path-verification.md) | 自动化回归与真实账号验收 |

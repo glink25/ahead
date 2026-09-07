@@ -8,7 +8,7 @@ OEF 用 YAML 或 JSON 描述未来事件及个人关注的内容，Ahead 根据�
 
 - 事件流：[EventFeed](../../packages/schema/schemas/event-feed.json) → [Event](../../packages/schema/schemas/event.json) → [ScheduleTimeline](../../packages/schema/schemas/schedule-timeline.json)、[TemporalValue](../../packages/schema/schemas/temporal-value.json)。
 - 个人资料：[UserData](../../packages/schema/schemas/user-data.json)；持续与重复：[Duration](../../packages/schema/schemas/duration.json)、[Recurrence](../../packages/schema/schemas/recurrence.json)。
-- 程序接入：[TypeScript 类型](../../packages/schema/src/types.ts)、[校验器](../../packages/schema/src/index.ts)；边界样例见 [fixtures](../../fixtures)。
+- 程序接入：[TypeScript 类型](../../packages/schema/src/types.ts)、[校验器](../../packages/schema/src/index.ts)。
 
 Schema 是结构约束的权威源；TypeScript 类型用于程序接入，[schemas/v0.1](../../schemas/v0.1)是发布副本。
 

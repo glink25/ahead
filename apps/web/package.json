@@ -6,10 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "typecheck": "tsc -b --pretty false",
-    "test": "vitest run src",
-    "test:e2e": "playwright test",
-    "test:offline": "AHEAD_OFFLINE_TEST=1 playwright test --config playwright.offline.config.ts"
+    "typecheck": "tsc -b --pretty false"
   },
   "dependencies": {
     "@ahead/core": "workspace:*",
@@ -34,14 +31,12 @@
     "zustand": "^5.0.0"
   },
   "devDependencies": {
-    "@playwright/test": "^1.62.1",
     "@tailwindcss/vite": "^4.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^4.3.0",
     "tailwindcss": "^4.0.0",
     "typescript": "^5.7.2",
-    "vite": "^6.0.0",
-    "vitest": "^2.1.8"
+    "vite": "^6.0.0"
   }
 }

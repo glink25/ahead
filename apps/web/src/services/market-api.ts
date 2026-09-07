@@ -8,7 +8,6 @@ import {
 import {
   assertEventFeed,
   fetchFeed,
-  loadFeedFromListing,
   type LoadedFeed,
 } from '../lib/feed-loader'
 import { loadMarketPage, type MarketListing } from '../lib/market'
@@ -151,10 +150,13 @@ export class MarketApi {
   private async *readOne(
     source: Source,
     fetcher: typeof fetch,
-    signal?: AbortSignal,
-    legacy?: MarketListing,
-    cachedOnly = false,
+    options: {
+      signal?: AbortSignal
+      cachedOnly?: boolean
+      privateAccess?: boolean
+    } = {},
   ): AsyncGenerator<ReadEvent> {
+    const { signal, cachedOnly = false, privateAccess = false } = options
     const key = sourceKey(source),
       path = source.manifestPath ?? 'ahead.yaml'
     const locator = parseLocator(source.locator)
@@ -164,7 +166,7 @@ export class MarketApi {
       // Direct subscriptions may point at private repositories. Preflight them
       // through the authenticated adapter so private metadata and bodies never
       // enter PublicReadClient or its persistent stores.
-      const authenticatedSnapshot = this.options.privateAdapter && !legacy
+      const authenticatedSnapshot = privateAccess && this.options.privateAdapter
         ? await this.options.privateAdapter.inspect(locator).catch(() => undefined)
         : undefined
       const privateSnapshot = authenticatedSnapshot?.private
@@ -208,15 +210,6 @@ export class MarketApi {
         }
         if (cached)
           yield { type: 'feed', feed: { ...cached, locator }, cached: true }
-        else if (legacy) {
-          try {
-            const fallback = loadFeedFromListing(legacy, validator)
-            if (fallback && !fallback.feed.eventsGlob)
-              yield { type: 'feed', feed: fallback, cached: true }
-          } catch {
-            /* invalid legacy listing */
-          }
-        }
         if (signal?.aborted || cachedOnly) return
         const snapshot = privateSnapshot ?? await adapter.inspect(locator)
         const reader = snapshot.private ? this.options.privateAdapter : adapter
@@ -249,9 +242,11 @@ export class MarketApi {
       for await (const event of this.readOne(
         source,
         fetcher,
-        options.signal,
-        undefined,
-        options.cachedOnly,
+        {
+          signal: options.signal,
+          cachedOnly: options.cachedOnly,
+          privateAccess: true,
+        },
       )) {
         yield event
         if (event.type === 'error' && event.limited) return
@@ -400,8 +395,7 @@ export class MarketApi {
             const iterator = this.readOne(
               { ...listing.source, kind: 'event-feed' },
               fetcher,
-              options.signal,
-              listing,
+              { signal: options.signal },
             )
             running.set(key, { iterator, next: next(key, iterator) })
           }

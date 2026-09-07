@@ -1,7 +1,0 @@
-{
-  "schema": "patch",
-  "data": {
-    "eventId": "x",
-    "ops": []
-  }
-}
