@@ -287,7 +287,7 @@ async function codeSearch(request: Request, env: Env): Promise<Response> {
   let response: Response
   try {
     response = await fetch(target, {
-      redirect: 'error',
+      redirect: 'manual',
       headers: {
         Authorization: authorization,
         Accept: 'application/vnd.github+json',
@@ -295,7 +295,15 @@ async function codeSearch(request: Request, env: Env): Promise<Response> {
         'User-Agent': `${env.GITHUB_APP_SLUG} (Ahead Search Relay)`,
       },
     })
-  } catch {
+  } catch (error) {
+    console.error(
+      'GitHub code search request failed',
+      error instanceof Error ? `${error.name}: ${error.message}` : 'Unknown error',
+    )
+    return jsonResponse(request, env, { message: 'GitHub code search is unreachable' }, 502, { 'Cache-Control': 'no-store' })
+  }
+  if (response.status >= 300 && response.status < 400) {
+    console.error('GitHub code search returned an unexpected redirect', response.status)
     return jsonResponse(request, env, { message: 'GitHub code search is unreachable' }, 502, { 'Cache-Control': 'no-store' })
   }
 
