@@ -215,4 +215,93 @@ describe('handleRequest OAuth flow', () => {
     await expect(response.json()).resolves.toEqual(tokenPayload)
   })
 
+  it('relays an allowlisted Ahead code search with the caller GitHub token', async () => {
+    const github = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({
+      total_count: 1,
+      incomplete_results: false,
+      items: [{
+        path: 'events/launch.yaml',
+        repository: { name: 'calendar', owner: { login: 'alice' } },
+      }],
+    }), {
+      headers: {
+        'Content-Type': 'application/json',
+        'X-RateLimit-Remaining': '7',
+        'X-RateLimit-Resource': 'code_search',
+      },
+    }))
+    vi.stubGlobal('fetch', github)
+    const query = '"launch" "schedule" "oefSearch" "oef-search-v1" in:file'
+    const response = await handleRequest(new Request(
+      `https://auth.example/api/github/search/code?q=${encodeURIComponent(query)}&page=1&per_page=100`,
+      {
+        headers: {
+          Origin: 'https://ahead.linkai.work',
+          Authorization: 'Bearer ghu_caller_token',
+        },
+      },
+    ), env)
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get('Access-Control-Allow-Origin')).toBe('https://ahead.linkai.work')
+    expect(response.headers.get('Cache-Control')).toBe('no-store')
+    expect(response.headers.get('X-RateLimit-Remaining')).toBe('7')
+    const [input, init] = github.mock.calls[0]!
+    expect(String(input)).toMatch(/^https:\/\/api\.github\.com\/search\/code\?/u)
+    expect(new Headers(init?.headers).get('Authorization')).toBe('Bearer ghu_caller_token')
+  })
+
+  it('requires both an allowlisted origin and a caller GitHub API token', async () => {
+    const github = vi.fn()
+    vi.stubGlobal('fetch', github)
+    const query = encodeURIComponent('"launch" "oefSearch" "oef-search-v1" in:file')
+    const missingToken = await handleRequest(new Request(
+      `https://auth.example/api/github/search/code?q=${query}`,
+      { headers: { Origin: 'https://ahead.linkai.work' } },
+    ), env)
+    const wrongOrigin = await handleRequest(new Request(
+      `https://auth.example/api/github/search/code?q=${query}`,
+      { headers: { Origin: 'https://evil.example', Authorization: 'Bearer ghu_token' } },
+    ), env)
+    expect(missingToken.status).toBe(401)
+    expect(wrongOrigin.status).toBe(403)
+    expect(github).not.toHaveBeenCalled()
+  })
+
+  it('rejects use as a generic GitHub code-search proxy', async () => {
+    const github = vi.fn()
+    vi.stubGlobal('fetch', github)
+    const response = await handleRequest(new Request(
+      'https://auth.example/api/github/search/code?q=password%20in%3Afile&page=1&per_page=100',
+      {
+        headers: {
+          Origin: 'https://ahead.linkai.work',
+          Authorization: 'Bearer ghu_token',
+        },
+      },
+    ), env)
+    expect(response.status).toBe(400)
+    expect(github).not.toHaveBeenCalled()
+  })
+
+  it('returns GitHub token rejection with CORS instead of accepting the token itself', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(
+      JSON.stringify({ message: 'Bad credentials' }),
+      { status: 401, headers: { 'Content-Type': 'application/json' } },
+    )))
+    const query = encodeURIComponent('"launch" "oefSearch" "oef-search-v1" in:file')
+    const response = await handleRequest(new Request(
+      `https://auth.example/api/github/search/code?q=${query}`,
+      {
+        headers: {
+          Origin: 'https://ahead.linkai.work',
+          Authorization: 'Bearer not-a-valid-github-token',
+        },
+      },
+    ), env)
+    expect(response.status).toBe(401)
+    expect(response.headers.get('Access-Control-Allow-Origin')).toBe('https://ahead.linkai.work')
+    await expect(response.json()).resolves.toMatchObject({ message: 'Bad credentials' })
+  })
+
 })

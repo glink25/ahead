@@ -16,7 +16,7 @@ export function corsHeaders(request: Request, frontendOrigin: string): Headers {
   if (isAllowedOrigin(origin, frontendOrigin)) {
     headers.set('Access-Control-Allow-Origin', origin!)
     headers.set('Access-Control-Allow-Credentials', 'true')
-    headers.set('Access-Control-Allow-Headers', 'Content-Type')
+    headers.set('Access-Control-Allow-Headers', 'Authorization, Content-Type')
     headers.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
   }
   return headers

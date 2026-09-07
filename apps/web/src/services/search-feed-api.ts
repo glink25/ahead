@@ -71,9 +71,17 @@ const PAGE_SIZE = 100
 const MAX_PAGES = 10
 const LOAD_AHEAD = 3
 
-/** Browser-local GitHub search provider. It never calls an Ahead HTTP API. */
+/** Browser-local search orchestration. Only code discovery may use a relay. */
 export class SearchFeedApi {
-  constructor(private readonly options: { adapter: Adapter; cache: KeyValueStore }) {}
+  constructor(private readonly options: {
+    adapter: Adapter
+    search?: GitHubSearchAdapter
+    cache: KeyValueStore
+  }) {}
+
+  private get search() {
+    return this.options.search ?? this.options.adapter
+  }
 
   openSession(options: {
     request: SearchRequest
@@ -109,7 +117,7 @@ export class SearchFeedApi {
           let delivered = 0
           do {
             const page = state.page
-            const result = await this.options.adapter.searchCode(
+            const result = await this.search.searchCode(
               buildCodeQuery(request), page, PAGE_SIZE, controller.signal,
             )
             if (controller.signal.aborted || state.closed) return
@@ -274,7 +282,7 @@ export class SearchFeedApi {
     if (!manifests) {
       manifests = (async () => {
         const query = `\"event-feed\" \"oefVersion\" repo:${owner}/${repo} in:file`
-        const found = await this.options.adapter.searchCode(query, 1, PAGE_SIZE, signal)
+        const found = await this.search.searchCode(query, 1, PAGE_SIZE, signal)
         if (found.incomplete_results) receive(incompleteError())
         const values: { path: string; feed: EventFeed; cached: boolean }[] = []
         for (const item of found.items) {

@@ -1,4 +1,4 @@
-import { corsHeaders, preflightResponse } from './cors.js'
+import { corsHeaders, isAllowedOrigin, preflightResponse } from './cors.js'
 import { decryptState, encryptState, type PendingGitHubToken } from './state.js'
 
 export interface Env {
@@ -253,6 +253,65 @@ async function refresh(request: Request, env: Env): Promise<Response> {
   }
 }
 
+function isAllowedSearchQuery(query: string): boolean {
+  const eventSearch = /["']?oefSearch["']?/u.test(query) &&
+    /["']?oef-search-v1["']?/u.test(query) && /\bin:file\b/u.test(query)
+  const manifestSearch = /["']?event-feed["']?/u.test(query) &&
+    /["']?oefVersion["']?/u.test(query) && /\brepo:[^\s/]+\/[^\s]+/u.test(query) &&
+    /\bin:file\b/u.test(query)
+  return eventSearch || manifestSearch
+}
+
+/** Narrow authenticated relay for GitHub Code Search responses lacking CORS. */
+async function codeSearch(request: Request, env: Env): Promise<Response> {
+  if (!isAllowedOrigin(request.headers.get('Origin'), env.FRONTEND_ORIGIN))
+    return new Response('Origin is not allowed', { status: 403, headers: { Vary: 'Origin' } })
+
+  const authorization = request.headers.get('Authorization')?.trim()
+  if (!authorization || !/^Bearer\s+\S+$/u.test(authorization))
+    return jsonResponse(request, env, { message: 'A GitHub API token is required' }, 401, { 'Cache-Control': 'no-store' })
+
+  const source = new URL(request.url)
+  const query = source.searchParams.get('q')?.trim() ?? ''
+  const page = Number(source.searchParams.get('page') ?? '1')
+  const perPage = Number(source.searchParams.get('per_page') ?? '100')
+  if (!query || query.length > 256 || !isAllowedSearchQuery(query) ||
+    !Number.isInteger(page) || page < 1 || page > 10 ||
+    !Number.isInteger(perPage) || perPage < 1 || perPage > 100)
+    return jsonResponse(request, env, { message: 'Invalid Ahead search parameters' }, 400, { 'Cache-Control': 'no-store' })
+
+  const target = new URL('https://api.github.com/search/code')
+  target.searchParams.set('q', query)
+  target.searchParams.set('page', String(page))
+  target.searchParams.set('per_page', String(perPage))
+  let response: Response
+  try {
+    response = await fetch(target, {
+      redirect: 'error',
+      headers: {
+        Authorization: authorization,
+        Accept: 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28',
+        'User-Agent': `${env.GITHUB_APP_SLUG} (Ahead Search Relay)`,
+      },
+    })
+  } catch {
+    return jsonResponse(request, env, { message: 'GitHub code search is unreachable' }, 502, { 'Cache-Control': 'no-store' })
+  }
+
+  const headers = corsHeaders(request, env.FRONTEND_ORIGIN)
+  headers.set('Content-Type', response.headers.get('Content-Type') ?? 'application/json; charset=utf-8')
+  headers.set('Cache-Control', 'no-store')
+  for (const name of [
+    'x-ratelimit-limit', 'x-ratelimit-remaining', 'x-ratelimit-used',
+    'x-ratelimit-resource', 'x-ratelimit-reset', 'retry-after',
+  ]) {
+    const value = response.headers.get(name)
+    if (value) headers.set(name, value)
+  }
+  return new Response(await response.arrayBuffer(), { status: response.status, headers })
+}
+
 export async function handleRequest(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url)
   if (request.method === 'OPTIONS') return preflightResponse(request, env.FRONTEND_ORIGIN)
@@ -265,6 +324,9 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
   }
   if (url.pathname === '/api/github/refresh' && request.method === 'POST') {
     return refresh(request, env)
+  }
+  if (url.pathname === '/api/github/search/code' && request.method === 'GET') {
+    return codeSearch(request, env)
   }
   return new Response('Not found', { status: 404 })
 }
