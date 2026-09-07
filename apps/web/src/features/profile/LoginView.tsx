@@ -17,7 +17,7 @@ export function LoginPage() {
   const [token, setToken] = useState('')
   const [error, setError] = useState(false)
   const [busy, setBusy] = useState(false)
-  const { session, loading, setSession, restoreError, setRestoreError } =
+  const { session, loading, setSession, setVerified, restoreError, setRestoreError } =
     useAuthSession()
   const loginWithPat = async (event: FormEvent) => {
     event.preventDefault()
@@ -28,6 +28,7 @@ export function LoginPage() {
       const auth = await patProvider.authenticate({ token })
       await activateSession(auth, true)
       setSession(auth)
+      setVerified(true)
     } catch {
       setError(true)
     } finally {

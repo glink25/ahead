@@ -7,7 +7,7 @@ import {
   type Records,
   type Space,
 } from '@ahead/sync'
-import { createIdbStore } from '../lib/idb'
+import { workspaceStore } from './storage'
 import {
   emptyProfile,
   changeProfile,
@@ -22,10 +22,9 @@ import {
   personalEvents,
 } from './model'
 import type { Event, UserData } from '@ahead/schema'
-const storage = createIdbStore('ahead-workspaces', 'state')
 export const database = new LocalDatabase({
-  read: () => storage.get<Database>('root'),
-  update: (fn) => storage.update('root', fn),
+  read: () => workspaceStore.get<Database>('root'),
+  update: (fn) => workspaceStore.update('root', fn),
 })
 for (const name of [...profileCollections, 'feed'])
   database.register(name, () => true)

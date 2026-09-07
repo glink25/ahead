@@ -1,14 +1,15 @@
 import type { AuthSession } from '@ahead/core'
-import { createIdbStore } from '../lib/idb'
+import { authStore } from './storage'
 import { database, initializeData, selectProfile } from './local'
 import { setSyncSession, startScheduler } from './scheduler'
-const identities = createIdbStore('ahead-account-cache', 'sessions')
+import { useAuthSession } from '../stores'
 export async function restoreCachedIdentity() {
-  return (await identities.get<AuthSession>('last')) ?? null
+  return (await authStore.get<AuthSession>('last-session')) ?? null
 }
 export async function activateSession(
   session: AuthSession | null,
   explicit = false,
+  verified = true,
 ) {
   await initializeData()
   startScheduler()
@@ -18,14 +19,14 @@ export async function activateSession(
     if (db.spaces[db.active]?.account) await selectProfile('guest')
     return
   }
-  await identities.set('last', session)
+  await authStore.set('last-session', session)
   const account = String(session.identity.id),
     db = await database.query()
   if (!explicit && db.selected[account] && db.spaces[db.selected[account]!])
     await selectProfile(db.selected[account]!, account)
   else await selectProfile('guest')
   // Without a selection, do not bootstrap/sync newly discovered profiles.
-  setSyncSession(explicit || !db.selected[account] ? null : session)
+  setSyncSession(verified && !explicit && db.selected[account] ? session : null)
 }
 export async function chooseProfile(id: string, session: AuthSession | null) {
   await selectProfile(
@@ -33,10 +34,5 @@ export async function chooseProfile(id: string, session: AuthSession | null) {
     session ? String(session.identity.id) : undefined,
     Boolean(session),
   )
-  setSyncSession(session)
-}
-export async function forgetSession() {
-  setSyncSession(null)
-  await identities.delete('last')
-  await selectProfile('guest')
+  setSyncSession(useAuthSession.getState().verified ? session : null)
 }

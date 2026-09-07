@@ -20,6 +20,7 @@ if (!resetting) {
     </StrictMode>,
   )
   if (import.meta.env.PROD) void cacheLoadedLanguages()
+  void navigator.storage?.persist?.().catch(() => {})
 }
 
 if (!resetting && import.meta.env.PROD && 'serviceWorker' in navigator) {

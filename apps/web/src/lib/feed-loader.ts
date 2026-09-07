@@ -1,7 +1,7 @@
 import type { RepositoryAdapter, ResourceLocator } from '@ahead/core'
 import { parseLocator, parseYaml, sourceKey, manifestPath as safePath } from '@ahead/protocol'
 import { createValidator, type EventFeed, type Event, type OefValidator } from '@ahead/schema'
-import { RepoCache } from './repo-cache'
+import { ResourceCache } from './resource-cache'
 import { assertDurationFitsRecurrence } from '@ahead/resolver'
 
 const DEFAULT_MANIFEST_PATH = 'ahead.yaml'
@@ -131,7 +131,7 @@ export interface FetchFeedOptions {
   adapter: RepositoryAdapter
   validator?: OefValidator
   ref?: string
-  cache?: RepoCache
+  cache?: ResourceCache
   /** Authenticated, non-persistent reads may opt into private repositories. */
   allowPrivate?: boolean
 }
@@ -167,6 +167,12 @@ export async function fetchFeed(options: FetchFeedOptions): Promise<LoadedFeed> 
     )
   }
 
-  await options.cache?.write({ sourceLocator, manifestPath, feed, headSha })
+  await options.cache?.write({
+    sourceLocator,
+    manifestPath,
+    feed,
+    headSha,
+    private: Boolean(snapshot.private),
+  })
   return { sourceLocator, manifestPath, feed, headSha, locator }
 }

@@ -11,11 +11,11 @@ export function ExperimentalView() {
   useFeatureTranslations('settings')
   const { t, i18n } = useTranslation()
 
-  const { errors, ready } = useFeedStore()
+  const { errors, hydrated } = useFeedStore()
   const space = useData((s) => s.db?.spaces[s.db.active])
   const location = useLocation()
   const [clearing, setClearing] = useState(false)
-  if (!ready) return <PageSkeleton variant="settings" />
+  if (!hydrated) return <PageSkeleton variant="settings" />
   return (
     <section className="profile-view">
       <h1>{t('messages.experimental_settings')}</h1>

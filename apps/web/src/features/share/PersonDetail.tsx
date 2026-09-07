@@ -7,7 +7,11 @@ import { Link, useSearchParams } from 'react-router'
 import { PageSkeleton } from '../../app/PageSkeleton'
 import { PERSONAL_FEED } from '../../data/model'
 import { pickText } from '../../lib/format'
-import { loadSharedResource } from '../../services/shared-resource'
+import type { LoadedFeed } from '../../lib/feed-loader'
+import {
+  loadCachedSharedResource,
+  loadSharedResource,
+} from '../../services/shared-resource'
 import { useAuthSession } from '../../stores'
 import { useFeedStore } from '../../stores/feed'
 import { CopyLinkButton, ResourceFailure, VisibilityBadge } from './ShareUi'
@@ -18,8 +22,9 @@ export function PersonDetail() {
   const [params] = useSearchParams()
   const key = params.get('source')
   const state = useSharedResource(key, 'user-data')
-  const { profile, act, ready } = useFeedStore()
+  const { profile, act, hydrated } = useFeedStore()
   const identity = useAuthSession((value) => value.session?.identity.id)
+  const verified = useAuthSession((value) => value.verified)
   const [events, setEvents] = useState<ResolvedEvent[]>([])
   const [loadingEvents, setLoadingEvents] = useState(false)
   const user = state.resource?.kind === 'user-data' ? state.resource.user : undefined
@@ -35,17 +40,8 @@ export function PersonDetail() {
     if (!user) return
     const controller = new AbortController()
     setLoadingEvents(true)
-    void Promise.allSettled(
-      channels.slice(0, 40).map((source) =>
-        loadSharedResource(sourceKey(source), 'event-feed', controller.signal),
-      ),
-    ).then((results) => {
+    const publish = (feeds: LoadedFeed[]) => {
       if (controller.signal.aborted) return
-      const feeds = results.flatMap((result) =>
-        result.status === 'fulfilled' && result.value.kind === 'event-feed'
-          ? [result.value.feed]
-          : [],
-      )
       const personal = user.extensions?.[PERSONAL_FEED] as Subscription | undefined
       let personalKey: string | undefined
       try { if (personal) personalKey = sourceKey(personal) } catch { /* invalid links are omitted */ }
@@ -64,9 +60,28 @@ export function PersonDetail() {
         ).filter((event) => visible.has(event.id)),
       )
       setLoadingEvents(false)
-    })
+    }
+    void (async () => {
+      const sources = channels.slice(0, 40).map(sourceKey)
+      const cached = await Promise.all(
+        sources.map((source) => loadCachedSharedResource(source, 'event-feed')),
+      )
+      publish(cached.flatMap((resource) =>
+        resource?.kind === 'event-feed' ? [resource.feed] : [],
+      ))
+      if (!navigator.onLine) return
+      const results = await Promise.allSettled(
+        sources.map((source) => loadSharedResource(source, 'event-feed', controller.signal)),
+      )
+      const refreshed = results.flatMap((result) =>
+        result.status === 'fulfilled' && result.value.kind === 'event-feed'
+          ? [result.value.feed]
+          : [],
+      )
+      if (refreshed.length) publish(refreshed)
+    })().catch(() => setLoadingEvents(false))
     return () => controller.abort()
-  }, [user, channels, identity])
+  }, [user, channels, identity, verified])
   if (state.loading) return <PageSkeleton variant="detail" />
   if (state.error || state.resource?.kind !== 'user-data')
     return <ResourceFailure error={(state.error ?? new Error('Wrong resource type')) as Error & { reason?: string }} />
@@ -86,7 +101,7 @@ export function PersonDetail() {
       {resource.user.bio && <p>{pickText(resource.user.bio)}</p>}
       <button
         className={'subscribe ' + (followed ? 'subscribed' : '')}
-        disabled={!ready}
+        disabled={!hydrated}
         aria-pressed={Boolean(followed)}
         onClick={() => act({ type: followed ? 'unsubscribe' : 'subscribe', source })}
       >

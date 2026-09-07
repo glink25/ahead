@@ -10,12 +10,29 @@ import type {
 } from '../services/search-feed-api'
 import { useAuthSession } from '../stores'
 import { useFeedStore } from '../stores/feed'
+import { identityScope, viewStore } from '../data/storage'
+import { createValidator } from '@ahead/schema'
 
 type SearchFailure = { message: string; reason: SearchErrorReason }
+type SearchSnapshot = { feeds: LoadedFeed[]; storedAt: string }
+const validator = createValidator()
+
+function limitedFeeds(feeds: LoadedFeed[]) {
+  let remaining = 200
+  const result: LoadedFeed[] = []
+  for (const feed of feeds) {
+    if (remaining <= 0) break
+    const events = (feed.feed.events ?? []).slice(0, remaining)
+    if (events.length) result.push({ ...feed, feed: { ...feed.feed, events } })
+    remaining -= events.length
+  }
+  return result
+}
 
 export function useSearchFeed(request?: SearchRequest) {
   const authLoading = useAuthSession((state) => state.loading)
   const session = useAuthSession((state) => state.session)
+  const verified = useAuthSession((state) => state.verified)
   const profile = useFeedStore((state) => state.profile)
   const [feeds, setFeeds] = useState<LoadedFeed[]>([])
   const [status, setStatus] = useState<SearchFeedStatus>('idle')
@@ -23,8 +40,8 @@ export function useSearchFeed(request?: SearchRequest) {
   const searchSession = useRef<SearchFeedSession | undefined>(undefined)
   const requestKey = request
     ? 'tag' in request
-      ? `tag:${request.tag}`
-      : `query:${request.query}`
+      ? `tag:${request.tag!.trim().toLowerCase()}`
+      : `query:${request.query.normalize('NFKC').trim()}`
     : ''
 
   useEffect(() => {
@@ -33,28 +50,61 @@ export function useSearchFeed(request?: SearchRequest) {
     setFeeds([])
     setError(undefined)
     setStatus('idle')
-    if (authLoading || !request) return
-    if (!session) {
-      setError({
-        message: 'messages.sign_in_to_search_github',
-        reason: 'authentication-required',
-      })
-      setStatus('failed')
-      return
-    }
-    const api = searchFeedApi()
-    if (!api) return
     let active = true
-    try {
+    if (!request) return
+    const snapshots = viewStore(identityScope(session), 'search', 20)
+    const save = (next: LoadedFeed[]) => {
+      const value = limitedFeeds(next)
+      void snapshots.set(requestKey, {
+        feeds: value,
+        storedAt: new Date().toISOString(),
+      } satisfies SearchSnapshot).catch(() => {})
+    }
+    void (async () => {
+      let cached = await snapshots.get<SearchSnapshot>(requestKey).catch(() => undefined)
+      if (!active) return
+      if (cached && cached.feeds.some((feed) => !validator.validate('event-feed', feed.feed).ok)) {
+        await snapshots.delete(requestKey).catch(() => {})
+        cached = undefined
+      }
+      if (cached?.feeds.length) {
+        setFeeds(cached.feeds)
+        setStatus('complete')
+        void snapshots.set(requestKey, {
+          ...cached,
+          storedAt: new Date().toISOString(),
+        }).catch(() => {})
+      }
+      if (authLoading) return
+      if (!session) {
+        if (!cached?.feeds.length) {
+          setError({ message: 'messages.sign_in_to_search_github', reason: 'authentication-required' })
+          setStatus('failed')
+        }
+        return
+      }
+      if (!verified) return
+      if (!navigator.onLine) {
+        if (!cached?.feeds.length) {
+          setError({ message: 'messages.github_search_unavailable', reason: 'search-unavailable' })
+          setStatus('failed')
+        }
+        return
+      }
+      const api = searchFeedApi()
+      if (!api) return
       const opened = api.openSession({
         request,
         receive: (event) => {
           if (!active) return
-          if (event.type === 'feed')
-            setFeeds((current) => [
+          if (event.type === 'feed') setFeeds((current) => {
+            const next = [
               ...current.filter((feed) => feed.sourceLocator !== event.feed.sourceLocator),
               event.feed,
-            ])
+            ]
+            save(next)
+            return next
+          })
           else if (event.type === 'error')
             setError({ message: event.message, reason: event.reason })
         },
@@ -67,16 +117,18 @@ export function useSearchFeed(request?: SearchRequest) {
       })
       searchSession.current = opened
       opened.setActive(true)
-    } catch (cause) {
-      setError({ message: String(cause), reason: 'search-unavailable' })
-      setStatus('failed')
-    }
+    })().catch((cause) => {
+      if (active) {
+        setError({ message: String(cause), reason: 'search-unavailable' })
+        setStatus('failed')
+      }
+    })
     return () => {
       active = false
       searchSession.current?.close()
       searchSession.current = undefined
     }
-  }, [authLoading, requestKey, session?.identity.id, session?.providerId])
+  }, [authLoading, verified, requestKey, session?.identity.id, session?.providerId])
 
   const events = useMemo(() => {
     if (!feeds.length) return []

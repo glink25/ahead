@@ -27,8 +27,8 @@ interface FeedStore {
   feeds: LoadedFeed[]
   listings: MarketListing[]
   users: { user: UserData; sourceLocator: string }[]
-  loading: boolean
-  ready: boolean
+  refreshing: boolean
+  hydrated: boolean
   errors: string[]
   loginSuggested: boolean
   marketStatus: MarketStatus
@@ -59,8 +59,8 @@ const sessionSeen = new Set<string>()
 const localWriteError = 'messages.could_not_save_check_browser_storage_permissions_and_retry'
 
 export const useFeedStore = create<FeedStore>((set, get) => {
-  const updateLoading = () => set((state) => ({
-    loading: Boolean(sourcesController) || state.marketStatus === 'initial' || state.marketStatus === 'appending',
+  const updateRefreshing = () => set((state) => ({
+    refreshing: Boolean(sourcesController) || state.marketStatus === 'initial' || state.marketStatus === 'appending',
   }))
   const receive = (event: ReadEvent) => {
     if (event.type === 'feed')
@@ -101,7 +101,7 @@ export const useFeedStore = create<FeedStore>((set, get) => {
     receive: receiveMarket,
     status: (status) => {
       set({ marketStatus: status === 'restoring' ? 'initial' : status === 'expanding' ? 'appending' : status })
-      updateLoading()
+      updateRefreshing()
     },
     available: () => get().discoverAvailable,
   })
@@ -110,8 +110,8 @@ export const useFeedStore = create<FeedStore>((set, get) => {
     feeds: [],
     listings: [],
     users: [],
-    loading: false,
-    ready: false,
+    refreshing: false,
+    hydrated: false,
     errors: [],
     loginSuggested: false,
     marketStatus: 'idle',
@@ -124,11 +124,23 @@ export const useFeedStore = create<FeedStore>((set, get) => {
       initializing ??= (async () => {
         await initializeData()
         const initial = await database.query()
+        const profile = materializeProfile(initial.spaces[initial.active]!.records)
         set({
-          profile: materializeProfile(initial.spaces[initial.active]!.records),
-          ready: true,
-          exposures: await discoverHistory().snapshot(),
+          profile,
         })
+        const api = marketApi()
+        const [exposures, listings] = await Promise.all([
+          discoverHistory().snapshot(),
+          api.market.snapshot(),
+        ])
+        if (listings?.length)
+          receiveMarket({ type: 'listings', listings, cached: true })
+        const personal = profile.extensions?.[PERSONAL_FEED] as Subscription | undefined
+        const sources = (await api.relatedSources(profile)).filter(
+          (source) => !personal || sourceKey(source) !== sourceKey(personal),
+        )
+        for await (const event of api.sources.snapshot(sources)) receive(event)
+        set({ exposures, hydrated: true })
         let previousActive = initial.active
         let previousSubscriptions = JSON.stringify(get().profile.subscriptions)
         useAuthSession.subscribe((current, previous) => {
@@ -175,7 +187,7 @@ export const useFeedStore = create<FeedStore>((set, get) => {
           if (changedProfile || changedSubscriptions)
             void get().refresh({ force: false, restart: changedProfile })
         })
-        await get().refresh({ force: false })
+        void get().refresh({ force: false })
       })()
       return initializing
     },
@@ -202,7 +214,7 @@ export const useFeedStore = create<FeedStore>((set, get) => {
       else await get().refresh({ force: false })
     },
     async refresh(options = {}) {
-      if (useAuthSession.getState().loading || !get().ready) return
+      if (useAuthSession.getState().loading || !get().hydrated) return
       const restart = options.restart ?? true
       if (restart) {
         generation++
@@ -224,7 +236,7 @@ export const useFeedStore = create<FeedStore>((set, get) => {
         ),
         loginSuggested: false,
       })
-      updateLoading()
+      updateRefreshing()
       const api = marketApi()
       try {
         // Metadata snapshots are bounded by the API and are safe to expose to
@@ -266,7 +278,7 @@ export const useFeedStore = create<FeedStore>((set, get) => {
           } finally {
             if (sourcesController === controller) {
               sourcesController = undefined
-              updateLoading()
+              updateRefreshing()
             }
           }
         }
@@ -282,7 +294,7 @@ export const useFeedStore = create<FeedStore>((set, get) => {
       } finally {
         if (sourcesController === controller) {
           sourcesController = undefined
-          updateLoading()
+          updateRefreshing()
         }
       }
     },

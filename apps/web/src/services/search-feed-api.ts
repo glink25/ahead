@@ -12,7 +12,6 @@ import {
   matchesEventsGlob,
   type LoadedFeed,
 } from '../lib/feed-loader'
-import type { KeyValueStore } from '../lib/idb'
 import { isAbort } from './public-read-client'
 
 export type SearchErrorReason =
@@ -76,7 +75,6 @@ export class SearchFeedApi {
   constructor(private readonly options: {
     adapter: Adapter
     search?: GitHubSearchAdapter
-    cache: KeyValueStore
   }) {}
 
   private get search() {
@@ -257,15 +255,9 @@ export class SearchFeedApi {
     signal: AbortSignal,
   ): Promise<{ file: VersionedFile; cached: boolean }> {
     if (signal.aborted) throw new DOMException('Request aborted', 'AbortError')
-    const key = `github:${owner}/${repo}@${snapshot.headSha}:${path}`
-    if (!snapshot.private) {
-      const cached = await this.options.cache.get<VersionedFile>(key).catch(() => undefined)
-      if (cached) return { file: cached, cached: true }
-    }
     const file = await this.options.adapter.readFile(
       { scheme: 'github', owner, repo }, path, { ref: snapshot.headSha, signal },
     )
-    if (!snapshot.private) await this.options.cache.set(key, file).catch(() => {})
     return { file, cached: false }
   }
 

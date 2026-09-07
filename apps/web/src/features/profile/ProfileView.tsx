@@ -8,9 +8,7 @@ import { useState } from 'react'
 import { Link, Navigate, useLocation } from 'react-router'
 import { useAuthSession } from '../../stores'
 import { useFeedStore } from '../../stores/feed'
-import { patProvider, oauthProvider } from '../../lib/auth'
 import { useData } from '../../data/local'
-import { forgetSession } from '../../data/session'
 import { setPaused, syncNow } from '../../data/scheduler'
 import { sourceKey } from '@ahead/protocol'
 export function ProfileView() {
@@ -28,8 +26,8 @@ export function ProfileView() {
 }
 
 
-  const { session, setSession, loading: authLoading } = useAuthSession()
-  const { profile, act, refresh, loading } = useFeedStore()
+  const { session, loading: authLoading } = useAuthSession()
+  const { profile, act, refresh, refreshing } = useFeedStore()
   const weekStartsOn =
     profile.settings?.weekStartsOn === 'sunday' ||
     profile.settings?.weekStartsOn === 'monday'
@@ -95,18 +93,12 @@ export function ProfileView() {
           <button
             className="setting-row danger"
             onClick={() => {
-              void forgetSession()
-                .then(() =>
-                  (session.providerId === oauthProvider.id
-                    ? oauthProvider
-                    : patProvider
-                  ).logout(),
-                )
-                .then(() => setSession(null))
-                .catch(() => setMessage('messages.could_not_sign_out_please_retry'))
+              if (!window.confirm(t('messages.clear_all_local_data_for_this_site_all_local_profiles_unsynced_changes_cred')))
+                return
+              window.location.replace('/reset.html?lang=' + i18n.resolvedLanguage)
             }}
           >
-             {t('messages.sign_out')} </button>
+             {t('messages.sign_out_and_clear_data')} </button>
         )}
       </div>
       <h2>{t('messages.display_and_privacy')}</h2>
@@ -204,10 +196,10 @@ export function ProfileView() {
         )}
         <button
           className="setting-row"
-          disabled={loading}
+          disabled={refreshing}
           onClick={() => void refresh()}
         >
-           {t('messages.refresh_channels')}<span>{loading ? t('messages.updating_2') : <RefreshCw />}</span>
+           {t('messages.refresh_channels')}<span>{refreshing ? t('messages.updating_2') : <RefreshCw />}</span>
         </button>
       </div>
       {message && (

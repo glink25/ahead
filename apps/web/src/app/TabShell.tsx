@@ -31,12 +31,12 @@ export function TabShell({ children }: { children: ReactNode }) {
   const back = useAppBack()
   const active = useData((s) => s.db?.spaces[s.db.active])
   const [mineUrl, setMineUrl] = useState('/mine')
-  const { loading, errors, retry, loginSuggested } = useFeedStore()
+  const { refreshing, errors, retry, loginSuggested } = useFeedStore()
   const [dismissedErrors, setDismissedErrors] = useState<string[]>([])
   const storageError = errors.some((error) => /messages\.(?:cannot_open_local_profiles|could_not_save|could_not_restore_local_data)/.test(error))
   useEffect(() => {
     if (
-      loading ||
+      refreshing ||
       storageError ||
       !errors.length ||
       errors.some((error) => /HTTP (403|429)|messages\.github_(?:access|request)/.test(error))
@@ -44,7 +44,7 @@ export function TabShell({ children }: { children: ReactNode }) {
       return
     const timer = setTimeout(() => setDismissedErrors(errors), 6000)
     return () => clearTimeout(timer)
-  }, [errors, loading, storageError])
+  }, [errors, refreshing, storageError])
   const { offset, dragging, handlers } = useSwipe(
     (direction) =>
       navigate(direction === 'left' ? '/discover' : mineUrl),
@@ -158,7 +158,7 @@ export function TabShell({ children }: { children: ReactNode }) {
           </Link>
         </div>
       </header>
-      {loading && location.pathname !== '/discover' && (
+      {refreshing && location.pathname !== '/discover' && (
         <div className="loading-progress" role="status" aria-label={t('messages.updating')} />
       )}
       {!!errors.length &&
@@ -173,7 +173,7 @@ export function TabShell({ children }: { children: ReactNode }) {
                   : t('messages.some_content_could_not_be_updated')}
             </span>
             {!storageError && (
-              <button disabled={loading} onClick={() => void retry()}>
+              <button disabled={refreshing} onClick={() => void retry()}>
                  {t('messages.retry')} </button>
             )}
             {loginSuggested && <Link to="/login">{t('messages.sign_in_to_github')}</Link>}

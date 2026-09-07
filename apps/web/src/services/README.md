@@ -4,7 +4,7 @@
 
 搜索独立于 Market。`SearchFeedApi` 在浏览器内负责编排，仓库检查与文件读取仍经 `OctokitAdapter` 直连 `api.github.com`。由于 GitHub Code Search 的实际 GET 响应并不稳定提供 CORS 头，只有 `/search/code` 通过 Ahead Auth Worker 的窄 relay 转发；本地随后完成协议校验和精确事件过滤。
 
-搜索命中独立 Event 时，只读取命中文件及仓库内候选 EventFeed manifest，校验 `eventsGlob` 后组装临时 feed，不遍历 repository tree，也不下载 glob 下的其他事件。公开仓库的 commit/path 文件可进入身份隔离的 immutable 缓存；私有文件与查询响应只存在于当前 session 内存。`useSearchFeed()` 负责 feed 合并、resolve、取消和渐进分页，页面不接触 GitHub 传输细节。GitHub 返回 `incomplete_results` 时，已验证结果仍会交付，同时产生结果不完整警告。
+搜索命中独立 Event 时，只读取命中文件及仓库内候选 EventFeed manifest，校验 `eventsGlob` 后组装临时 feed，不遍历 repository tree，也不下载 glob 下的其他事件。`useSearchFeed()` 负责 feed 合并、resolve、取消、渐进分页，并按身份保存最近的已验证查询快照。GitHub 返回 `incomplete_results` 时，已验证结果仍会交付，同时产生结果不完整警告。
 
 接口与事件类型直接查看 [MarketApi](market-api.ts)，传输与限流实现查看 [PublicReadClient](public-read-client.ts)。
 
@@ -19,6 +19,6 @@ Discover 通过 `MarketApi.market.openSession()` 消费市场。页面只报告�
 
 ## 缓存与认证边界
 
-可变资源重新验证，固定 SHA 内容复用缓存。共享请求的取消只分离当前读者，其他读者可继续使用。TTL、并发及请求间隔以传输实现为准。
+应用只使用一个 `ahead` IndexedDB：workspace、认证、已验证资源和派生视图分别位于固定 object store。页面先交付本地快照，再在后台重新验证可变资源；传输响应只在内存中短暂复用。共享请求的取消只分离当前读者，其他读者可继续使用。
 
-GitHub API 的凭证由应用认证层提供。普通 GitHub API 请求只发送到 `api.github.com`；Code Search token 发送给配置的 Auth Worker 并由其原样透传给 `api.github.com/search/code`。relay 必须校验允许的 Origin 和 Bearer token，只接受 Ahead 的 OEF 搜索查询及有限分页，不记录、不缓存 token 或搜索响应，调用额度归该 token 所属账号。公开内容缓存与限流状态按身份隔离，私密同步和写请求不走此缓存。
+GitHub API 的凭证由应用认证层提供。普通 GitHub API 请求只发送到 `api.github.com`；Code Search token 发送给配置的 Auth Worker 并由其原样透传给 `api.github.com/search/code`。relay 必须校验允许的 Origin 和 Bearer token，只接受 Ahead 的 OEF 搜索查询及有限分页，不记录、不缓存 token 或搜索响应，调用额度归该 token 所属账号。公开和私有内容快照都按身份隔离；私密同步和写请求不经过内容缓存。

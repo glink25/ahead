@@ -200,6 +200,7 @@
     "not_signed_in": "Not signed in",
     "could_not_sign_out_please_retry": "Could not sign out. Please retry.",
     "sign_out": "Sign out",
+    "sign_out_and_clear_data": "Sign out and clear local data",
     "display_and_privacy": "Display and privacy",
     "week_starts_on": "Week starts on",
     "follow_locale": "Follow locale",

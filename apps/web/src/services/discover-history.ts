@@ -1,5 +1,5 @@
 import type { ExposureSignal } from '@ahead/recommendation'
-import { createIdbStore } from '../lib/idb'
+import { identityScope, viewStore } from '../data/storage'
 import { useAuthSession } from '../stores'
 
 type ExposureMap = Record<string, ExposureSignal>
@@ -11,7 +11,7 @@ class DiscoverHistory {
   private cache: ExposureMap = {}
 
   constructor(identity: string) {
-    this.store = createIdbStore('ahead-discover-' + encodeURIComponent(identity), 'history')
+    this.store = viewStore(identity, 'discover-history')
   }
 
   async snapshot(): Promise<ExposureMap> {
@@ -39,7 +39,7 @@ class DiscoverHistory {
 
 export function discoverHistory() {
   const session = useAuthSession.getState().session
-  const identity = session ? `${session.providerId}:${session.identity.id}` : 'guest'
+  const identity = identityScope(session)
   if (current?.identity !== identity) current = { identity, api: new DiscoverHistory(identity) }
   return current.api
 }

@@ -1,34 +1,30 @@
 import { authenticatedAdapter, publicReadFetch } from '../lib/auth'
-import { createIdbStore } from '../lib/idb'
-import { RepoCache } from '../lib/repo-cache'
+import { identityScope, viewStore } from '../data/storage'
+import { ResourceCache } from '../lib/resource-cache'
 import { useAuthSession } from '../stores'
 import { MarketApi } from './market-api'
 import { PublicReadClient } from './public-read-client'
-let current: { identity: string; api: MarketApi } | undefined
+let current: { key: string; api: MarketApi } | undefined
 
 export function marketApi(): MarketApi {
   const session = useAuthSession.getState().session
-  const identity = session
-    ? `${session.providerId}:${session.identity.id}`
-    : 'guest'
-  if (current?.identity === identity) return current.api
-  const suffix = encodeURIComponent(identity)
+  const verified = useAuthSession.getState().verified
+  const identity = identityScope(session)
+  const key = `${identity}:${verified ? 'verified' : 'cached'}`
+  if (current?.key === key) return current.api
   const client = new PublicReadClient({
     fetcher: publicReadFetch(),
     authenticated: Boolean(session),
-    store: createIdbStore('ahead-public-api-' + suffix, 'responses'),
   })
-  const privateAdapter = session ? authenticatedAdapter(session) : undefined
+  const privateAdapter = session && verified ? authenticatedAdapter(session) : undefined
   const api = new MarketApi({
     repository:
       import.meta.env.VITE_GITHUB_MARKET_REPOSITORY || 'glink25/ahead',
     client,
-    storage: createIdbStore('ahead-market-' + suffix, 'data'),
-    cache: new RepoCache(
-      createIdbStore('ahead-public-feeds-' + suffix, 'feeds'),
-    ),
-    ...(session ? { privateAdapter } : {}),
+    storage: viewStore(identity, 'market'),
+    cache: new ResourceCache(identity),
+    ...(privateAdapter ? { privateAdapter } : {}),
   })
-  current = { identity, api }
+  current = { key, api }
   return api
 }

@@ -11,8 +11,8 @@ import {
   type LoadedFeed,
 } from '../lib/feed-loader'
 import { loadMarketPage, type MarketListing } from '../lib/market'
-import { RepoCache } from '../lib/repo-cache'
-import type { KeyValueStore } from '../lib/idb'
+import { ResourceCache } from '../lib/resource-cache'
+import type { LocalStore } from '../data/storage'
 import type { RepositoryAdapter } from '@ahead/core'
 import {
   isAbort,
@@ -96,8 +96,8 @@ export class MarketApi {
     private options: {
       repository: string
       client: PublicReadClient
-      storage: KeyValueStore
-      cache: RepoCache
+      storage: LocalStore
+      cache: ResourceCache
       privateAdapter?: RepositoryAdapter
     },
   ) {}
@@ -163,20 +163,11 @@ export class MarketApi {
     if (!('owner' in locator)) return
     const adapter = new CdnReadAdapter(fetcher)
     try {
-      // Direct subscriptions may point at private repositories. Preflight them
-      // through the authenticated adapter so private metadata and bodies never
-      // enter PublicReadClient or its persistent stores.
-      const authenticatedSnapshot = privateAccess && this.options.privateAdapter
-        ? await this.options.privateAdapter.inspect(locator).catch(() => undefined)
-        : undefined
-      const privateSnapshot = authenticatedSnapshot?.private
-        ? authenticatedSnapshot
-        : undefined
       if (source.kind === 'user-data') {
-        const cached = await this.options.storage
-          .get<UserData>('user:' + key)
-          .catch(() => undefined)
-        if (!privateSnapshot && cached && validator.validate('user-data', cached).ok)
+        const cached = await this.options.cache.readUser(key)
+        if (cached && !validator.validate('user-data', cached).ok)
+          await this.options.cache.deleteUser(key).catch(() => {})
+        if (cached && validator.validate('user-data', cached).ok)
           yield {
             type: 'user',
             user: cached,
@@ -184,6 +175,12 @@ export class MarketApi {
             cached: true,
           }
         if (signal?.aborted || cachedOnly) return
+        const authenticatedSnapshot = privateAccess && this.options.privateAdapter
+          ? await this.options.privateAdapter.inspect(locator).catch(() => undefined)
+          : undefined
+        const privateSnapshot = authenticatedSnapshot?.private
+          ? authenticatedSnapshot
+          : undefined
         const snapshot = privateSnapshot ?? await adapter.inspect(locator)
         const reader = snapshot.private ? this.options.privateAdapter : adapter
         if (!reader) throw new Error('messages.sign_in_to_view_this_resource')
@@ -193,24 +190,28 @@ export class MarketApi {
         const user = parseYaml<UserData>(file.content)
         if (!validator.validate('user-data', user).ok)
           throw new Error('messages.profile_validation_failed')
-        if (!snapshot.private)
-          await this.options.storage.set('user:' + key, user).catch(() => {})
+        await this.options.cache.writeUser(key, user, snapshot.private).catch(() => {})
         if (!signal?.aborted)
           yield { type: 'user', user, sourceLocator: key, cached: false }
       } else {
-        let cached = privateSnapshot
-          ? undefined
-          : await this.options.cache.readAny(key, path)
+        let cached = await this.options.cache.readAny(key, path)
         if (cached) {
           try {
             assertEventFeed(cached.feed, validator, key)
           } catch {
+            await this.options.cache.deleteFeed(key, path).catch(() => {})
             cached = undefined
           }
         }
         if (cached)
           yield { type: 'feed', feed: { ...cached, locator }, cached: true }
         if (signal?.aborted || cachedOnly) return
+        const authenticatedSnapshot = privateAccess && this.options.privateAdapter
+          ? await this.options.privateAdapter.inspect(locator).catch(() => undefined)
+          : undefined
+        const privateSnapshot = authenticatedSnapshot?.private
+          ? authenticatedSnapshot
+          : undefined
         const snapshot = privateSnapshot ?? await adapter.inspect(locator)
         const reader = snapshot.private ? this.options.privateAdapter : adapter
         if (!reader) throw new Error('messages.sign_in_to_view_this_resource')
@@ -219,9 +220,9 @@ export class MarketApi {
           adapter: reader,
           ref: snapshot.headSha,
           allowPrivate: snapshot.private,
-          ...(snapshot.private ? {} : { cache: this.options.cache }),
+          cache: this.options.cache,
         })
-        if (!snapshot.private) await this.remember(source)
+        await this.remember(source)
         if (!signal?.aborted) yield { type: 'feed', feed, cached: false }
       }
     } catch (error) {

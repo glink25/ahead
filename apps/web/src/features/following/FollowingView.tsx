@@ -14,7 +14,7 @@ export function FollowingView() {
   const priorities = [t('messages.lowest'), t('messages.very_low'), t('messages.low'), t('messages.default'), t('messages.high'), t('messages.very_high'), t('messages.highest')]
 
 
-  const { profile, feeds, users, listings, act, loading } = useFeedStore()
+  const { profile, feeds, users, listings, act, refreshing, hydrated } = useFeedStore()
   const personalFeed = profile.extensions?.[PERSONAL_FEED] as
     Subscription | undefined
   let personalKey: string | undefined
@@ -34,7 +34,7 @@ export function FollowingView() {
       l.source.resourceType === 'user-data' &&
       !followed.some((s) => sourceKey(s) === sourceKey(l.source)),
   )
-  if (!useFeedStore.getState().ready) return <PageSkeleton variant="list" />
+  if (!hydrated) return <PageSkeleton variant="list" />
   return (
     <section className="following-view">
       <h1>{t('messages.following')}</h1>
@@ -149,7 +149,7 @@ export function FollowingView() {
           >
             <h3><Link to={'/people/view?source=' + encodeURIComponent(sourceKey(source))}>{pickText(listing.source.name) || listing.title}</Link></h3>
             <button
-              disabled={loading}
+              disabled={refreshing}
               onClick={() => act({ type: 'subscribe', source })}
             >
                {t('messages.follow')} </button>

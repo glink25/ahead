@@ -33,12 +33,12 @@ export function EvidenceLinks({ evidence }: { evidence?: Evidence[] }) {
 export function FavoriteButton({ event }: { event: ResolvedEvent }) {
   const { t, i18n } = useTranslation()
 
-  const { profile, act, ready } = useFeedStore()
+  const { profile, act, hydrated } = useFeedStore()
   const favorite = profile.favorites?.includes(event.id) ?? false
   return (
     <IconButton
       className="icon-action"
-      disabled={!ready}
+      disabled={!hydrated}
       aria-label={favorite ? t('messages.remove_favorite') : t('messages.favorite')}
       aria-pressed={favorite}
       onClick={() =>
@@ -57,7 +57,7 @@ export function FavoriteButton({ event }: { event: ResolvedEvent }) {
 export function FeedSourceBar({ event, availableFeeds }: { event: ResolvedEvent; availableFeeds?: ReturnType<typeof useFeedStore.getState>['feeds'] }) {
   const { t, i18n } = useTranslation()
 
-  const { feeds, profile, act, ready } = useFeedStore()
+  const { feeds, profile, act, hydrated } = useFeedStore()
   const sourceFeed = primaryFeedForEvent(event, availableFeeds ?? feeds)
   const sources = sourceFeed ? [sourceFeed] : []
   return (
@@ -80,7 +80,7 @@ export function FeedSourceBar({ event, availableFeeds }: { event: ResolvedEvent;
               </Link>
             </div>
             <button
-              disabled={!ready}
+              disabled={!hydrated}
               className={'subscribe ' + (subscribed ? 'subscribed' : '')}
               aria-pressed={Boolean(subscribed)}
               onClick={() =>

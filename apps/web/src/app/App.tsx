@@ -82,6 +82,7 @@ export function App() {
   const {
     setSession,
     setLoading,
+    setVerified,
     setRestoreError
   } = useAuthSession()
   useEffect(() => {
@@ -89,28 +90,64 @@ export function App() {
       location.search.includes('github_authorized=') ||
       sessionStorage.getItem('ahead-login-choice') === '1'
     sessionStorage.removeItem('ahead-login-choice')
+    const initializeFeed = async () => {
+      try {
+        await useFeedStore.getState().initialize()
+      } catch {
+        useFeedStore.setState({
+          errors: ['messages.cannot_open_local_profiles_check_browser_storage_permissions'],
+          refreshing: false,
+          hydrated: true,
+        })
+      }
+    }
     void (async () => {
-      const result = navigator.onLine
-        ? await bootstrapAuthSession({ patProvider, oauthProvider })
-        : { session: await restoreCachedIdentity(), error: null }
-      const restored =
-        result.session ?? (result.error ? await restoreCachedIdentity() : null)
-      await activateSession(restored, explicit)
-      setSession(restored)
+      if (explicit) {
+        const result = await bootstrapAuthSession({ patProvider, oauthProvider })
+        await activateSession(result.session, true, true)
+        setSession(result.session)
+        setVerified(Boolean(result.session))
+        setRestoreError(result.error)
+        setLoading(false)
+        await initializeFeed()
+        return
+      }
+
+      const cached = await restoreCachedIdentity()
+      await activateSession(cached, false, false)
+      setSession(cached)
+      setVerified(false)
+      setLoading(false)
+      await initializeFeed()
+
+      if (!navigator.onLine) return
+      const result = await bootstrapAuthSession({ patProvider, oauthProvider })
+      if (result.error && !result.session) {
+        setRestoreError(result.error)
+        return
+      }
+      await activateSession(result.session, false, true)
+      setSession(result.session)
+      setVerified(Boolean(result.session))
       setRestoreError(result.error)
+      void useFeedStore.getState().refresh({ force: false, restart: false })
     })()
       .catch((error) => setRestoreError(String(error)))
       .finally(() => setLoading(false))
-    void useFeedStore
-      .getState()
-      .initialize()
-      .catch(() =>
-        useFeedStore.setState({
-          errors: ['messages.cannot_open_local_profiles_check_browser_storage_permissions'],
-          loading: false,
-        }),
-      )
-  }, [setSession, setLoading, setRestoreError])
+  }, [setSession, setLoading, setVerified, setRestoreError])
+  useEffect(() => {
+    const refresh = () => {
+      const state = useFeedStore.getState()
+      if (state.hydrated && !useAuthSession.getState().loading)
+        void state.refresh({ force: false, restart: false })
+    }
+    window.addEventListener('online', refresh)
+    window.addEventListener('focus', refresh)
+    return () => {
+      window.removeEventListener('online', refresh)
+      window.removeEventListener('focus', refresh)
+    }
+  }, [])
   return (
     <TabShell>
       <div

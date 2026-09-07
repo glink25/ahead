@@ -12,7 +12,7 @@ export function ChannelDetail() {
   const [params] = useSearchParams()
   const key = params.get('source')
   const state = useSharedResource(key, 'event-feed')
-  const { profile, act, ready } = useFeedStore()
+  const { profile, act, hydrated } = useFeedStore()
   if (state.loading) return <PageSkeleton variant="detail" />
   if (state.error || state.resource?.kind !== 'event-feed')
     return <ResourceFailure error={(state.error ?? new Error('Wrong resource type')) as Error & { reason?: string }} />
@@ -39,7 +39,7 @@ export function ChannelDetail() {
       )}
       <button
         className={'subscribe ' + (subscribed ? 'subscribed' : '')}
-        disabled={!ready}
+        disabled={!hydrated}
         aria-pressed={Boolean(subscribed)}
         onClick={() => act({ type: subscribed ? 'unsubscribe' : 'subscribe', source })}
       >

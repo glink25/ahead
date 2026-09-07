@@ -18,13 +18,17 @@ import {
   FeedSourceBar,
   HideMenu,
 } from '../discover/PosterCard'
-import { loadSharedResource } from '../../services/shared-resource'
+import {
+  loadCachedSharedResource,
+  loadSharedResource,
+} from '../../services/shared-resource'
 import { mergeEvents } from '@ahead/resolver'
 import type { LoadedFeed } from '../../lib/feed-loader'
 import { sourceKey } from '@ahead/protocol'
 import { CopyLinkButton, ResourceFailure } from '../share/ShareUi'
 import { posterFor } from '../../lib/media'
 import { primaryFeedForEvent } from '../../lib/primary-feed'
+import { useAuthSession } from '../../stores'
 export function EventDetail() {
   useFeatureTranslations('event')
   const { t, i18n } = useTranslation()
@@ -35,7 +39,8 @@ export function EventDetail() {
   const { db } = useData()
   const [error, setError] = useState('')
   const { resolved } = useFeedView()
-  const { loading, ready, feeds, profile } = useFeedStore()
+  const { refreshing, hydrated, feeds, profile } = useFeedStore()
+  const verified = useAuthSession((state) => state.verified)
   const linkedSources = useMemo(
     () => [...new Set(new URLSearchParams(location.search).getAll('source'))],
     [location.search],
@@ -62,17 +67,30 @@ export function EventDetail() {
       return
     }
     const controller = new AbortController()
+    let restoredFeeds: LoadedFeed[] = []
     setShared({ feeds: [], errors: [], loading: true })
-    void Promise.allSettled(
-      linkedSources.map((key) => loadSharedResource(key, 'event-feed', controller.signal)),
-    ).then((results) => {
+    void (async () => {
+      const cached = await Promise.all(
+        linkedSources.map((key) => loadCachedSharedResource(key, 'event-feed')),
+      )
       if (controller.signal.aborted) return
-      setShared({
-        feeds: results.flatMap((result) =>
+      restoredFeeds = cached.flatMap((resource) =>
+        resource?.kind === 'event-feed' ? [resource.feed] : [],
+      )
+      if (restoredFeeds.length || !navigator.onLine)
+        setShared({ feeds: restoredFeeds, errors: [], loading: false })
+      if (!navigator.onLine) return
+      const results = await Promise.allSettled(
+        linkedSources.map((key) => loadSharedResource(key, 'event-feed', controller.signal)),
+      )
+      if (controller.signal.aborted) return
+      const feeds = results.flatMap((result) =>
           result.status === 'fulfilled' && result.value.kind === 'event-feed'
             ? [result.value.feed]
             : [],
-        ),
+        )
+      setShared({
+        feeds: feeds.length ? feeds : restoredFeeds,
         errors: results.flatMap((result, index) =>
           result.status === 'rejected'
             ? [{
@@ -85,9 +103,16 @@ export function EventDetail() {
         ),
         loading: false,
       })
+    })().catch((error) => {
+      if (!controller.signal.aborted)
+        setShared({
+          feeds: restoredFeeds,
+          errors: [{ source: '', error: error instanceof Error ? error : new Error(String(error)) }],
+          loading: false,
+        })
     })
     return () => controller.abort()
-  }, [linkedSources])
+  }, [linkedSources, verified])
   const sharedEvent = useMemo(
     () => mergeEvents(
       shared.feeds.flatMap((feed) =>
@@ -100,7 +125,7 @@ export function EventDetail() {
   )
   const localEvent = resolved.events.find((e) => e.id === id)
   const event = linkedSources.length ? sharedEvent : localEvent
-  if (!ready || shared.loading || (!linkedSources.length && loading && !event))
+  if (!hydrated || shared.loading || (!linkedSources.length && refreshing && !event))
     return <PageSkeleton variant="detail" />
   if (!event && shared.errors.length)
     return <ResourceFailure error={shared.errors[0]!.error as Error & { reason?: string }} />

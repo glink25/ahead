@@ -1,4 +1,3 @@
-import { createIdbStore } from '../lib/idb'
 import { authenticatedAdapter, oauthProvider, patProvider } from '../lib/auth'
 import { useAuthSession } from '../stores'
 import { createGitHubSearchRelay } from './github-search-relay'
@@ -25,10 +24,6 @@ export function searchFeedApi(): SearchFeedApi | undefined {
         return credential.accessToken
       },
     }),
-    cache: createIdbStore(
-      'ahead-search-content-' + encodeURIComponent(identity),
-      'files',
-    ),
   })
   current = { identity, api }
   return api

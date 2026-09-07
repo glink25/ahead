@@ -1,5 +1,3 @@
-import type { KeyValueStore } from '../lib/idb'
-
 export const READ_POLICY = {
   ttl: 10 * 60_000,
   apiInterval: 1000,
@@ -61,7 +59,7 @@ interface Pending {
   readers: number
 }
 
-/** Private transport of the browser-side service. No credentials are persisted. */
+/** Session transport. Durable state is stored only as validated business snapshots. */
 export class PublicReadClient {
   private memory = new Map<string, CachedResponse>()
   private pending = new Map<string, Pending>()
@@ -78,7 +76,6 @@ export class PublicReadClient {
   constructor(
     private options: {
       fetcher: typeof fetch
-      store: KeyValueStore
       authenticated: boolean
       apiInterval?: number
       now?: () => number
@@ -111,11 +108,7 @@ export class PublicReadClient {
         init?.headers ?? (input instanceof Request ? input.headers : undefined),
       )
       const key = url + '|' + (headers.get('accept') ?? '')
-      const cached =
-        this.memory.get(key) ??
-        (await this.options.store
-          .get<CachedResponse>(key)
-          .catch(() => undefined))
+      const cached = this.memory.get(key)
       if (signal?.aborted) throw abortError()
       const immutable = /(?:@|\/)[a-f0-9]{40}(?:\/|\?)/i.test(url)
       if (
@@ -140,9 +133,8 @@ export class PublicReadClient {
           controller.signal,
           context.priority ?? 0,
         )
-          .then(async (value) => {
+          .then((value) => {
             this.memory.set(key, value)
-            await this.options.store.set(key, value).catch(() => {})
             return value
           })
           .finally(() => {

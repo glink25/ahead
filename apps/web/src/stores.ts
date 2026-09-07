@@ -5,18 +5,22 @@ import { create } from 'zustand'
 interface AuthSessionStore {
   session: AuthSession | null
   loading: boolean
+  verified: boolean
   restoreError: string | null
   setSession: (session: AuthSession | null) => void
   setLoading: (loading: boolean) => void
+  setVerified: (verified: boolean) => void
   setRestoreError: (restoreError: string | null) => void
 }
 
 export const useAuthSession = create<AuthSessionStore>((set) => ({
   session: null,
   loading: true,
+  verified: false,
   restoreError: null,
   setSession: (session) => set({ session }),
   setLoading: (loading) => set({ loading }),
+  setVerified: (verified) => set({ verified }),
   setRestoreError: (restoreError) => set({ restoreError }),
 }))
 

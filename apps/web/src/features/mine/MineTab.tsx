@@ -18,7 +18,7 @@ export function MineTab() {
   const { t } = useTranslation()
 
   const { mine, resolved } = useFeedView()
-  const { feeds, profile, ready } = useFeedStore()
+  const { feeds, profile, hydrated } = useFeedStore()
   const weekStartsOn =
     profile.settings?.weekStartsOn === 'sunday' ||
     profile.settings?.weekStartsOn === 'monday'
@@ -35,7 +35,7 @@ export function MineTab() {
     if (!calendar && timeline.current)
       timeline.current.scrollTop = scroll.current
   }, [calendar])
-  if (!ready) return <PageSkeleton variant="list" />
+  if (!hydrated) return <PageSkeleton variant="list" />
   const { history, current } = partitionTimelineEvents(mine)
   const empty = (
     <div className="empty-view">

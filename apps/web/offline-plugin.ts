@@ -58,7 +58,13 @@ self.addEventListener('fetch', event => {
   if (url.pathname === '/reset.html') {
     event.respondWith(fetch(request).catch(() => caches.open(CACHE).then(cache => cache.match('/reset.html'))));
   } else if (request.mode === 'navigate') {
-    event.respondWith(fetch(request).catch(() => caches.open(CACHE).then(cache => cache.match('/'))));
+    const cache = caches.open(CACHE);
+    const update = cache.then(target => fetch(request).then(response => {
+      if (response.ok) return target.put('/', response.clone()).then(() => response);
+      return response;
+    }));
+    event.waitUntil(update.catch(() => {}));
+    event.respondWith(cache.then(target => target.match('/')).then(cached => cached || update));
   } else if (!url.search && (ASSETS.includes(url.pathname) || LAZY_ASSETS.includes(url.pathname))) {
     event.respondWith(cachedAsset(url.pathname));
   }

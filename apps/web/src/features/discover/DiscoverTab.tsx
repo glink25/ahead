@@ -15,7 +15,7 @@ export function DiscoverTab({
 
   const [recommendationSeed] = useState(() => crypto.randomUUID())
   const { discover } = useFeedView(recommendationSeed)
-  const { loading, ready, refresh, marketStatus, revision, setMarketActive, reportDiscoverVisible, setDiscoverAvailable } =
+  const { refreshing, hydrated, refresh, marketStatus, revision, setMarketActive, reportDiscoverVisible, setDiscoverAvailable } =
     useFeedStore()
   useLayoutEffect(() => {
     setDiscoverAvailable(discover.length)
@@ -143,7 +143,9 @@ export function DiscoverTab({
     window.addEventListener('keydown', keydown)
     return () => window.removeEventListener('keydown', keydown)
   }, [events, index, height, active])
-  if (!ready || (!events.length && loading))
+  const waitingForFirstContent =
+    active && !events.length && (marketStatus === 'idle' || marketStatus === 'initial')
+  if (!hydrated || (!events.length && refreshing) || waitingForFirstContent)
     return <PageSkeleton variant="poster" />
   if (!events.length)
     return (
@@ -152,7 +154,7 @@ export function DiscoverTab({
         <h1>
           {marketStatus === 'failed' ? t('messages.content_is_temporarily_unavailable') : t('messages.no_events_yet')}
         </h1>
-        <button onClick={() => void refresh()} disabled={loading}>
+        <button onClick={() => void refresh()} disabled={refreshing}>
            {t('messages.reload')} </button>
       </div>
     )

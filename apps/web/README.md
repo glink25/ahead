@@ -18,7 +18,7 @@ pnpm dev
 
 执行根目录 `pnpm build`，将 `apps/web/dist` 部署到静态站点托管服务；Cloudflare Pages 的路由回退和响应头分别由 [_redirects](public/_redirects)、[_headers](public/_headers)提供。构建与开发代理配置见 [vite.config.ts](vite.config.ts)。
 
-生产构建缓存应用外壳；首次在线缓存完成后可离线刷新、编辑与保存，开发服务器不注册 Service Worker。缓存边界见 [offline-plugin.ts](offline-plugin.ts)，资料保存机制见[同步说明](../../docs/profile-sync.md)。
+生产构建以 stale-while-revalidate 缓存应用外壳；业务数据从统一的 `ahead` IndexedDB 本地优先恢复，再在应用运行时后台更新。首次在线缓存完成后可离线刷新、浏览、编辑与保存，开发服务器不注册 Service Worker。缓存边界见 [offline-plugin.ts](offline-plugin.ts)，资料保存机制见[同步说明](../../docs/profile-sync.md)。
 
 当前浏览器校验器使用 Ajv 动态编译。若托管层添加禁止动态求值的 CSP，会影响校验；仓库的响应头未配置 CSP，外部代理或平台规则需单独检查。
 
