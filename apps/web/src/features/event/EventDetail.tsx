@@ -23,6 +23,8 @@ import { mergeEvents } from '@ahead/resolver'
 import type { LoadedFeed } from '../../lib/feed-loader'
 import { sourceKey } from '@ahead/protocol'
 import { CopyLinkButton, ResourceFailure } from '../share/ShareUi'
+import { posterFor } from '../../lib/media'
+import { primaryFeedForEvent } from '../../lib/primary-feed'
 export function EventDetail() {
   useFeatureTranslations('event')
   const { t, i18n } = useTranslation()
@@ -33,7 +35,7 @@ export function EventDetail() {
   const { db } = useData()
   const [error, setError] = useState('')
   const { resolved } = useFeedView()
-  const { loading, ready } = useFeedStore()
+  const { loading, ready, feeds, profile } = useFeedStore()
   const linkedSources = useMemo(
     () => [...new Set(new URLSearchParams(location.search).getAll('source'))],
     [location.search],
@@ -126,71 +128,109 @@ export function EventDetail() {
     ? '/events/' + encodeURIComponent(event.id) + '?' +
       [...new Set(shareSources)].map((value) => 'source=' + encodeURIComponent(value)).join('&')
     : undefined
+  const availableFeeds = linkedSources.length ? shared.feeds : feeds
+  const primaryFeed = primaryFeedForEvent(event, availableFeeds)
+  const poster = posterFor(event, {
+    locator: primaryFeed?.locator,
+    headSha: primaryFeed?.headSha,
+    allowRemoteImages: !profile.settings?.privacyRemoteImages,
+  })
   return (
     <article className="event-detail">
-      <div className="resource-heading">
-        <h1>{pickText(event.title)}</h1>
-        <CopyLinkButton url={shareUrl} />
-      </div>
-      {!!shared.errors.length && !!event && (
-        <details className="feedback" role="status">
-          <summary>{t('messages.some_event_sources_could_not_be_opened')}</summary>
-          <ul>{shared.errors.map((item) => <li key={item.source}>{item.source}</li>)}</ul>
-        </details>
-      )}
-      <p className="detail-countdown">{countdown.headline}</p>
-      <p>{pickText(event.description) || pickText(event.summary)}</p>
-      {own && (
-        <div className="personal-actions">
-          <Link
-            className="primary-link"
-            to={'/studio?event=' + encodeURIComponent(event.id)}
-          >
-             {t('messages.edit')} </Link>
-          <button
-            onClick={() => {
-              if (db)
-                void deleteEvent(db.active, event.id)
-                  .then(() => navigate('/mine', { replace: true }))
-                  .catch(() => setError('messages.could_not_save_deletion_please_retry'))
+      <section
+        className="event-detail-hero"
+        style={{
+          background: 'linear-gradient(145deg,' + poster.gradient.join(',') + ')',
+        }}
+        aria-labelledby="event-detail-title"
+      >
+        {poster.url && (
+          <img
+            className="event-detail-hero-image"
+            src={poster.url}
+            alt=""
+            onError={(e) => {
+              e.currentTarget.style.opacity = '0'
             }}
-          >
-             {t('messages.delete')} </button>
+          />
+        )}
+        <div className="event-detail-hero-shade" />
+        <div className="event-detail-hero-content">
+          <div className="event-detail-heading">
+            <h1 id="event-detail-title">{pickText(event.title)}</h1>
+            <CopyLinkButton url={shareUrl} />
+          </div>
+          <p className="detail-countdown">{countdown.headline}</p>
+          {countdown.dateLabel &&
+            !countdown.headline.includes(countdown.dateLabel) && (
+              <p className="event-detail-date">{countdown.dateLabel}</p>
+            )}
         </div>
-      )}
-      {error && <p role="alert">{displayMessage(error)}</p>}
-      <div className="detail-actions">
-        <FavoriteButton event={event} />
-        <HideMenu event={event} />
-      </div>
-      <h2>{t('messages.schedule_history')}</h2>
-      <ol className="schedule-timeline">
-        {[...event.schedule]
-          .sort((a, b) => a.recordedAt.localeCompare(b.recordedAt))
-          .map((entry) => (
-            <li key={entry.id}>
-              <time>
-                {new Date(entry.recordedAt).toLocaleDateString(i18n.resolvedLanguage)}
-              </time>
-              <h3>{describeTemporal(entry.value)}</h3>
-              <p>
-                {entry.confidence && t(CONFIDENCE_LABELS[entry.confidence])}
-                {entry.source && ' · ' + entry.source}
-              </p>
-              <EvidenceLinks evidence={entry.evidence} />
-            </li>
-          ))}
-      </ol>
-      <h2>{t('messages.sources')}</h2>
-      <EvidenceLinks evidence={event.evidence} />
-      {event.evidence
-        ?.filter((e) => e.kind === 'citation' || e.kind === 'note')
-        .map((e, i) => (
-          <p className="citation" key={i}>
-            {e.value}
+      </section>
+      <div className="event-detail-body">
+        {!!shared.errors.length && !!event && (
+          <details className="feedback" role="status">
+            <summary>{t('messages.some_event_sources_could_not_be_opened')}</summary>
+            <ul>{shared.errors.map((item) => <li key={item.source}>{item.source}</li>)}</ul>
+          </details>
+        )}
+        {(pickText(event.description) || pickText(event.summary)) && (
+          <p className="event-detail-description">
+            {pickText(event.description) || pickText(event.summary)}
           </p>
-        ))}
-      <FeedSourceBar event={event} availableFeeds={linkedSources.length ? shared.feeds : undefined} />
+        )}
+        {own && (
+          <div className="personal-actions">
+            <Link
+              className="primary-link"
+              to={'/studio?event=' + encodeURIComponent(event.id)}
+            >
+               {t('messages.edit')} </Link>
+            <button
+              onClick={() => {
+                if (db)
+                  void deleteEvent(db.active, event.id)
+                    .then(() => navigate('/mine', { replace: true }))
+                    .catch(() => setError('messages.could_not_save_deletion_please_retry'))
+              }}
+            >
+               {t('messages.delete')} </button>
+          </div>
+        )}
+        {error && <p role="alert">{displayMessage(error)}</p>}
+        <div className="detail-actions">
+          <FavoriteButton event={event} />
+          <HideMenu event={event} />
+        </div>
+        <h2>{t('messages.schedule_history')}</h2>
+        <ol className="schedule-timeline">
+          {[...event.schedule]
+            .sort((a, b) => a.recordedAt.localeCompare(b.recordedAt))
+            .map((entry) => (
+              <li key={entry.id}>
+                <time>
+                  {new Date(entry.recordedAt).toLocaleDateString(i18n.resolvedLanguage)}
+                </time>
+                <h3>{describeTemporal(entry.value)}</h3>
+                <p>
+                  {entry.confidence && t(CONFIDENCE_LABELS[entry.confidence])}
+                  {entry.source && ' · ' + entry.source}
+                </p>
+                <EvidenceLinks evidence={entry.evidence} />
+              </li>
+            ))}
+        </ol>
+        <h2>{t('messages.sources')}</h2>
+        <EvidenceLinks evidence={event.evidence} />
+        {event.evidence
+          ?.filter((e) => e.kind === 'citation' || e.kind === 'note')
+          .map((e, i) => (
+            <p className="citation" key={i}>
+              {e.value}
+            </p>
+          ))}
+        <FeedSourceBar event={event} availableFeeds={availableFeeds} />
+      </div>
     </article>
   )
 }

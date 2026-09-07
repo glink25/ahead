@@ -27,6 +27,19 @@ describe('head HTML injection', () => {
   })
 })
 
+describe('installable app metadata', () => {
+  it('enables full-bleed iOS standalone rendering', () => {
+    const html = readFileSync(resolve(import.meta.dirname, '../index.html'), 'utf8')
+
+    expect(html).toContain('viewport-fit=cover')
+    expect(html).toContain('name="apple-mobile-web-app-capable" content="yes"')
+    expect(html).toContain(
+      'name="apple-mobile-web-app-status-bar-style" content="black-translucent"',
+    )
+    expect(html).toContain('name="apple-mobile-web-app-title" content="Ahead / 盼头"')
+  })
+})
+
 describe('private deployment content policy', () => {
   it('keeps provider fingerprints out of repository files', () => {
     const repositoryRoot = resolve(import.meta.dirname, '../../..')

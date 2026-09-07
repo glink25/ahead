@@ -9,6 +9,9 @@ async function registry(page: Page, rich = false) {
     id,
     title: { 'zh-CN': id },
     tags: ['test'],
+    ...(id === 'first-game'
+      ? { media: [{ path: 'assets/event-cover.svg', kind: 'image' }] }
+      : {}),
     ...(rich
       ? {
           summary: { 'zh-CN': '这是一段保留在发现页的事件描述。'.repeat(24) },
@@ -85,6 +88,11 @@ async function registry(page: Page, rich = false) {
     return route.fulfill({ json: { private: false, default_branch: 'trunk' } })
   })
   await page.route('https://cdn.jsdelivr.net/**', async (route) => {
+    if (route.request().url().endsWith('/assets/event-cover.svg'))
+      return route.fulfill({
+        body: '<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800"><rect width="1200" height="800" fill="#315649"/></svg>',
+        contentType: 'image/svg+xml',
+      })
     const path = route.request().url().split('/').at(-1) as keyof typeof feeds
     return route.fulfill({
       body: JSON.stringify(feeds[path]),
@@ -185,10 +193,42 @@ test('discover → scroll → favorite → swipe mine → calendar → detail �
     .getByRole('link', { name: title, exact: true })
     .click()
   await expect(page.getByRole('heading', { name: '日期记录' })).toBeVisible()
+  await expect(page.locator('.event-detail-hero')).toBeVisible()
+  await expect(page.locator('.event-detail-hero-image')).toHaveCount(0)
+  await expect(page.locator('.event-detail-hero')).toHaveAttribute(
+    'style',
+    /linear-gradient/,
+  )
   await expect(page.locator('.schedule-timeline li')).toHaveCount(2)
   await page.reload()
   await expect(page.getByRole('button', { name: '取消喜爱' })).toBeVisible()
   expect(errors).toEqual([])
+})
+
+test('event detail uses its pinned feed cover and keeps the gradient fallback', async ({
+  page,
+}) => {
+  await registry(page)
+  await page.goto('/discover')
+  await page
+    .locator('.poster-slot')
+    .first()
+    .getByRole('heading', { name: 'first-game', exact: true })
+    .click()
+
+  const hero = page.locator('.event-detail-hero')
+  const image = hero.locator('.event-detail-hero-image')
+  await expect(hero).toBeVisible()
+  await expect(image).toHaveAttribute(
+    'src',
+    new RegExp(`test/showcase@${sha}/assets/event-cover\\.svg$`),
+  )
+  await expect(page.locator('.event-detail-heading')).toContainText('first-game')
+  await expect(page.locator('.detail-countdown')).toBeVisible()
+
+  await image.evaluate((element) => element.dispatchEvent(new Event('error')))
+  await expect(image).toHaveCSS('opacity', '0')
+  await expect(hero).toHaveAttribute('style', /linear-gradient/)
 })
 
 test('same repository feeds subscribe independently and cached events survive network failure', async ({
@@ -230,9 +270,10 @@ test('same repository feeds subscribe independently and cached events survive ne
   await expect(page.locator('.error-strip')).toBeVisible()
 })
 
-test('empty calendar supports year and week; editor previews without saving', async ({
-  page,
+test('empty calendar supports year and week; editor form and YAML round-trip', async ({
+  page, context,
 }) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write'])
   await registry(page)
   await page.goto('/mine?view=calendar&date=2028-02-29')
   await expect(page.locator('.month-scroll')).toBeVisible()
@@ -247,28 +288,56 @@ test('empty calendar supports year and week; editor previews without saving', as
   ).toHaveText(/周?二29/)
   await expect(page.locator('.week-group[data-active=true] .week-day-row')).toHaveCount(7)
   await page.getByRole('link', { name: '新建事件', exact: true }).click()
-  await page.getByRole('button', { name: '预览', exact: true }).click()
-  await expect(page.getByText('请输入事件名称')).toBeVisible()
+  await expect(page.getByRole('button', { name: '预览', exact: true })).toHaveCount(0)
   await page.getByPlaceholder('有什么值得期待？').fill('周末散步')
-  await page.getByRole('button', { name: '预览', exact: true }).click()
-  await expect(page.getByRole('article', { name: '事件预览' })).toContainText(
-    '周末散步',
-  )
+  await page.getByRole('combobox', { name: '重复', exact: true }).selectOption('weekly')
+  await page.getByRole('spinbutton', { name: '重复间隔' }).fill('2')
+  await page.getByRole('combobox', { name: '结束重复' }).selectOption('count')
+  await page.getByRole('spinbutton', { name: '重复次数' }).fill('6')
+  await page.locator('summary').filter({ hasText: '事件图片' }).click()
+  await page.getByRole('textbox', { name: '图片链接' }).fill('https://example.com/weekend.jpg')
   await page.getByRole('button', { name: '高级编辑' }).click()
+  await expect(page.getByRole('link', { name: '查看 OEF 文档' })).toHaveAttribute(
+    'href',
+    'https://github.com/glink25/ahead/blob/main/docs/protocol/README.md',
+  )
+  await page.getByRole('button', { name: '复制 AI 创建提示词' }).click()
+  await expect(page.getByRole('button', { name: 'AI 提示词已复制' })).toBeVisible()
   const yaml = page.getByRole('textbox', { name: '事件 YAML' })
+  await expect(yaml).toHaveValue(/freq: weekly/)
+  await expect(yaml).toHaveValue(/count: 6/)
+  await expect(yaml).toHaveValue(/https:\/\/example\.com\/weekend\.jpg/)
   await yaml.fill(
     (await yaml.inputValue()) +
-      'recurrence:\n  freq: yearly\nextensions:\n  keep: yes\n',
+      'extensions:\n  keep: yes\n',
   )
   await page.getByRole('button', { name: '返回表单' }).click()
   await page.getByPlaceholder('有什么值得期待？').fill('周末出游')
   await page.getByRole('button', { name: '高级编辑' }).click()
-  await expect(yaml).toHaveValue(/freq: yearly/)
+  await expect(yaml).toHaveValue(/freq: weekly/)
   await expect(yaml).toHaveValue(/keep: yes/)
   await page.getByRole('button', { name: '返回上一页' }).click()
   await expect(
     page.locator('.week-group[data-active=true] .week-day-row button[aria-pressed=true]'),
   ).toHaveText(/周?二29/)
+})
+
+test('advanced editor falls back to a manually selectable AI prompt', async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText: () => Promise.reject(new Error('clipboard unavailable')) },
+    })
+  })
+  await registry(page)
+  await page.goto('/studio')
+  await page.getByRole('button', { name: '高级编辑' }).click()
+  await page.getByRole('button', { name: '复制 AI 创建提示词' }).click()
+  const manual = page.getByRole('textbox', { name: '请手动复制此提示词' })
+  await expect(manual).toBeVisible()
+  await expect(manual).toHaveValue(/单独的 Event YAML 对象/)
 })
 
 test('navigation preserves discovery position without transient scrolling', async ({

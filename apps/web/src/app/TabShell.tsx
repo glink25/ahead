@@ -24,6 +24,7 @@ export function TabShell({ children }: { children: ReactNode }) {
     navigate = useNavigate()
   const mine = location.pathname === '/mine'
   const tab = mine || location.pathname === '/discover'
+  const eventDetail = location.pathname.startsWith('/events/')
   const calendar =
     mine && new URLSearchParams(location.search).get('view') === 'calendar'
   useNavigationJournal()
@@ -81,7 +82,9 @@ export function TabShell({ children }: { children: ReactNode }) {
   return (
     <div
       className={
-        'app-shell' + (location.pathname === '/discover' ? ' immersive' : '')
+        'app-shell' +
+        (location.pathname === '/discover' || eventDetail ? ' immersive' : '') +
+        (eventDetail ? ' event-detail-shell' : '')
       }
     >
       <header className="app-header">

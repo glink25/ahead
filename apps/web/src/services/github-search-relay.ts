@@ -7,6 +7,7 @@ export class GitHubSearchRelayError extends Error {
   }
 }
 
+// web由于cors限制必须通过稳定后端进行中转，原生app端可以不需要
 export function createGitHubSearchRelay(options: {
   baseUrl: string
   getAccessToken: () => Promise<string>
