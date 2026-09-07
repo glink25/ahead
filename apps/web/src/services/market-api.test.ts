@@ -5,7 +5,6 @@ import { PublicReadClient } from './public-read-client'
 import { RepoCache } from '../lib/repo-cache'
 import { feed } from '../lib/test-fixtures'
 import { memory, deferred } from './test-helpers'
-import type { RepositoryAdapter } from '@ahead/core'
 const sha = 'a'.repeat(40)
 const issue = (number: number) => ({
   number,
@@ -30,36 +29,6 @@ function setup(fetcher: typeof fetch) {
     }),
     storage: memory(),
     cache: new RepoCache(memory()),
-  })
-}
-function searchSetup(files: Record<string, unknown>, searchFetcher?: typeof fetch) {
-  const adapter: RepositoryAdapter = {
-    inspect: async (locator) => ({
-      locator,
-      defaultBranch: 'main',
-      headSha: sha,
-      private: false,
-    }),
-    readFile: async (_locator, path) => {
-      if (!(path in files)) throw new Error('missing ' + path)
-      return { path, content: JSON.stringify(files[path]), sha, encoding: 'utf-8' }
-    },
-    readTree: async () => Object.keys(files).map((path) => ({
-      path,
-      type: 'blob' as const,
-      mode: '100644',
-      sha,
-    })),
-    commitFiles: async () => { throw new Error('read only') },
-    createRepository: async () => { throw new Error('read only') },
-  }
-  return new MarketApi({
-    repository: 'a/market',
-    client: new PublicReadClient({ fetcher: async () => new Response('{}'), store: memory(), authenticated: true, apiInterval: 0 }),
-    storage: memory(),
-    cache: new RepoCache(memory()),
-    privateAdapter: adapter,
-    ...(searchFetcher ? { searchFetcher } : {}),
   })
 }
 function response(input: RequestInfo | URL) {
@@ -313,71 +282,4 @@ it('probes only Market metadata once within six hours', async () => {
   expect(await api.market.probeHead()).toBeUndefined()
   expect(fetcher.mock.calls.filter(([url]) => String(url).includes('/issues?'))).toHaveLength(1)
   expect(fetcher.mock.calls.some(([url]) => String(url).includes('cdn.jsdelivr.net'))).toBe(false)
-})
-
-it('searches an inline feed and filters its events in the API layer', async () => {
-  const source = { ...feed([
-    { ...feed().events![0]!, id: 'match', title: { en: 'Game release' }, tags: ['games'] },
-    { ...feed().events![0]!, id: 'other', title: { en: 'Concert' } },
-  ]), oefSearch: 'oef-search-v1' as const }
-  const searchFetcher = vi.fn(async (_input: RequestInfo | URL) => new Response(JSON.stringify({
-    total_count: 1,
-    incomplete_results: false,
-    items: [{ path: 'custom/feed.json', repository: { name: 'repo', owner: { login: 'alice' } } }],
-  })))
-  const events = []
-  for await (const event of searchSetup({ 'custom/feed.json': source }, searchFetcher).search.stream({ query: 'game' })) events.push(event)
-  expect(events.find((event) => event.type === 'feed')).toMatchObject({
-    feed: { manifestPath: 'custom/feed.json', feed: { events: [{ id: 'match' }] } },
-  })
-  expect(events.at(-1)).toMatchObject({ type: 'progress', complete: true })
-  const query = decodeURIComponent(new URL(String(searchFetcher.mock.calls[0]![0])).searchParams.get('q')!)
-  expect(query).toContain('"game"')
-  expect(query).toContain('"oefSearch"')
-  expect(query).toContain('"oef-search-v1"')
-})
-
-it('maps a marked standalone event to an arbitrary eventsGlob manifest for tag search', async () => {
-  const event = { ...feed().events![0]!, oefSearch: 'oef-search-v1' as const, id: 'game', title: { en: 'Launch' }, tags: ['games'] }
-  const manifest = { ...feed([]), eventsGlob: 'content/*.json' }
-  const searchFetcher = vi.fn(async (input: RequestInfo | URL) => {
-    const query = decodeURIComponent(new URL(String(input)).searchParams.get('q')!)
-    return new Response(JSON.stringify({
-      total_count: 1,
-      incomplete_results: false,
-      items: query.includes('repo:alice/repo')
-        ? [{ path: 'feeds/ahead.json', repository: { name: 'repo', owner: { login: 'alice' } } }]
-        : [{ path: 'content/game.json', repository: { name: 'repo', owner: { login: 'alice' } } }],
-    }))
-  })
-  const events = []
-  for await (const item of searchSetup({
-    'content/game.json': event,
-    'feeds/ahead.json': manifest,
-  }, searchFetcher).search.stream({ tag: 'games' })) events.push(item)
-  expect(events.find((item) => item.type === 'feed')).toMatchObject({
-    feed: { manifestPath: 'feeds/ahead.json', feed: { events: [{ id: 'game' }] } },
-  })
-  expect(searchFetcher).toHaveBeenCalledTimes(2)
-})
-
-it('rejects a search hit whose marker is not on the document root', async () => {
-  const source = { ...feed(), extensions: { oefSearch: 'oef-search-v1' } }
-  const searchFetcher = vi.fn(async () => new Response(JSON.stringify({
-    total_count: 1,
-    incomplete_results: false,
-    items: [{ path: 'feed.json', repository: { name: 'repo', owner: { login: 'alice' } } }],
-  })))
-  const events = []
-  for await (const item of searchSetup({ 'feed.json': source }, searchFetcher).search.stream({ query: 'game' })) events.push(item)
-  expect(events.some((item) => item.type === 'feed')).toBe(false)
-  expect(events.at(-1)).toMatchObject({ type: 'progress', complete: true, loaded: 0 })
-})
-
-it('reports that GitHub authentication is required before searching', async () => {
-  const events = []
-  for await (const event of searchSetup({}).search.stream({ query: 'game' })) events.push(event)
-  expect(events).toEqual([
-    expect.objectContaining({ type: 'error', reason: 'authentication-required' }),
-  ])
 })

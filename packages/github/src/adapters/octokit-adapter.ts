@@ -10,13 +10,14 @@ import type {
   VersionedFile,
 } from '@ahead/core'
 import { createOctokit, type AheadOctokit } from '../octokit.js'
+import type { GitHubSearchAdapter } from './types.js'
 
 function decodeBase64(content: string): string {
   const bytes = Uint8Array.from(atob(content.replace(/\n/g, '')), (char) => char.charCodeAt(0))
   return new TextDecoder().decode(bytes)
 }
 
-export class OctokitAdapter implements RepositoryAdapter {
+export class OctokitAdapter implements RepositoryAdapter, GitHubSearchAdapter {
   private readonly octokit: AheadOctokit
 
   constructor(getAccessToken: () => Promise<string>) {
@@ -47,16 +48,18 @@ export class OctokitAdapter implements RepositoryAdapter {
     }
   }
 
-  async inspect(locator: ResourceLocator): Promise<RepositorySnapshot> {
+  async inspect(locator: ResourceLocator, options?: { signal?: AbortSignal }): Promise<RepositorySnapshot> {
     const repository = await this.octokit.request('GET /repos/{owner}/{repo}', {
       owner: locator.owner,
       repo: locator.repo,
+      request: options?.signal ? { signal: options.signal } : undefined,
     })
     const ref = locator.ref ?? repository.data.default_branch
     const commit = await this.octokit.request('GET /repos/{owner}/{repo}/commits/{ref}', {
       owner: locator.owner,
       repo: locator.repo,
       ref,
+      request: options?.signal ? { signal: options.signal } : undefined,
     })
 
     return {
@@ -81,13 +84,14 @@ export class OctokitAdapter implements RepositoryAdapter {
   async readFile(
     locator: ResourceLocator,
     path: string,
-    opts?: { ref?: string },
+    opts?: { ref?: string; signal?: AbortSignal },
   ): Promise<VersionedFile> {
     const response = await this.octokit.request('GET /repos/{owner}/{repo}/contents/{path}', {
       owner: locator.owner,
       repo: locator.repo,
       path,
       ref: opts?.ref ?? locator.ref,
+      request: opts?.signal ? { signal: opts.signal } : undefined,
     })
     const data = response.data
     if (Array.isArray(data) || data.type !== 'file' || !('content' in data)) {

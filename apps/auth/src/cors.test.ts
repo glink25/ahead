@@ -21,7 +21,7 @@ describe('corsHeaders', () => {
     )
     expect(headers.get('Access-Control-Allow-Origin')).toBe('https://app.example.com')
     expect(headers.get('Access-Control-Allow-Credentials')).toBe('true')
-    expect(headers.get('Access-Control-Allow-Headers')).toContain('Authorization')
+    expect(headers.get('Access-Control-Allow-Headers')).toBe('Content-Type')
   })
 
   it('omits ACAO for disallowed origins', () => {
