@@ -10,6 +10,7 @@ import { useFeedStore } from '../../stores/feed'
 import { countdownFor, pickText } from '../../lib/format'
 import { posterFor } from '../../lib/media'
 import { tagLabel } from '../../lib/tag-label'
+import { primaryFeedForEvent } from '../../lib/primary-feed'
 
 export function EvidenceLinks({ evidence }: { evidence?: Evidence[] }) {
   const { t, i18n } = useTranslation()
@@ -57,9 +58,8 @@ export function FeedSourceBar({ event, availableFeeds }: { event: ResolvedEvent;
   const { t, i18n } = useTranslation()
 
   const { feeds, profile, act, ready } = useFeedStore()
-  const sources = (availableFeeds ?? feeds).filter((f) =>
-    event.sourceLocators.includes(f.sourceLocator),
-  )
+  const sourceFeed = primaryFeedForEvent(event, availableFeeds ?? feeds)
+  const sources = sourceFeed ? [sourceFeed] : []
   return (
     <div className="source-list">
       {sources.map((feed) => {
@@ -169,7 +169,7 @@ export function PosterCard({
 
   const { feeds, profile } = useFeedStore()
   const visibleFeeds = availableFeeds ?? feeds
-  const feed = visibleFeeds.find((f) => event.sourceLocators.includes(f.sourceLocator))
+  const feed = primaryFeedForEvent(event, visibleFeeds)
   const poster = posterFor(event, {
     locator: feed?.locator,
     headSha: feed?.headSha,

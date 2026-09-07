@@ -158,6 +158,15 @@ describe('resolver', () => {
     ])
     expect(merged).toHaveLength(1)
     expect(merged[0]?.summary).toEqual({ en: 'Summary' })
+    expect(merged[0]?.sourceLocators).toEqual([
+      'github:a/feed',
+      'github:b/feed',
+    ])
+    expect(merged[0]?.provenance).toContainEqual({
+      field: 'id',
+      sourceLocator: 'github:a/feed',
+      reason: 'initial',
+    })
     expect(merged[0]?.provenance).toContainEqual({
       field: 'summary',
       sourceLocator: 'github:b/feed',
