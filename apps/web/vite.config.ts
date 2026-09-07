@@ -3,69 +3,75 @@ import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
+import { headHtmlPlugin } from './build-html'
 
 const rootDir = path.dirname(fileURLToPath(import.meta.url))
 const packagesDir = path.resolve(rootDir, '../../packages')
 
-export default defineConfig({
-  plugins: [
-    react(),
-    tailwindcss(),
-    offlinePlugin(),
-    {
-      name: 'local-data-reset-headers',
-      configureServer(server) {
-        server.middlewares.use((req, res, next) => {
-          if (req.url?.split('?')[0] === '/clear-site-data.txt') {
-            res.setHeader('Clear-Site-Data', '"cache", "cookies"')
-            res.setHeader('X-Ahead-Reset', 'clear-cache-and-cookies')
-            res.setHeader('Cache-Control', 'no-store')
-          }
-          next()
-        })
+export default defineConfig(({ mode }) => {
+  const buildEnv = loadEnv(mode, rootDir, 'AHEAD_')
+
+  return {
+    plugins: [
+      react(),
+      tailwindcss(),
+      headHtmlPlugin(buildEnv.AHEAD_HEAD_HTML),
+      offlinePlugin(),
+      {
+        name: 'local-data-reset-headers',
+        configureServer(server) {
+          server.middlewares.use((req, res, next) => {
+            if (req.url?.split('?')[0] === '/clear-site-data.txt') {
+              res.setHeader('Clear-Site-Data', '"cache", "cookies"')
+              res.setHeader('X-Ahead-Reset', 'clear-cache-and-cookies')
+              res.setHeader('Cache-Control', 'no-store')
+            }
+            next()
+          })
+        },
+        configurePreviewServer(server) {
+          server.middlewares.use((req, res, next) => {
+            if (req.url?.split('?')[0] === '/clear-site-data.txt') {
+              res.setHeader('Clear-Site-Data', '"cache", "cookies"')
+              res.setHeader('X-Ahead-Reset', 'clear-cache-and-cookies')
+              res.setHeader('Cache-Control', 'no-store')
+            }
+            next()
+          })
+        },
       },
-      configurePreviewServer(server) {
-        server.middlewares.use((req, res, next) => {
-          if (req.url?.split('?')[0] === '/clear-site-data.txt') {
-            res.setHeader('Clear-Site-Data', '"cache", "cookies"')
-            res.setHeader('X-Ahead-Reset', 'clear-cache-and-cookies')
-            res.setHeader('Cache-Control', 'no-store')
-          }
-          next()
-        })
+    ],
+    resolve: {
+      alias: {
+        '@ahead/sync': path.join(packagesDir, 'sync/src'),
+        '@ahead/core': path.join(packagesDir, 'core/src'),
+        '@ahead/editor': path.join(packagesDir, 'editor/src'),
+        '@ahead/github': path.join(packagesDir, 'github/src'),
+        '@ahead/market': path.join(packagesDir, 'market/src'),
+        '@ahead/protocol': path.join(packagesDir, 'protocol/src'),
+        '@ahead/recommendation': path.join(packagesDir, 'recommendation/src'),
+        '@ahead/resolver': path.join(packagesDir, 'resolver/src'),
+        '@ahead/schema': path.join(packagesDir, 'schema/src'),
+        '@ahead/ui': path.join(packagesDir, 'ui/src'),
       },
     },
-  ],
-  resolve: {
-    alias: {
-      '@ahead/sync': path.join(packagesDir, 'sync/src'),
-      '@ahead/core': path.join(packagesDir, 'core/src'),
-      '@ahead/editor': path.join(packagesDir, 'editor/src'),
-      '@ahead/github': path.join(packagesDir, 'github/src'),
-      '@ahead/market': path.join(packagesDir, 'market/src'),
-      '@ahead/protocol': path.join(packagesDir, 'protocol/src'),
-      '@ahead/recommendation': path.join(packagesDir, 'recommendation/src'),
-      '@ahead/resolver': path.join(packagesDir, 'resolver/src'),
-      '@ahead/schema': path.join(packagesDir, 'schema/src'),
-      '@ahead/ui': path.join(packagesDir, 'ui/src'),
+    server: {
+      port: 4455,
     },
-  },
-  server: {
-    port: 4455,
-  },
-  build: {
-    rollupOptions: {
-      output: {
-        manualChunks(id) {
-          if (id.includes('/node_modules/')) {
-            if (/\/(react|react-dom|react-router|scheduler)\//u.test(id))
-              return 'react-vendor'
-            if (id.includes('/@octokit/')) return 'github-vendor'
-            if (/\/(ajv|ajv-formats|yaml)\//u.test(id)) return 'protocol-vendor'
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (id.includes('/node_modules/')) {
+              if (/\/(react|react-dom|react-router|scheduler)\//u.test(id))
+                return 'react-vendor'
+              if (id.includes('/@octokit/')) return 'github-vendor'
+              if (/\/(ajv|ajv-formats|yaml)\//u.test(id)) return 'protocol-vendor'
+            }
           }
         },
       },
     },
-  },
+  }
 })
