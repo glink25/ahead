@@ -81,8 +81,8 @@ function SearchResultCard({
         </div>
         <FavoriteButton event={event} />
       </div>
-      <footer className="border-t border-[var(--line)] px-4 py-3 [&_.subscribe.subscribed]:border-[var(--line)] [&_.subscribe.subscribed]:bg-[var(--surface)] [&_.subscribe.subscribed]:text-[var(--ink)] max-[600px]:px-3">
-        <FeedSourceBar event={event} availableFeeds={feeds} />
+      <footer className="border-t border-line px-4 py-3 max-[600px]:px-3">
+        <FeedSourceBar event={event} availableFeeds={feeds} subscribedTone="surface" />
       </footer>
     </article>
   )
@@ -119,8 +119,8 @@ export function SearchView() {
     if (value) navigate('/search?q=' + encodeURIComponent(value))
   }
   return (
-    <section className="search-view">
-      <form className="search-form" role="search" onSubmit={submit}>
+    <section className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] bg-surface">
+      <form className="flex items-center gap-2.5 border-b border-line px-[max(20px,calc((100%-804px)/2))] py-3 [&>.lucide]:w-[18px] [&>.lucide]:text-muted [&>button]:flex-none [&>button]:rounded-[14px] [&>button]:bg-surface [&>button]:px-2.5 [&>button]:py-[7px] [&>button_.lucide]:w-[17px] [&>input]:min-w-0 [&>input]:flex-1 [&>input]:border-0 [&>input]:bg-transparent [&>input]:text-base" role="search" onSubmit={submit}>
         <Search aria-hidden />
         <input
           aria-label={t('messages.search_events')}
@@ -144,8 +144,8 @@ export function SearchView() {
       {!query && !tag ? (
         <div className="empty-view"><h1>{t('messages.search_events')}</h1></div>
       ) : status === 'searching' && !events.length ? (
-        <div className="search-loading" role="status" aria-label={t('messages.searching')}>
-          <LoaderCircle className="loading-spinner" />
+        <div className="flex min-h-[180px] items-center justify-center gap-2.5 text-sm text-muted" role="status" aria-label={t('messages.searching')}>
+          <LoaderCircle className="size-[22px] animate-[spinner-turn_1s_linear_infinite] text-muted motion-reduce:animate-none" />
           <span>{t('messages.searching')}</span>
         </div>
       ) : error?.reason === 'authentication-required' || error?.reason === 'authentication-expired' ? (

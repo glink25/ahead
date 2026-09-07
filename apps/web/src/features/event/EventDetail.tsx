@@ -161,9 +161,9 @@ export function EventDetail() {
     allowRemoteImages: !profile.settings?.privacyRemoteImages,
   })
   return (
-    <article className="event-detail">
+    <article data-event-detail>
       <section
-        className="event-detail-hero"
+        className="relative min-h-[clamp(380px,58dvh,640px)] overflow-hidden text-white max-[600px]:min-h-[clamp(380px,58dvh,540px)]"
         style={{
           background: 'linear-gradient(145deg,' + poster.gradient.join(',') + ')',
         }}
@@ -171,7 +171,7 @@ export function EventDetail() {
       >
         {poster.url && (
           <img
-            className="event-detail-hero-image"
+            className="absolute inset-0 h-full w-full object-cover object-[center_44%]"
             src={poster.url}
             alt=""
             onError={(e) => {
@@ -179,20 +179,20 @@ export function EventDetail() {
             }}
           />
         )}
-        <div className="event-detail-hero-shade" />
-        <div className="event-detail-hero-content">
-          <div className="event-detail-heading">
+        <div className="absolute inset-0 h-full w-full bg-[linear-gradient(180deg,#07130d4d_0%,#07130d0d_30%,#07130d80_68%,#07130df0_100%),linear-gradient(90deg,#07130d75,transparent_65%)]" />
+        <div className="relative mx-auto flex min-h-[clamp(380px,58dvh,640px)] w-[min(100%,920px)] flex-col justify-end px-8 pb-[52px] pt-[calc(var(--header-height)+env(safe-area-inset-top)+36px)] max-[600px]:min-h-[clamp(380px,58dvh,540px)] max-[600px]:px-5 max-[600px]:pb-9">
+          <div className="flex items-end justify-between gap-8 max-[600px]:flex-col max-[600px]:items-start max-[600px]:gap-5 [&_h1]:max-w-[720px] [&_h1]:text-balance [&_h1]:text-[clamp(34px,5vw,62px)]! [&_h1]:leading-[1.12]! [&_h1]:tracking-[-1.5px]! max-[600px]:[&_h1]:text-[clamp(34px,10vw,46px)]! [&_.copy-link-control]:text-white max-[600px]:[&_.copy-link-control]:order-first [&_.copy-link-control_.primary-link]:border [&_.copy-link-control_.primary-link]:border-[#ffffff40] [&_.copy-link-control_.primary-link]:bg-[#0a160d66] [&_.copy-link-control_.primary-link]:text-white [&_.copy-link-control_.primary-link]:backdrop-blur-[14px] max-[600px]:[&_.copy-link-control_.primary-link]:px-3.5 max-[600px]:[&_.copy-link-control_.primary-link]:py-[9px] max-[600px]:[&_.copy-link-control_.primary-link]:text-xs [&_.copy-link-control_label]:text-[#ffffffcc]">
             <h1 id="event-detail-title">{pickText(event.title)}</h1>
             <CopyLinkButton url={shareUrl} />
           </div>
-          <p className="detail-countdown">{countdown.headline}</p>
+          <p className="mt-[22px] text-[clamp(30px,4.5vw,54px)] leading-[1.12]! tracking-[-1px] text-[#e0edbd] max-[600px]:text-[clamp(30px,10vw,44px)]">{countdown.headline}</p>
           {countdown.dateLabel &&
             !countdown.headline.includes(countdown.dateLabel) && (
-              <p className="event-detail-date">{countdown.dateLabel}</p>
+              <p className="mt-2 text-[13px] text-[#edf2e9d9]">{countdown.dateLabel}</p>
             )}
         </div>
       </section>
-      <div className="event-detail-body">
+      <div className="mx-auto w-[min(100%,760px)] px-6 pb-5 pt-9 max-[600px]:px-5 max-[600px]:pb-3 max-[600px]:pt-[30px] [&>h2]:mx-1 [&>h2]:mb-3 [&>h2]:mt-[30px] [&>h2]:text-base [&>h2]:font-semibold [&>.source-list]:mt-6">
         {!!shared.errors.length && !!event && (
           <details className="feedback" role="status">
             <summary>{t('messages.some_event_sources_could_not_be_opened')}</summary>
@@ -200,12 +200,12 @@ export function EventDetail() {
           </details>
         )}
         {(pickText(event.description) || pickText(event.summary)) && (
-          <p className="event-detail-description">
+          <p className="whitespace-pre-wrap [overflow-wrap:anywhere]">
             {pickText(event.description) || pickText(event.summary)}
           </p>
         )}
         {own && (
-          <div className="personal-actions">
+          <div className="my-5 flex items-center gap-5 text-sm">
             <Link
               className="primary-link"
               to={'/studio?event=' + encodeURIComponent(event.id)}
@@ -223,12 +223,12 @@ export function EventDetail() {
           </div>
         )}
         {error && <p role="alert">{displayMessage(error)}</p>}
-        <div className="detail-actions">
+        <div className="my-3 flex gap-2">
           <FavoriteButton event={event} />
           <HideMenu event={event} />
         </div>
         <h2>{t('messages.schedule_history')}</h2>
-        <ol className="schedule-timeline">
+        <ol className="mx-2.5 my-6 border-l border-line [&_li]:relative [&_li]:list-none [&_li]:pb-7 [&_li]:pl-6 [&_li]:before:absolute [&_li]:before:left-[-4px] [&_li]:before:top-1.5 [&_li]:before:size-[7px] [&_li]:before:rounded-full [&_li]:before:bg-[#91a576] [&_li]:before:content-[''] [&_time]:text-xs [&_time]:text-muted [&_p]:text-xs [&_p]:text-muted [&_h3]:my-2 [&_h3]:text-lg">
           {[...event.schedule]
             .sort((a, b) => a.recordedAt.localeCompare(b.recordedAt))
             .map((entry) => (
@@ -250,11 +250,11 @@ export function EventDetail() {
         {event.evidence
           ?.filter((e) => e.kind === 'citation' || e.kind === 'note')
           .map((e, i) => (
-            <p className="citation" key={i}>
+            <p className="text-xs text-muted [overflow-wrap:anywhere]" key={i}>
               {e.value}
             </p>
           ))}
-        <FeedSourceBar event={event} availableFeeds={availableFeeds} />
+        <FeedSourceBar event={event} availableFeeds={availableFeeds} subscribedTone="panel" />
       </div>
     </article>
   )

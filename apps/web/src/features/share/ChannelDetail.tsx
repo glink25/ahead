@@ -31,14 +31,14 @@ export function ChannelDetail() {
       </div>
       {resource.feed.feed.description && <p>{pickText(resource.feed.feed.description)}</p>}
       {!!resource.feed.feed.tags?.length && (
-        <div className="resource-tags">
+        <div className="my-3.5 flex flex-wrap gap-2 [&_span]:rounded-full [&_span]:bg-panel [&_span]:px-[9px] [&_span]:py-[5px] [&_span]:text-xs [&_span]:text-muted">
           {resource.feed.feed.tags.map((tag) => (
             <span key={tag.id}># {pickText(tag.label) || tag.id}</span>
           ))}
         </div>
       )}
       <button
-        className={'subscribe ' + (subscribed ? 'subscribed' : '')}
+        className={`subscribe ${subscribed ? 'border border-[#ffffff40] bg-[#ffffff16] text-inherit' : ''}`}
         disabled={!hydrated}
         aria-pressed={Boolean(subscribed)}
         onClick={() => act({ type: subscribed ? 'unsubscribe' : 'subscribe', source })}

@@ -100,7 +100,7 @@ export function PersonDetail() {
       </div>
       {resource.user.bio && <p>{pickText(resource.user.bio)}</p>}
       <button
-        className={'subscribe ' + (followed ? 'subscribed' : '')}
+        className={`subscribe ${followed ? 'border border-[#ffffff40] bg-[#ffffff16] text-inherit' : ''}`}
         disabled={!hydrated}
         aria-pressed={Boolean(followed)}
         onClick={() => act({ type: followed ? 'unsubscribe' : 'subscribe', source })}

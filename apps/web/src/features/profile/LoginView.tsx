@@ -41,7 +41,7 @@ export function LoginPage() {
     return <Navigate to={returnTo ?? '/profiles?choose=1'} replace />
   }
   return (
-    <section className="login-view">
+    <section className="max-w-[480px]! [&>.primary-link]:mt-7 [&>.primary-link]:w-full [&>.settings-group]:mt-6">
       <h1>{t('messages.sign_in_to_ahead')}</h1>
       {oauthProvider.available && (
         <button

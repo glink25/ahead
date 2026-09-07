@@ -17,7 +17,7 @@ export function ExperimentalView() {
   const [clearing, setClearing] = useState(false)
   if (!hydrated) return <PageSkeleton variant="settings" />
   return (
-    <section className="profile-view">
+    <section className="pb-10">
       <h1>{t('messages.experimental_settings')}</h1>
       <div className="settings-group">
         <details
@@ -28,7 +28,7 @@ export function ExperimentalView() {
           <summary>
              {t('messages.diagnostics')} <ChevronRight />
           </summary>
-          <div className="settings-body diagnostic-output">
+          <div className="settings-body text-xs [overflow-wrap:anywhere] [&_p]:py-1.5">
             {errors.map((error, i) => (
               <p key={i}>{displayMessage(error)}</p>
             ))}
@@ -42,7 +42,7 @@ export function ExperimentalView() {
          {t('messages.clear_all_profiles_sign_in_information_and_caches_for_this_site_in_this_bro')} </p>
       <div className="settings-group">
         <button
-          className="setting-row danger"
+          className="setting-row text-[#b64e45]"
           disabled={clearing}
           onClick={() => {
             if (

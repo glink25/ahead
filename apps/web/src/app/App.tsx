@@ -151,7 +151,8 @@ export function App() {
   return (
     <TabShell>
       <div
-        className={'browser-pages' + (!browsing ? ' browsing-hidden' : '')}
+        data-browser-pages
+        className={`absolute inset-y-0 left-0 flex w-[200%] transition-transform duration-280 ease-[cubic-bezier(0.22,0.8,0.3,1)] motion-reduce:transition-none ${browsing ? '' : 'pointer-events-none invisible'}`}
         style={{
           transform: mine
             ? 'translateX(var(--tab-swipe-offset, 0px))'
@@ -159,7 +160,7 @@ export function App() {
         }}
       >
         <div
-          className="browser-pane"
+          className="relative h-full w-1/2 flex-none overflow-hidden"
           inert={!mine || !browsing}
           aria-hidden={!mine || !browsing}
         >
@@ -168,7 +169,7 @@ export function App() {
           )}
         </div>
         <div
-          className="browser-pane"
+          className="relative h-full w-1/2 flex-none overflow-hidden"
           inert={mine || !browsing}
           aria-hidden={mine || !browsing}
         >

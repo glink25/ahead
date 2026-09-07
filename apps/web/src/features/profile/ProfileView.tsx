@@ -47,14 +47,14 @@ export function ProfileView() {
     return <Navigate to="/settings/experimental#diagnostics" replace />
   if (!ready || authLoading) return <PageSkeleton variant="settings" />
   return (
-    <section className="profile-view">
+    <section className="pb-10">
       <h1>{t('messages.settings')}</h1>
       <h2>{t('messages.profiles')}</h2>
       <div className="settings-group">
         <Link className="setting-row" to="/profiles">
           <span>
             <strong>{profileName(space)}</strong>
-            <small className="profile-meta">
+            <small className="mt-1.5 block text-xs font-normal text-muted">
               {space?.private === false ? t('messages.public') : t('messages.private')}
             </small>
           </span>
@@ -74,7 +74,7 @@ export function ProfileView() {
           <div className="setting-row" aria-disabled="true">
             <span>
               {t('messages.view_profile')}
-              <small className="profile-meta">{t('messages.sync_before_copying_link')}</small>
+              <small className="mt-1.5 block text-xs font-normal text-muted">{t('messages.sync_before_copying_link')}</small>
             </span>
           </div>
         )}
@@ -91,7 +91,7 @@ export function ProfileView() {
         </div>
         {session && (
           <button
-            className="setting-row danger"
+            className="setting-row text-[#b64e45]"
             onClick={() => {
               if (!window.confirm(t('messages.clear_all_local_data_for_this_site_all_local_profiles_unsynced_changes_cred')))
                 return

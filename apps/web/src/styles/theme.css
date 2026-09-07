@@ -1,0 +1,37 @@
+@theme inline {
+  --color-surface: var(--surface);
+  --color-panel: var(--panel);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-accent: var(--accent);
+}
+
+:root {
+  --surface: #f5f4f0;
+  --panel: #fff;
+  --ink: #202822;
+  --muted: #737c72;
+  --line: #e0e3dc;
+  --accent: #dce9b7;
+  --header-height: 72px;
+  color: var(--ink);
+  background: var(--surface);
+  font-family: Inter, ui-sans-serif, system-ui, 'PingFang SC', sans-serif;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --surface: #121714;
+    --panel: #1e2620;
+    --ink: #eef2e9;
+    --muted: #a3afa4;
+    --line: #354238;
+    color-scheme: dark;
+  }
+}
+
+@media (max-width: 600px) {
+  :root { --header-height: 62px; }
+}

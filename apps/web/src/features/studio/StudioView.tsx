@@ -419,8 +419,8 @@ function StudioEditor({
 
   const recurrenceVisible = fields.recurrenceFrequency !== 'none' && fields.recurrenceFrequency !== 'advanced'
   return (
-    <section className="studio-view">
-      <div className="editor-heading">
+    <section className="max-w-[680px]!">
+      <div className="mb-7 flex items-center justify-between gap-4 max-[600px]:mb-[18px]">
         <div>
           <h1>{initial ? t('messages.edit_event') : t('messages.new_event')}</h1>
           <p className="muted">{name} · {privateRepo ? t('messages.private') : t('messages.public')}</p>
@@ -430,8 +430,8 @@ function StudioEditor({
         </button>
       </div>
       {mode === 'form' ? (
-        <div className="editor-form">
-          <label className="event-title-label">
+        <div className="grid gap-5 [&_.setting-row]:max-[600px]:text-[13px] [&_.setting-row_input:not([type=checkbox])]:min-w-0 [&_.setting-row_input:not([type=checkbox])]:max-w-[65%] [&_.setting-row_input:not([type=checkbox])]:rounded-lg [&_.setting-row_input:not([type=checkbox])]:border-0 [&_.setting-row_input:not([type=checkbox])]:bg-surface [&_.setting-row_input:not([type=checkbox])]:p-2 [&_.setting-row_input:not([type=checkbox])]:text-sm max-[600px]:[&_.setting-row_input:not([type=checkbox])]:text-xs">
+          <label className="text-xs text-muted [&_input]:block [&_input]:w-full [&_input]:rounded-none [&_input]:border-0 [&_input]:border-b [&_input]:border-line [&_input]:bg-transparent [&_input]:px-0 [&_input]:py-4 [&_input]:text-2xl [&_input]:font-medium [&_input]:text-ink max-[600px]:[&_input]:text-[22px]">
             {t('messages.event_name')}
             <input
               autoFocus
@@ -444,11 +444,11 @@ function StudioEditor({
           </label>
           {errors.title && <p id="title-error" className="field-error">{displayMessage(errors.title)}</p>}
 
-          <section className="editor-section" aria-labelledby="event-time-heading">
+          <section className="grid gap-[9px] [&>h2]:m-0! [&>h2]:px-1 [&>h2]:text-[13px]! [&>h2]:font-medium! [&>h2]:text-muted" aria-labelledby="event-time-heading">
             <h2 id="event-time-heading">{t('messages.time')}</h2>
             <div className="settings-group">
               {fields.custom ? (
-                <div className="settings-body editor-advanced-notice">
+                <div className="settings-body px-5 py-3.5 text-xs leading-[1.55] text-muted">
                   {t('messages.this_event_uses_a_custom_schedule_adjust_it_in_the_advanced_editor')}
                 </div>
               ) : (
@@ -493,13 +493,13 @@ function StudioEditor({
                     />
                   </label>
                   {errors.end && <p className="field-error">{displayMessage(errors.end)}</p>}
-                  {!fields.allDay && <p className="editor-timezone">{Intl.DateTimeFormat().resolvedOptions().timeZone}</p>}
+                  {!fields.allDay && <p className="px-5 py-2 text-[11px] text-muted">{Intl.DateTimeFormat().resolvedOptions().timeZone}</p>}
                 </>
               )}
             </div>
           </section>
 
-          <section className="editor-section" aria-labelledby="event-repeat-heading">
+          <section className="grid gap-[9px] [&>h2]:m-0! [&>h2]:px-1 [&>h2]:text-[13px]! [&>h2]:font-medium! [&>h2]:text-muted" aria-labelledby="event-repeat-heading">
             <h2 id="event-repeat-heading">{t('messages.repeat')}</h2>
             <div className="settings-group">
               <label className="setting-row">
@@ -522,13 +522,13 @@ function StudioEditor({
                 </select>
               </label>
               {fields.recurrenceFrequency === 'advanced' && (
-                <p className="editor-advanced-notice">{t('messages.advanced_repeat_rule_is_preserved')}</p>
+                <p className="px-5 py-3.5 text-xs leading-[1.55] text-muted">{t('messages.advanced_repeat_rule_is_preserved')}</p>
               )}
               {recurrenceVisible && (
                 <>
                   <label className="setting-row">
                     {t('messages.repeat_every')}
-                    <span className="inline-editor-field">
+                    <span className="inline-flex items-center justify-end gap-2 text-xs text-muted [&_input]:w-[76px]">
                       <input
                         aria-label={t('messages.repeat_interval')}
                         type="number"
@@ -585,7 +585,7 @@ function StudioEditor({
             </div>
           </section>
 
-          <details className="settings-group settings-disclosure editor-extra-section">
+          <details className="settings-group settings-disclosure mt-0">
             <summary>{t('messages.notes')} <Plus /></summary>
             <textarea
               aria-label={t('messages.notes')}
@@ -595,12 +595,12 @@ function StudioEditor({
             />
           </details>
 
-          <details className="settings-group settings-disclosure editor-extra-section">
+          <details className="settings-group settings-disclosure mt-0">
             <summary>{t('messages.event_image')} <Plus /></summary>
             {fields.imageAdvanced && !changes.image && (
-              <p className="editor-advanced-notice">{t('messages.advanced_image_is_preserved')}</p>
+              <p className="px-5 py-3.5 text-xs leading-[1.55] text-muted">{t('messages.advanced_image_is_preserved')}</p>
             )}
-            <label className="editor-url-field">
+            <label className="grid gap-2 px-5 pb-5 text-xs text-muted [&_input]:w-full [&_input]:rounded-[10px] [&_input]:border-0 [&_input]:bg-surface [&_input]:px-3 [&_input]:py-2.5 [&_input]:text-ink">
               {t('messages.image_link')}
               <input
                 aria-label={t('messages.image_link')}
@@ -616,10 +616,10 @@ function StudioEditor({
           </details>
         </div>
       ) : (
-        <div className="yaml-editor">
-          <div className="yaml-editor-heading">
+        <div className="block text-[13px] text-muted [&>textarea]:mt-2.5 [&>textarea]:block [&>textarea]:min-h-[340px] [&>textarea]:w-full [&>textarea]:rounded-xl [&>textarea]:border [&>textarea]:border-line [&>textarea]:bg-panel [&>textarea]:p-4 [&>textarea]:font-mono [&>textarea]:text-[13px]">
+          <div className="flex items-center justify-between gap-3">
             <span>{t('messages.event_yaml')}</span>
-            <div className="yaml-editor-actions">
+            <div className="flex flex-wrap items-center justify-end gap-3 [&_.text-button]:inline-flex [&_.text-button]:items-center [&_.text-button]:gap-[5px] [&_.text-button]:text-xs [&_svg]:size-3.5">
               <a
                 className="text-button"
                 href={OEF_DOCUMENTATION_URL}
@@ -647,7 +647,7 @@ function StudioEditor({
             }}
           />
           {copyState === 'manual' && (
-            <label className="manual-copy-prompt">
+            <label className="mt-3.5 grid gap-2 [&_textarea]:mt-0 [&_textarea]:min-h-[120px] [&_textarea]:font-sans">
               {t('messages.copy_prompt_manually')}
               <textarea
                 readOnly
@@ -665,15 +665,15 @@ function StudioEditor({
           <pre>{details}</pre>
         </details>
       )}
-      <div className="editor-footer">
+      <div className="mt-6 flex items-center justify-end gap-3 [&>span]:text-xs [&>span]:text-muted">
         <button className="primary-link" disabled={saving} onClick={() => void save()}>
           {saving ? t('messages.saving') : t('messages.save')}
         </button>
       </div>
       {blocker.state === 'blocked' && (
-        <div className="confirm-backdrop">
+        <div className="fixed inset-0 z-60 grid place-items-center bg-[#0007] p-6">
           <section
-            className="confirm-panel"
+            className="grid min-w-[280px] gap-[18px] rounded-[20px] bg-panel p-6 shadow-[0_20px_60px_#0004] [&_h2]:text-xl"
             role="dialog"
             aria-modal="true"
             aria-label={t('messages.unsaved_event')}

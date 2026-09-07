@@ -36,10 +36,10 @@ export function FollowingView() {
   )
   if (!hydrated) return <PageSkeleton variant="list" />
   return (
-    <section className="following-view">
+    <section>
       <h1>{t('messages.following')}</h1>
       <h2>
-         {t('messages.channels')} <small>{channels.length}</small>
+         {t('messages.channels')} <small className="ml-1.5 font-normal text-muted">{channels.length}</small>
       </h2>
       {!channels.length && (
         <p className="muted">
@@ -52,7 +52,7 @@ export function FollowingView() {
         const key = sourceKey(source),
           feed = feeds.find((f) => f.sourceLocator === key)
         return (
-          <article className="following-card" key={key}>
+          <article className="mt-3 overflow-hidden rounded-[18px] border border-line bg-panel [&_button]:whitespace-nowrap [&_button]:text-[13px] [&_select]:rounded-lg [&_select]:border [&_select]:border-line [&_select]:bg-surface [&_select]:px-2.5 [&_select]:py-[7px]" key={key}>
             <div className="setting-row">
               <h3>
                 <Link to={'/channels/view?source=' + encodeURIComponent(key)}>
@@ -90,7 +90,7 @@ export function FollowingView() {
         )
       })}
       <h2>
-         {t('messages.people')} <small>{followed.length}</small>
+         {t('messages.people')} <small className="ml-1.5 font-normal text-muted">{followed.length}</small>
       </h2>
       <p className="muted">{t('messages.recommendations_consider_the_preferences_of_people_you_follow')}</p>
       {followed.map((source) => {
@@ -98,7 +98,7 @@ export function FollowingView() {
           user = users.find((u) => u.sourceLocator === key)?.user
         const listing = listings.find((l) => sourceKey(l.source) === key)
         return (
-          <article className="following-card" key={key}>
+          <article className="mt-3 overflow-hidden rounded-[18px] border border-line bg-panel [&_button]:whitespace-nowrap [&_button]:text-[13px] [&_select]:rounded-lg [&_select]:border [&_select]:border-line [&_select]:bg-surface [&_select]:px-2.5 [&_select]:py-[7px]" key={key}>
             <div className="setting-row">
               <h3><Link to={'/people/view?source=' + encodeURIComponent(key)}>
                 {pickText(user?.displayName) || pickText(listing?.source.name) || listing?.title || t('messages.followed_user')}
@@ -144,7 +144,7 @@ export function FollowingView() {
         }
         return (
           <article
-            className="following-card setting-row"
+            className="setting-row mt-3 overflow-hidden rounded-[18px] border border-line bg-panel [&_button]:whitespace-nowrap [&_button]:text-[13px]"
             key={listing.issueNumber}
           >
             <h3><Link to={'/people/view?source=' + encodeURIComponent(sourceKey(source))}>{pickText(listing.source.name) || listing.title}</Link></h3>

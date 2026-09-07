@@ -1,0 +1,3 @@
+@keyframes loading { 50% { opacity: 0.3; } }
+@keyframes spinner-turn { to { transform: rotate(360deg); } }
+@keyframes skeleton-shimmer { to { background-position-x: -300%; } }

@@ -150,7 +150,7 @@ export function DiscoverTab({
   if (!events.length)
     return (
       <div className="empty-view">
-        <span className="empty-orbit"><Sparkles /></span>
+        <span className="text-[50px] text-[#94a676]"><Sparkles /></span>
         <h1>
           {marketStatus === 'failed' ? t('messages.content_is_temporarily_unavailable') : t('messages.no_events_yet')}
         </h1>
@@ -162,7 +162,7 @@ export function DiscoverTab({
     to = Math.min(events.length, index + 3)
   return (
     <div
-      className="discover-scroll"
+      className="h-full touch-pan-y snap-y snap-mandatory overflow-y-auto overscroll-y-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       ref={container}
       aria-label={t('messages.discover_events')}
       onPointerDownCapture={() => {
@@ -179,7 +179,7 @@ export function DiscoverTab({
       <div style={{ height: from * height }} aria-hidden />
       {events.slice(from, to).map((event, offset) => (
         <div
-          className="poster-slot"
+          className="snap-start snap-always"
           data-index={from + offset}
           key={event.id}
           style={{ height }}

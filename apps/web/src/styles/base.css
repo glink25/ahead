@@ -1,0 +1,63 @@
+@layer base {
+  html {
+    height: 100%;
+    background: #0f172a;
+  }
+
+  body {
+    min-width: 320px;
+    height: 100%;
+    min-height: 100%;
+    overflow: hidden;
+    background: var(--surface);
+  }
+
+  #root { height: 100%; }
+
+  button,
+  a,
+  summary { -webkit-tap-highlight-color: transparent; }
+
+  button,
+  summary { cursor: pointer; }
+
+  button:disabled {
+    cursor: wait;
+    opacity: 0.5;
+  }
+
+  button { color: inherit; }
+
+  input,
+  textarea,
+  select { color: var(--ink); }
+
+  :focus-visible {
+    outline: 2px solid #548e7e;
+    outline-offset: 4px;
+  }
+
+  .lucide {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+    vertical-align: middle;
+    stroke-width: 1.8;
+  }
+
+  button .lucide,
+  a .lucide,
+  summary .lucide { display: inline-block; }
+
+  [data-sonner-toaster] { font-family: inherit; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

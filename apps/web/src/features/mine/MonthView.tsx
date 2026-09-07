@@ -38,9 +38,12 @@ function eventArtwork(
 }
 
 function dayClass(key: string, selectedDate: string | undefined, today: string) {
-  return [key === selectedDate ? 'selected-day' : '', key === today ? 'today' : '']
-    .filter(Boolean)
-    .join(' ')
+  if (key === selectedDate && key === today)
+    return 'bg-ink font-extrabold text-surface shadow-[inset_0_0_0_2px_#a8be86]'
+  if (key === selectedDate) return 'bg-ink text-surface'
+  if (key === today)
+    return 'bg-[color-mix(in_srgb,var(--accent)_18%,transparent)] font-extrabold text-[#65843e] shadow-[inset_0_0_0_1px_#91a576]'
+  return ''
 }
 
 function parseKey(value: string) {
@@ -301,7 +304,7 @@ function PeriodScroller({
 
   return (
     <div
-      className={`calendar-scroll ${scale}-scroll`}
+      className="relative min-h-[150px] flex-1 snap-y snap-mandatory overflow-y-auto overscroll-contain [overflow-anchor:none] [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
       ref={viewport}
       onScroll={() => {
         if (timer.current) clearTimeout(timer.current)
@@ -312,7 +315,7 @@ function PeriodScroller({
         const ordinal = base + index
         return (
           <section
-            className={`calendar-group ${scale}-group`}
+            className="min-h-full snap-start snap-always px-0.5 pb-7 pt-3.5 [&>h2]:mb-3.5 [&>h2]:ml-1.5 [&>h2]:text-xl [&>h2]:font-semibold"
             data-period-ordinal={ordinal}
             data-active={ordinal === target ? 'true' : undefined}
             key={ordinal}
@@ -363,10 +366,10 @@ function MonthPeriod({
     <>
       <h2>{calendarLabel(month, { year: 'numeric', month: 'long' }, locale)}</h2>
       {!!approximate.length && (
-        <div className="approximate-events">
+        <div className="mx-1 mb-3 -mt-1 flex flex-wrap gap-1.5 [&_a]:max-w-full [&_a]:overflow-hidden [&_a]:text-ellipsis [&_a]:whitespace-nowrap [&_a]:rounded-lg [&_a]:px-2 [&_a]:py-[5px] [&_a]:text-[10px] [&_a]:text-white [&_a]:[text-shadow:0_1px_2px_#0008]">
           {approximate.map((event) => (
             <Link
-              className="calendar-event-artwork"
+              className="bg-cover bg-center"
               key={event.id}
               style={eventArtwork(posterForEvent(event), 'solid')}
               to={'/events/' + encodeURIComponent(event.id)}
@@ -376,25 +379,25 @@ function MonthPeriod({
           ))}
         </div>
       )}
-      <div className="month-grid">
+      <div className="grid grid-cols-7">
         {Array.from({ length: blanks }, (_, i) => <span key={'blank' + i} />)}
         {Array.from({ length: count }, (_, i) => {
           const key = keyFor(new Date(Date.UTC(year, index, i + 1)))
           const list = occurrences.get(key) ?? []
           return (
-            <div className="day-cell" key={key}>
+            <div className="relative h-16 min-w-0 border-t border-line text-center" key={key}>
               <button
-                className={dayClass(key, selectedDate, today)}
+                className={`mt-0.5 size-7 rounded-full text-xs ${dayClass(key, selectedDate, today)}`}
                 aria-label={key}
                 aria-pressed={key === selectedDate}
                 onClick={() => onSelect(key)}
               >
                 {i + 1}
               </button>
-              <div className="day-events">
+              <div className="flex h-7 flex-col overflow-hidden">
                 {list.slice(0, 2).map((event) => (
                   <Link
-                    className="calendar-event-artwork"
+                    className="mx-0.5 overflow-hidden text-ellipsis whitespace-nowrap rounded-[3px] bg-cover bg-center px-[3px] text-[9px] text-white [text-shadow:0_1px_2px_#0008] max-[600px]:text-[8px]"
                     key={event.id}
                     style={eventArtwork(posterForEvent(event), 'solid')}
                     to={'/events/' + encodeURIComponent(event.id)}
@@ -403,7 +406,7 @@ function MonthPeriod({
                   </Link>
                 ))}
               </div>
-              {list.length > 2 && <span className="event-overflow">+{list.length - 2}</span>}
+              {list.length > 2 && <span className="absolute right-px top-1 text-[8px] text-muted">+{list.length - 2}</span>}
             </div>
           )
         })}
@@ -437,10 +440,10 @@ function YearPeriod({
     <>
       <h2>{calendarLabel(yearDate, { year: 'numeric' }, locale)}</h2>
       {!!approximate.length && (
-        <div className="approximate-events year-approximate-events">
+        <div className="mx-1 mb-3 -mt-1 flex max-h-[54px] flex-wrap gap-1.5 overflow-y-auto [&_a]:max-w-full [&_a]:overflow-hidden [&_a]:text-ellipsis [&_a]:whitespace-nowrap [&_a]:rounded-lg [&_a]:px-2 [&_a]:py-[5px] [&_a]:text-[10px] [&_a]:text-white [&_a]:[text-shadow:0_1px_2px_#0008]">
           {approximate.map((event) => (
             <Link
-              className="calendar-event-artwork"
+              className="bg-cover bg-center"
               key={event.id}
               style={eventArtwork(posterForEvent(event))}
               to={'/events/' + encodeURIComponent(event.id)}
@@ -450,27 +453,27 @@ function YearPeriod({
           ))}
         </div>
       )}
-      <div className="year-grid">
+      <div className="grid grid-cols-3 gap-6 max-[600px]:gap-3">
         {Array.from({ length: 12 }, (_, monthIndex) => {
           const month = new Date(Date.UTC(year, monthIndex, 1))
           const blanks = (month.getUTCDay() - firstDay + 7) % 7
           const count = new Date(Date.UTC(year, monthIndex + 1, 0)).getUTCDate()
           return (
-            <section className="mini-month" key={monthIndex}>
-              <h3>
+            <section key={monthIndex}>
+              <h3 className="my-3 text-base font-semibold max-[600px]:text-sm">
                 <button onClick={() => onNavigate(keyFor(month), 'month')}>
                   {calendarLabel(month, { month: 'short' }, locale)}
                 </button>
               </h3>
-              <div className="month-grid">
+              <div className="grid grid-cols-7">
                 {Array.from({ length: blanks }, (_, i) => <span key={'blank' + i} />)}
                 {Array.from({ length: count }, (_, i) => {
                   const key = keyFor(new Date(Date.UTC(year, monthIndex, i + 1)))
                   const list = occurrences[monthIndex]!.get(key) ?? []
                   return (
-                    <div className="day-cell" key={key}>
+                    <div className="relative h-7 min-w-0 text-center max-[600px]:h-[22px]" key={key}>
                       <button
-                        className={dayClass(key, selectedDate, today)}
+                        className={`size-[22px] rounded-full text-[10px] max-[600px]:h-[22px] max-[600px]:w-[17px] max-[600px]:text-[9px] ${dayClass(key, selectedDate, today)}`}
                         aria-label={key}
                         aria-pressed={key === selectedDate}
                         onClick={() => onSelect(key, 'month')}
@@ -479,7 +482,7 @@ function YearPeriod({
                       </button>
                       {!!list.length && (
                         <span
-                          className="event-dots"
+                          className="absolute inset-x-0.5 bottom-0 flex min-h-[5px] items-center justify-center gap-0.5 [&_i]:size-1 [&_i]:rounded-full [&_i]:bg-cover [&_i]:bg-center [&_small]:text-[7px] [&_small]:text-muted"
                           role="img"
                           aria-label={list.map((event) => pickText(event.title)).join(', ')}
                         >
@@ -524,14 +527,14 @@ function WeekPeriod({
         {calendarLabel(week, { month: 'short', day: 'numeric' }, locale)} –{' '}
         {calendarLabel(end, { year: 'numeric', month: 'short', day: 'numeric' }, locale)}
       </h2>
-      <div className="week-agenda">
+      <div className="grid border-t border-line">
         {days.map((day) => {
           const key = keyFor(day)
           const list = occurrences.get(key) ?? []
           return (
-            <section className={`week-day-row${key === today ? ' today' : ''}`} key={key}>
+            <section className={`grid min-h-[72px] grid-cols-[62px_minmax(0,1fr)] gap-3 border-b border-line px-1 py-[9px] ${key === today ? 'bg-[color-mix(in_srgb,var(--accent)_12%,transparent)]' : ''}`} key={key}>
               <button
-                className={dayClass(key, selectedDate, today)}
+                className={`grid self-start justify-items-center gap-[3px] rounded-xl px-1 py-1.5 [&_small]:text-[10px] [&_small]:text-muted [&_strong]:text-lg ${key === selectedDate ? '[&_small]:text-inherit' : ''} ${dayClass(key, selectedDate, today)}`}
                 aria-label={key}
                 aria-pressed={key === selectedDate}
                 onClick={() => onSelect(key)}
@@ -539,13 +542,13 @@ function WeekPeriod({
                 <small>{calendarLabel(day, { weekday: 'short' }, locale)}</small>
                 <strong>{day.getUTCDate()}</strong>
               </button>
-              <div className="week-day-events">
+              <div className="flex min-w-0 flex-wrap content-start gap-[7px]">
                 {list.length ? list.map((event) => {
                   const time = eventTime(event, timezone, locale)
                   const summary = pickText(event.summary) || pickText(event.description)
                   return (
                     <Link
-                      className="week-event calendar-event-artwork"
+                      className="grid min-w-0 max-w-[280px] flex-[1_1_180px] gap-[3px] rounded-[10px] border border-[#ffffff26] bg-cover bg-center px-2.5 py-2 text-white [text-shadow:0_1px_3px_#000c] [&_small]:text-[10px] [&_small]:text-[#e8f4d8] [&_strong]:overflow-hidden [&_strong]:text-ellipsis [&_strong]:whitespace-nowrap [&_strong]:text-xs [&_span]:overflow-hidden [&_span]:text-ellipsis [&_span]:whitespace-nowrap [&_span]:text-[10px] [&_span]:text-[#ffffffe0]"
                       key={event.id}
                       style={eventArtwork(posterForEvent(event))}
                       to={'/events/' + encodeURIComponent(event.id)}
@@ -555,7 +558,7 @@ function WeekPeriod({
                       {summary && <span>{summary}</span>}
                     </Link>
                   )
-                }) : <span className="week-empty">—</span>}
+                }) : <span className="self-center text-line">—</span>}
               </div>
             </section>
           )
@@ -621,9 +624,9 @@ export function MonthView({
   )
 
   return (
-    <section className="month-view">
-      <div className="calendar-controls">
-        <div className="view-switch" aria-label={t('messages.calendar_view')}>
+    <section className="mx-auto flex min-h-0 w-full max-w-[860px] flex-1 flex-col px-7 pb-5 max-[600px]:px-4 max-[600px]:pb-4">
+      <div className="flex shrink-0 items-center justify-between pb-4 pt-1 text-sm [&>button]:rounded-[20px] [&>button]:px-3 [&>button]:py-2">
+        <div className="flex rounded-3xl bg-line p-[3px] [&_button]:rounded-[20px] [&_button]:px-[18px] [&_button]:py-[7px] [&_button[aria-pressed=true]]:bg-panel [&_button[aria-pressed=true]]:shadow-[0_1px_4px_#0001]" aria-label={t('messages.calendar_view')}>
           {(['year', 'month', 'week'] as const).map((value) => (
             <button key={value} aria-pressed={scale === value} onClick={() => navigateCalendar(viewDate, value)}>
               {{ year: t('messages.year'), month: t('messages.month'), week: t('messages.week') }[value]}
@@ -636,7 +639,7 @@ export function MonthView({
         }}>{t('messages.today')}</button>
       </div>
       {scale === 'month' && (
-        <div className="weekdays">
+        <div className="grid shrink-0 grid-cols-7 border-b border-line py-2 text-center text-[11px] text-muted">
           {weekdays.map((day) => <span key={day}>{day}</span>)}
         </div>
       )}
@@ -668,7 +671,7 @@ export function MonthView({
         )}
       />
       {!!unknown.length && (
-        <details className="fuzzy-dates">
+        <details className="max-h-[86px] shrink-0 overflow-y-auto pb-2 pl-0.5 pr-[76px] pt-2 text-xs [&_a]:block [&_a]:py-2 [&_a]:text-xs [&_a]:text-muted">
           <summary>{t('messages.unscheduled')} {unknown.length}</summary>
           {unknown.map((event) => (
             <Link key={event.id} to={'/events/' + encodeURIComponent(event.id)}>

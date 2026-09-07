@@ -16,7 +16,7 @@ export function EvidenceLinks({ evidence }: { evidence?: Evidence[] }) {
   const { t, i18n } = useTranslation()
 
   return (
-    <div className="evidence-links">
+    <div data-evidence-links className="my-3 flex flex-wrap gap-x-[18px] gap-y-2 text-xs [@media(max-height:700px)]:my-[5px] [&_a]:px-0 [&_a]:py-[5px] [&_a]:underline [&_a]:underline-offset-4">
       {evidence
         ?.filter(
           (item) => item.kind === 'url' && /^https?:\/\//u.test(item.value),
@@ -54,7 +54,7 @@ export function FavoriteButton({ event }: { event: ResolvedEvent }) {
   )
 }
 
-export function FeedSourceBar({ event, availableFeeds }: { event: ResolvedEvent; availableFeeds?: ReturnType<typeof useFeedStore.getState>['feeds'] }) {
+export function FeedSourceBar({ event, availableFeeds, subscribedTone = 'poster' }: { event: ResolvedEvent; availableFeeds?: ReturnType<typeof useFeedStore.getState>['feeds']; subscribedTone?: 'poster' | 'panel' | 'surface' }) {
   const { t, i18n } = useTranslation()
 
   const { feeds, profile, act, hydrated } = useFeedStore()
@@ -81,7 +81,7 @@ export function FeedSourceBar({ event, availableFeeds }: { event: ResolvedEvent;
             </div>
             <button
               disabled={!hydrated}
-              className={'subscribe ' + (subscribed ? 'subscribed' : '')}
+              className={`subscribe ${subscribed ? subscribedTone === 'panel' ? 'border border-line bg-panel text-ink' : subscribedTone === 'surface' ? 'border border-line bg-surface text-ink' : 'border border-[#ffffff40] bg-[#ffffff16] text-inherit' : ''}`}
               aria-pressed={Boolean(subscribed)}
               onClick={() =>
                 act({ type: subscribed ? 'unsubscribe' : 'subscribe', source })
@@ -101,11 +101,12 @@ export function HideMenu({ event }: { event: ResolvedEvent }) {
 
   const act = useFeedStore((s) => s.act)
   return (
-    <details className="event-menu">
-      <summary aria-label={t('messages.more_event_actions')}>
+    <details className="relative">
+      <summary className="grid min-h-11 min-w-11 list-none place-items-center text-2xl" aria-label={t('messages.more_event_actions')}>
         <Ellipsis />
       </summary>
       <button
+        className="absolute bottom-full right-0 z-10 whitespace-nowrap rounded-xl border border-line bg-panel px-[18px] py-3.5 text-sm text-ink"
         onClick={() => act({ type: 'hide', id: event.id, tags: event.tags })}
       >
          {t('messages.not_interested')} </button>
@@ -132,18 +133,18 @@ function EventDescription({ text }: { text: string }) {
   if (!text) return null
   return (
     <div
-      className="description-block"
+      className="mt-4 max-w-[580px] [@media(max-height:700px)]:mt-2"
       onPointerDown={(e) => e.stopPropagation()}
     >
       <p
         ref={paragraph}
-        className={'poster-summary' + (expanded ? ' expanded' : '')}
+        className={`text-sm leading-[1.7] text-[#ffffffe0] max-[600px]:text-[13px] [@media(max-height:700px)]:text-xs ${expanded ? 'block max-h-[25dvh] touch-pan-y overflow-y-auto overscroll-contain [@media(max-height:700px)]:max-h-[18dvh]' : 'line-clamp-3 [@media(max-height:700px)]:line-clamp-2'}`}
       >
         {text}
       </p>
       {(canExpand || expanded) && (
         <button
-          className="text-button"
+          className="text-button mt-1 text-[#ddd]"
           aria-expanded={expanded}
           onClick={() => setExpanded(!expanded)}
         >
@@ -178,7 +179,7 @@ export function PosterCard({
   const countdown = countdownFor(event)
   return (
     <Poster
-      className="poster"
+      className="relative h-full w-full overflow-hidden text-white"
       style={{
         background: 'linear-gradient(145deg,' + poster.gradient.join(',') + ')',
       }}
@@ -186,7 +187,7 @@ export function PosterCard({
     >
       {poster.url && (
         <img
-          className="poster-image"
+          className="absolute inset-0 h-full w-full object-cover object-[center_44%]"
           src={poster.url}
           alt={poster.alt}
           loading={index ? 'lazy' : 'eager'}
@@ -195,13 +196,13 @@ export function PosterCard({
           }}
         />
       )}
-      <div className="poster-shade" />
-      <div className="poster-content">
-        <div className="poster-main">
-          <div className="tag-list">
+      <div className="absolute inset-0 h-full w-full bg-[linear-gradient(180deg,#07130d26_0%,#07130d10_20%,#07130d55_45%,#07130df2_100%)] object-cover" />
+      <div className="relative mx-auto flex h-full max-w-[1080px] flex-col justify-end px-12 pb-[calc(28px+env(safe-area-inset-bottom))] pt-[calc(var(--header-height)+env(safe-area-inset-top)+20px)] max-[600px]:px-[22px] max-[600px]:pb-[calc(20px+env(safe-area-inset-bottom))] [@media(max-height:700px)]:pb-3 [@media(max-height:700px)]:pt-[calc(var(--header-height)+env(safe-area-inset-top)+8px)]">
+        <div className="min-h-0 overflow-y-auto overscroll-contain pb-[18px] [scrollbar-width:none] [@media(max-height:700px)]:pb-1.5 [&_[data-evidence-links]]:max-h-20 [&_[data-evidence-links]]:overflow-y-auto [&_[data-evidence-links]]:overscroll-contain [&_h1]:my-3 [&_h1]:text-[clamp(28px,4vw,52px)] [&_h1]:font-[650] [&_h1]:leading-[1.18] [&_h1]:tracking-[-1px] max-[600px]:[&_h1]:text-[32px] [@media(max-height:700px)]:[&_h1]:my-2 [@media(max-height:700px)]:[&_h1]:text-[26px]">
+          <div className="flex flex-wrap gap-2 text-[11px] [&_span]:rounded-2xl [&_span]:bg-[#ffffff18] [&_span]:px-2.5 [&_span]:py-1">
             {event.tags?.map((tag) => (
               <Link
-                className="search-tag"
+                className="text-inherit focus-visible:[&_span]:outline-2 focus-visible:[&_span]:outline-offset-2 focus-visible:[&_span]:outline-current"
                 key={tag}
                 to={'/search?tag=' + encodeURIComponent(tag)}
                 onPointerDown={(e) => e.stopPropagation()}
@@ -213,21 +214,21 @@ export function PosterCard({
           <Link to={eventHref ?? '/events/' + encodeURIComponent(event.id)}>
             <h1>{pickText(event.title)}</h1>
           </Link>
-          <Countdown className={'countdown ' + countdown.precision}>
+          <Countdown className={`my-2.5 leading-[1.15] tracking-[-1.5px] text-[#e0edbd] [@media(max-height:700px)]:my-2 [@media(max-height:700px)]:text-[30px] ${countdown.precision === 'approximate' ? 'text-[clamp(24px,3vw,40px)] max-[600px]:text-[27px]' : 'text-[clamp(32px,5.5vw,64px)] max-[600px]:text-[44px]'}`}>
             {countdown.headline}
           </Countdown>
           {countdown.dateLabel &&
             !countdown.headline.includes(countdown.dateLabel) && (
-              <p className="date-label">{countdown.dateLabel}</p>
+              <p className="text-[13px] text-[#e2e9dc]">{countdown.dateLabel}</p>
             )}
           <EventDescription
             text={pickText(event.summary) || pickText(event.description)}
           />
           <EvidenceLinks evidence={event.evidence} />
         </div>
-        <footer>
+        <footer className="flex shrink-0 items-center gap-[22px] border-t border-[#ffffff26] pt-3.5 max-[600px]:gap-2 [@media(max-height:700px)]:pt-2">
           <FeedSourceBar event={event} availableFeeds={availableFeeds} />
-          <div className="poster-actions">
+          <div className="flex items-center gap-1 max-[600px]:gap-0">
             <FavoriteButton event={event} />
             <HideMenu event={event} />
           </div>

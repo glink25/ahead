@@ -62,12 +62,12 @@ export function ProfilesView() {
   }
   if (!ready || !db) return <PageSkeleton variant="settings" />
   return (
-    <section className="profiles-view">
+    <section className="[&>.settings-group]:my-4">
       <h1>{t('messages.profiles')}</h1>
       <p className="muted">
         {session ? '@' + session.identity.login : t('messages.local_profile')}
       </p>
-      <div className="profile-list">
+      <div className="my-6 grid gap-3">
         {profiles.map((space) => (
           <article className="settings-group" key={space.id}>
             <button
@@ -77,7 +77,7 @@ export function ProfilesView() {
             >
               <span>
                 <strong>{profileName(space)}</strong>
-                <small className="profile-meta">
+                <small className="mt-1.5 block text-xs font-normal text-muted">
                   {space.private ? t('messages.private') : t('messages.public')}
                   {space.remote
                     ? ' · ' + space.remote.owner + '/' + space.remote.repo
