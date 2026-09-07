@@ -1,33 +1,47 @@
 import { sourceKey } from '@ahead/protocol'
 import type { Subscription } from '@ahead/schema'
-import { mergeEvents, type ResolvedEvent } from '@ahead/resolver'
+import type { AddressedEvent } from '../../services/market-api'
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link, useSearchParams } from 'react-router'
+import { Link, useLocation, useNavigate, useParams } from 'react-router'
 import { PageSkeleton } from '../../app/PageSkeleton'
 import { PERSONAL_FEED } from '../../data/model'
 import { pickText } from '../../lib/format'
 import type { LoadedFeed } from '../../lib/feed-loader'
-import {
-  loadCachedSharedResource,
-  loadSharedResource,
-} from '../../services/shared-resource'
 import { useAuthSession } from '../../stores'
 import { useFeedStore } from '../../stores/feed'
 import { CopyLinkButton, ResourceFailure, VisibilityBadge } from './ShareUi'
-import { useSharedResource } from './useSharedResource'
+import { useAddressedResource } from './useAddressedResource'
+import { marketApi } from '../../services/market'
+import {
+  addressKey,
+  eventPath,
+  githubAddress,
+  parseResourceAddress,
+  resourcePath,
+  sourceFromAddress,
+} from '../../services/resource-address'
 
 export function PersonDetail() {
   const { t } = useTranslation()
-  const [params] = useSearchParams()
-  const key = params.get('source')
-  const state = useSharedResource(key, 'user-data')
+  const { '*': sourcePath } = useParams()
+  const location = useLocation()
+  const navigate = useNavigate()
+  const address = useMemo(() => {
+    try { return parseResourceAddress(sourcePath) } catch { return undefined }
+  }, [sourcePath])
+  const state = useAddressedResource(address, 'user-data')
   const { profile, act, hydrated } = useFeedStore()
   const identity = useAuthSession((value) => value.session?.identity.id)
   const verified = useAuthSession((value) => value.verified)
-  const [events, setEvents] = useState<ResolvedEvent[]>([])
+  const [events, setEvents] = useState<AddressedEvent[]>([])
   const [loadingEvents, setLoadingEvents] = useState(false)
-  const user = state.resource?.kind === 'user-data' ? state.resource.user : undefined
+  const user = state.resource?.type === 'user' ? state.resource.user : undefined
+  useEffect(() => {
+    const next = state.resource?.address
+    if (!address || !next || addressKey(address) === addressKey(next)) return
+    navigate(resourcePath('user-data', next) + location.search + location.hash, { replace: true })
+  }, [address, state.resource, navigate, location.search, location.hash])
   const channels = useMemo(
     () => (user?.subscriptions ?? []).filter((item) => item.kind !== 'user-data'),
     [user],
@@ -49,46 +63,39 @@ export function PersonDetail() {
       for (const feed of feeds)
         if (feed.sourceLocator === personalKey)
           for (const event of feed.feed.events ?? []) visible.add(event.id)
-      setEvents(
-        mergeEvents(
-          feeds.flatMap((feed) =>
-            (feed.feed.events ?? []).map((event) => ({
-              event,
-              sourceLocator: feed.sourceLocator,
-            })),
-          ),
-        ).filter((event) => visible.has(event.id)),
-      )
+      setEvents(marketApi().events.resolve({
+        feeds,
+        users: [],
+        activeProfile: user,
+      }).events.filter((event) => visible.has(event.id)))
       setLoadingEvents(false)
     }
     void (async () => {
-      const sources = channels.slice(0, 40).map(sourceKey)
-      const cached = await Promise.all(
-        sources.map((source) => loadCachedSharedResource(source, 'event-feed')),
-      )
-      publish(cached.flatMap((resource) =>
-        resource?.kind === 'event-feed' ? [resource.feed] : [],
-      ))
-      if (!navigator.onLine) return
-      const results = await Promise.allSettled(
-        sources.map((source) => loadSharedResource(source, 'event-feed', controller.signal)),
-      )
-      const refreshed = results.flatMap((result) =>
-        result.status === 'fulfilled' && result.value.kind === 'event-feed'
-          ? [result.value.feed]
-          : [],
-      )
-      if (refreshed.length) publish(refreshed)
+      const feeds = new Map<string, LoadedFeed>()
+      for await (const event of marketApi().sources.read({
+        sources: channels.slice(0, 40),
+        refresh: true,
+        signal: controller.signal,
+      })) {
+        if (event.type !== 'feed') continue
+        feeds.set(event.feed.sourceLocator, event.feed)
+        publish([...feeds.values()])
+      }
     })().catch(() => setLoadingEvents(false))
     return () => controller.abort()
   }, [user, channels, identity, verified])
   if (state.loading) return <PageSkeleton variant="detail" />
-  if (state.error || state.resource?.kind !== 'user-data')
-    return <ResourceFailure error={(state.error ?? new Error('Wrong resource type')) as Error & { reason?: string }} />
+  if (!state.resource || state.resource.type !== 'user')
+    return <ResourceFailure error={state.error} />
   const resource = state.resource
-  const source = { ...resource.source, kind: 'user-data' as const }
-  const canonical = sourceKey(source)
-  const followed = profile.subscriptions?.some((item) => sourceKey(item) === canonical)
+  const resourceAddress = resource.address
+  const source = resourceAddress.scheme === 'github'
+    ? sourceFromAddress(resourceAddress, 'user-data')
+    : undefined
+  const canonical = resourceAddress.scheme === 'github'
+    ? sourceKey(source!)
+    : `local:${resourceAddress.spaceId}`
+  const followed = source && profile.subscriptions?.some((item) => sourceKey(item) === canonical)
   return (
     <section className="resource-detail">
       <div className="resource-heading">
@@ -96,14 +103,15 @@ export function PersonDetail() {
           <h1>{pickText(resource.user.displayName)}</h1>
           <VisibilityBadge resource={resource} />
         </div>
-        <CopyLinkButton url={'/people/view?source=' + encodeURIComponent(canonical)} />
+        <CopyLinkButton url={resourcePath('user-data', resource.address)} />
       </div>
       {resource.user.bio && <p>{pickText(resource.user.bio)}</p>}
       <button
         className={`subscribe ${followed ? 'border border-[#ffffff40] bg-[#ffffff16] text-inherit' : ''}`}
         disabled={!hydrated}
         aria-pressed={Boolean(followed)}
-        onClick={() => act({ type: followed ? 'unsubscribe' : 'subscribe', source })}
+        onClick={() => source && act({ type: followed ? 'unsubscribe' : 'subscribe', source })}
+        hidden={!source}
       >
         {followed ? t('messages.followed') : t('messages.follow')}
       </button>
@@ -111,9 +119,8 @@ export function PersonDetail() {
       {loadingEvents && <p className="muted">{t('messages.loading')}</p>}
       <div className="resource-list">
         {events.map((event) => {
-          const query = event.sourceLocators.map((value) => 'source=' + encodeURIComponent(value)).join('&')
           return (
-            <Link className="resource-card" key={event.id} to={'/events/' + encodeURIComponent(event.id) + '?' + query}>
+            <Link className="resource-card" key={event.id} to={eventPath(event)}>
               <strong>{pickText(event.title)}</strong>
               <small>{pickText(event.summary) || pickText(event.description)}</small>
             </Link>
@@ -127,7 +134,7 @@ export function PersonDetail() {
             {people.map((person) => {
               const personKey = sourceKey(person)
               return (
-                <Link className="resource-card" key={personKey} to={'/people/view?source=' + encodeURIComponent(personKey)}>
+                <Link className="resource-card" key={personKey} to={resourcePath('user-data', githubAddress(person))}>
                   <strong>{person.locator}</strong>
                   <small>{person.manifestPath ?? 'ahead.yaml'}</small>
                 </Link>
@@ -141,7 +148,7 @@ export function PersonDetail() {
         {channels.map((channel) => {
           const channelKey = sourceKey(channel)
           return (
-            <Link className="resource-card" key={channelKey} to={'/channels/view?source=' + encodeURIComponent(channelKey)}>
+            <Link className="resource-card" key={channelKey} to={resourcePath('event-feed', githubAddress(channel))}>
               <strong>{channel.locator}</strong>
               <small>{channel.manifestPath ?? 'ahead.yaml'}</small>
             </Link>

@@ -1,25 +1,47 @@
-import { sourceKey } from '@ahead/protocol'
 import { useTranslation } from 'react-i18next'
-import { Link, useSearchParams } from 'react-router'
+import { useEffect, useMemo } from 'react'
+import { Link, useLocation, useNavigate, useParams } from 'react-router'
 import { PageSkeleton } from '../../app/PageSkeleton'
 import { pickText } from '../../lib/format'
 import { useFeedStore } from '../../stores/feed'
 import { CopyLinkButton, ResourceFailure, VisibilityBadge } from './ShareUi'
-import { useSharedResource } from './useSharedResource'
+import { useAddressedResource } from './useAddressedResource'
+import {
+  addressKey,
+  eventPath,
+  parseResourceAddress,
+  resourcePath,
+  sourceFromAddress,
+} from '../../services/resource-address'
+import { sourceKey } from '@ahead/protocol'
 
 export function ChannelDetail() {
   const { t } = useTranslation()
-  const [params] = useSearchParams()
-  const key = params.get('source')
-  const state = useSharedResource(key, 'event-feed')
+  const { '*': sourcePath } = useParams()
+  const location = useLocation()
+  const navigate = useNavigate()
+  const address = useMemo(() => {
+    try { return parseResourceAddress(sourcePath) } catch { return undefined }
+  }, [sourcePath])
+  const state = useAddressedResource(address, 'event-feed')
   const { profile, act, hydrated } = useFeedStore()
+  useEffect(() => {
+    const next = state.resource?.address
+    if (!address || !next || addressKey(address) === addressKey(next)) return
+    navigate(resourcePath('event-feed', next) + location.search + location.hash, { replace: true })
+  }, [address, state.resource, navigate, location.search, location.hash])
   if (state.loading) return <PageSkeleton variant="detail" />
-  if (state.error || state.resource?.kind !== 'event-feed')
-    return <ResourceFailure error={(state.error ?? new Error('Wrong resource type')) as Error & { reason?: string }} />
+  if (!state.resource || state.resource.type !== 'feed')
+    return <ResourceFailure error={state.error} />
   const resource = state.resource
-  const source = { ...resource.source, kind: 'event-feed' as const }
-  const canonical = sourceKey(source)
-  const subscribed = profile.subscriptions?.some((item) => sourceKey(item) === canonical)
+  const resourceAddress = resource.address
+  const source = resourceAddress.scheme === 'github'
+    ? sourceFromAddress(resourceAddress, 'event-feed')
+    : undefined
+  const canonical = resourceAddress.scheme === 'github'
+    ? sourceKey(source!)
+    : `local:${resourceAddress.spaceId}`
+  const subscribed = source && profile.subscriptions?.some((item) => sourceKey(item) === canonical)
   return (
     <section className="resource-detail">
       <div className="resource-heading">
@@ -27,7 +49,7 @@ export function ChannelDetail() {
           <h1>{pickText(resource.feed.feed.name)}</h1>
           <VisibilityBadge resource={resource} />
         </div>
-        <CopyLinkButton url={'/channels/view?source=' + encodeURIComponent(canonical)} />
+        <CopyLinkButton url={resourcePath('event-feed', resource.address)} />
       </div>
       {resource.feed.feed.description && <p>{pickText(resource.feed.feed.description)}</p>}
       {!!resource.feed.feed.tags?.length && (
@@ -41,14 +63,15 @@ export function ChannelDetail() {
         className={`subscribe ${subscribed ? 'border border-[#ffffff40] bg-[#ffffff16] text-inherit' : ''}`}
         disabled={!hydrated}
         aria-pressed={Boolean(subscribed)}
-        onClick={() => act({ type: subscribed ? 'unsubscribe' : 'subscribe', source })}
+        onClick={() => source && act({ type: subscribed ? 'unsubscribe' : 'subscribe', source })}
+        hidden={!source}
       >
         {subscribed ? t('messages.subscribed') : t('messages.subscribe_to_channel')}
       </button>
       <h2>{t('messages.events')}</h2>
       <div className="resource-list">
         {(resource.feed.feed.events ?? []).map((event) => (
-          <Link className="resource-card" key={event.id} to={'/events/' + encodeURIComponent(event.id) + '?source=' + encodeURIComponent(canonical)}>
+          <Link className="resource-card" key={event.id} to={eventPath({ id: event.id, address: resource.eventAddresses[event.id] ?? resource.address })}>
             <strong>{pickText(event.title)}</strong>
             <small>{pickText(event.summary) || pickText(event.description)}</small>
           </Link>

@@ -9,7 +9,9 @@ import {
   type ReactNode,
 } from 'react'
 import { Link, useNavigate } from 'react-router'
-import { expandRecurrence, type ResolvedEvent } from '@ahead/resolver'
+import { expandRecurrence } from '@ahead/resolver'
+import type { AddressedEvent } from '../../services/market-api'
+import { eventPath } from '../../services/resource-address'
 import type { TemporalValue } from '@ahead/schema'
 import { pickText, describeTemporal, formatCalendarDate } from '../../lib/format'
 import type { PosterSource } from '../../lib/media'
@@ -133,16 +135,16 @@ function preciseRangeKeys(value: TemporalValue, timezone: string) {
 }
 
 export function monthOccurrences(
-  events: ResolvedEvent[],
+  events: AddressedEvent[],
   year: number,
   month: number,
   timezone = 'Asia/Shanghai',
 ) {
-  const days = new Map<string, ResolvedEvent[]>()
+  const days = new Map<string, AddressedEvent[]>()
   const from = new Date(Date.UTC(year, month, 1) - DAY)
   const to = new Date(Date.UTC(year, month + 1, 1) + DAY)
   const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate()
-  const add = (key: string, event: ResolvedEvent) => {
+  const add = (key: string, event: AddressedEvent) => {
     const list = days.get(key) ?? []
     if (!list.some((item) => item.id === event.id)) list.push(event)
     days.set(key, list)
@@ -174,8 +176,8 @@ export function monthOccurrences(
   return days
 }
 
-function eventsForDays(events: ResolvedEvent[], days: Date[], timezone: string) {
-  const months = new Map<string, Map<string, ResolvedEvent[]>>()
+function eventsForDays(events: AddressedEvent[], days: Date[], timezone: string) {
+  const months = new Map<string, Map<string, AddressedEvent[]>>()
   for (const date of days) {
     const month = `${date.getUTCFullYear()}-${date.getUTCMonth()}`
     if (!months.has(month)) {
@@ -199,7 +201,7 @@ function periodFromOrdinal(scale: CalendarScale, ordinal: number, firstDay: numb
   const epoch = startOfWeek(new Date(Date.UTC(1970, 0, 1)), firstDay)
   return addDays(epoch, ordinal * 7)
 }
-function eventTime(event: ResolvedEvent, timezone: string, locale: string) {
+function eventTime(event: AddressedEvent, timezone: string, locale: string) {
   const value = event.currentSchedule?.value
   if (value?.kind !== 'datetime') return ''
   return new Intl.DateTimeFormat(locale, {
@@ -209,7 +211,7 @@ function eventTime(event: ResolvedEvent, timezone: string, locale: string) {
   }).format(new Date(value.dateTime))
 }
 function approximateEvents(
-  events: ResolvedEvent[],
+  events: AddressedEvent[],
   fromMonth: number,
   toMonth: number,
   timezone: string,
@@ -329,14 +331,14 @@ function PeriodScroller({
 }
 
 type PeriodProps = {
-  events: ResolvedEvent[]
+  events: AddressedEvent[]
   timezone: string
   locale: string
   selectedDate?: string
   today: string
   onSelect: (key: string, scale?: CalendarScale) => void
   onNavigate: (key: string, scale: CalendarScale) => void
-  posterForEvent: (event: ResolvedEvent) => PosterSource
+  posterForEvent: (event: AddressedEvent) => PosterSource
 }
 
 function MonthPeriod({
@@ -372,7 +374,7 @@ function MonthPeriod({
               className="bg-cover bg-center"
               key={event.id}
               style={eventArtwork(posterForEvent(event), 'solid')}
-              to={'/events/' + encodeURIComponent(event.id)}
+              to={eventPath(event)}
             >
               {pickText(event.title)} · {describeTemporal(event.currentSchedule!.value)}
             </Link>
@@ -400,7 +402,7 @@ function MonthPeriod({
                     className="mx-0.5 overflow-hidden text-ellipsis whitespace-nowrap rounded-[3px] bg-cover bg-center px-[3px] text-[9px] text-white [text-shadow:0_1px_2px_#0008] max-[600px]:text-[8px]"
                     key={event.id}
                     style={eventArtwork(posterForEvent(event), 'solid')}
-                    to={'/events/' + encodeURIComponent(event.id)}
+                    to={eventPath(event)}
                   >
                     {pickText(event.title)}
                   </Link>
@@ -446,7 +448,7 @@ function YearPeriod({
               className="bg-cover bg-center"
               key={event.id}
               style={eventArtwork(posterForEvent(event))}
-              to={'/events/' + encodeURIComponent(event.id)}
+              to={eventPath(event)}
             >
               {pickText(event.title)} · {describeTemporal(event.currentSchedule!.value)}
             </Link>
@@ -551,7 +553,7 @@ function WeekPeriod({
                       className="grid min-w-0 max-w-[280px] flex-[1_1_180px] gap-[3px] rounded-[10px] border border-[#ffffff26] bg-cover bg-center px-2.5 py-2 text-white [text-shadow:0_1px_3px_#000c] [&_small]:text-[10px] [&_small]:text-[#e8f4d8] [&_strong]:overflow-hidden [&_strong]:text-ellipsis [&_strong]:whitespace-nowrap [&_strong]:text-xs [&_span]:overflow-hidden [&_span]:text-ellipsis [&_span]:whitespace-nowrap [&_span]:text-[10px] [&_span]:text-[#ffffffe0]"
                       key={event.id}
                       style={eventArtwork(posterForEvent(event))}
-                      to={'/events/' + encodeURIComponent(event.id)}
+                      to={eventPath(event)}
                     >
                       {time && <small>{time}</small>}
                       <strong>{pickText(event.title)}</strong>
@@ -575,10 +577,10 @@ export function MonthView({
   posterForEvent,
   search = '',
 }: {
-  events: ResolvedEvent[]
+  events: AddressedEvent[]
   timezone: string
   weekStartsOn?: 'sunday' | 'monday'
-  posterForEvent: (event: ResolvedEvent) => PosterSource
+  posterForEvent: (event: AddressedEvent) => PosterSource
   search?: string
 }) {
   const { t, i18n } = useTranslation()
@@ -674,7 +676,7 @@ export function MonthView({
         <details className="max-h-[86px] shrink-0 overflow-y-auto pb-2 pl-0.5 pr-[76px] pt-2 text-xs [&_a]:block [&_a]:py-2 [&_a]:text-xs [&_a]:text-muted">
           <summary>{t('messages.unscheduled')} {unknown.length}</summary>
           {unknown.map((event) => (
-            <Link key={event.id} to={'/events/' + encodeURIComponent(event.id)}>
+            <Link key={event.id} to={eventPath(event)}>
               {pickText(event.title)} ·{' '}
               {event.currentSchedule ? describeTemporal(event.currentSchedule.value) : t('messages.date_tbd')}
             </Link>

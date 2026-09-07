@@ -3,7 +3,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { TagChip } from '@ahead/ui'
-import type { ResolvedEvent } from '@ahead/resolver'
+import type { AddressedEvent } from '../../services/market-api'
 import { displayMessage, useFeatureTranslations } from '../../i18n'
 import { useSearchFeed } from '../../hooks/useSearchFeed'
 import type { LoadedFeed } from '../../lib/feed-loader'
@@ -13,6 +13,7 @@ import { primaryFeedForEvent } from '../../lib/primary-feed'
 import { tagLabel } from '../../lib/tag-label'
 import { useFeedStore } from '../../stores/feed'
 import { FavoriteButton, FeedSourceBar } from '../discover/PosterCard'
+import { eventPath } from '../../services/resource-address'
 
 function SearchResultCard({
   event,
@@ -20,7 +21,7 @@ function SearchResultCard({
   href,
   eager,
 }: {
-  event: ResolvedEvent
+  event: AddressedEvent
   feeds: LoadedFeed[]
   href: string
   eager: boolean
@@ -176,8 +177,7 @@ export function SearchView() {
               </p>
             )}
             {events.map((event, index) => {
-              const sources = event.sourceLocators.filter((source) => source.startsWith('github:'))
-              const href = '/events/' + encodeURIComponent(event.id) + (sources.length ? '?' + sources.map((source) => 'source=' + encodeURIComponent(source)).join('&') : '')
+              const href = eventPath(event)
               return <SearchResultCard key={event.id} event={event} feeds={feeds} href={href} eager={index === 0} />
             })}
             <div ref={loadMore} className="h-px" aria-hidden />

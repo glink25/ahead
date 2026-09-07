@@ -8,6 +8,7 @@ import { useFeedStore } from '../../stores/feed'
 import { pickText } from '../../lib/format'
 import { PERSONAL_FEED } from '../../data/model'
 import type { Subscription } from '@ahead/schema'
+import { githubAddress, resourcePath } from '../../services/resource-address'
 export function FollowingView() {
   useFeatureTranslations('following')
   const { t } = useTranslation()
@@ -55,7 +56,7 @@ export function FollowingView() {
           <article className="mt-3 overflow-hidden rounded-[18px] border border-line bg-panel [&_button]:whitespace-nowrap [&_button]:text-[13px] [&_select]:rounded-lg [&_select]:border [&_select]:border-line [&_select]:bg-surface [&_select]:px-2.5 [&_select]:py-[7px]" key={key}>
             <div className="setting-row">
               <h3>
-                <Link to={'/channels/view?source=' + encodeURIComponent(key)}>
+                <Link to={resourcePath('event-feed', githubAddress(source))}>
                   {pickText(feed?.feed.name) || t('messages.untitled_channel')}
                 </Link>
               </h3>
@@ -100,7 +101,7 @@ export function FollowingView() {
         return (
           <article className="mt-3 overflow-hidden rounded-[18px] border border-line bg-panel [&_button]:whitespace-nowrap [&_button]:text-[13px] [&_select]:rounded-lg [&_select]:border [&_select]:border-line [&_select]:bg-surface [&_select]:px-2.5 [&_select]:py-[7px]" key={key}>
             <div className="setting-row">
-              <h3><Link to={'/people/view?source=' + encodeURIComponent(key)}>
+              <h3><Link to={resourcePath('user-data', githubAddress(source))}>
                 {pickText(user?.displayName) || pickText(listing?.source.name) || listing?.title || t('messages.followed_user')}
               </Link></h3>
               <button onClick={() => act({ type: 'unsubscribe', source })}>
@@ -147,7 +148,7 @@ export function FollowingView() {
             className="setting-row mt-3 overflow-hidden rounded-[18px] border border-line bg-panel [&_button]:whitespace-nowrap [&_button]:text-[13px]"
             key={listing.issueNumber}
           >
-            <h3><Link to={'/people/view?source=' + encodeURIComponent(sourceKey(source))}>{pickText(listing.source.name) || listing.title}</Link></h3>
+            <h3><Link to={resourcePath('user-data', githubAddress(source))}>{pickText(listing.source.name) || listing.title}</Link></h3>
             <button
               disabled={refreshing}
               onClick={() => act({ type: 'subscribe', source })}

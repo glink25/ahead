@@ -11,6 +11,8 @@ import { countdownFor, pickText } from '../../lib/format'
 import { posterFor } from '../../lib/media'
 import { tagLabel } from '../../lib/tag-label'
 import { primaryFeedForEvent } from '../../lib/primary-feed'
+import type { AddressedEvent } from '../../services/market-api'
+import { addressFromSourceKey, eventPath, resourcePath } from '../../services/resource-address'
 
 export function EvidenceLinks({ evidence }: { evidence?: Evidence[] }) {
   const { t, i18n } = useTranslation()
@@ -75,7 +77,7 @@ export function FeedSourceBar({ event, availableFeeds, subscribedTone = 'poster'
         return (
           <div className="source-bar" key={feed.sourceLocator}>
             <div>
-              <Link to={'/channels/view?source=' + encodeURIComponent(feed.sourceLocator)}>
+              <Link to={resourcePath('event-feed', addressFromSourceKey(feed.sourceLocator))}>
                 <strong>{name}</strong>
               </Link>
             </div>
@@ -161,7 +163,7 @@ export function PosterCard({
   availableFeeds,
   eventHref,
 }: {
-  event: ResolvedEvent
+  event: AddressedEvent
   index: number
   availableFeeds?: ReturnType<typeof useFeedStore.getState>['feeds']
   eventHref?: string
@@ -211,7 +213,7 @@ export function PosterCard({
               </Link>
             ))}
           </div>
-          <Link to={eventHref ?? '/events/' + encodeURIComponent(event.id)}>
+          <Link to={eventHref ?? eventPath(event)}>
             <h1>{pickText(event.title)}</h1>
           </Link>
           <Countdown className={`my-2.5 leading-[1.15] tracking-[-1.5px] text-[#e0edbd] [@media(max-height:700px)]:my-2 [@media(max-height:700px)]:text-[30px] ${countdown.precision === 'approximate' ? 'text-[clamp(24px,3vw,40px)] max-[600px]:text-[27px]' : 'text-[clamp(32px,5.5vw,64px)] max-[600px]:text-[44px]'}`}>

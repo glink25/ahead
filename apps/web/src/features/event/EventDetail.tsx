@@ -4,7 +4,6 @@ import { useTranslation } from 'react-i18next'
 import { useData, deleteEvent } from '../../data/local'
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router'
-import { useFeedView } from '../../hooks/useFeedView'
 import { useFeedStore } from '../../stores/feed'
 import {
   countdownFor,
@@ -18,142 +17,69 @@ import {
   FeedSourceBar,
   HideMenu,
 } from '../discover/PosterCard'
-import {
-  loadCachedSharedResource,
-  loadSharedResource,
-} from '../../services/shared-resource'
 import { mergeEvents } from '@ahead/resolver'
-import type { LoadedFeed } from '../../lib/feed-loader'
-import { sourceKey } from '@ahead/protocol'
 import { CopyLinkButton, ResourceFailure } from '../share/ShareUi'
 import { posterFor } from '../../lib/media'
 import { primaryFeedForEvent } from '../../lib/primary-feed'
-import { useAuthSession } from '../../stores'
+import {
+  addressKey,
+  localEventAddress,
+  parseResourceAddress,
+  resourcePath,
+} from '../../services/resource-address'
+import { useAddressedResource } from '../share/useAddressedResource'
+import { personalEvents } from '../../data/model'
 export function EventDetail() {
   useFeatureTranslations('event')
   const { t, i18n } = useTranslation()
 
-  const { id } = useParams()
+  const { id, '*': sourcePath } = useParams()
   const location = useLocation()
   const navigate = useNavigate()
   const { db } = useData()
   const [error, setError] = useState('')
-  const { resolved } = useFeedView()
   const { refreshing, hydrated, feeds, profile } = useFeedStore()
-  const verified = useAuthSession((state) => state.verified)
-  const linkedSources = useMemo(
-    () => [...new Set(new URLSearchParams(location.search).getAll('source'))],
-    [location.search],
-  )
-  const [shared, setShared] = useState<{
-    feeds: LoadedFeed[]
-    errors: { source: string; error: Error }[]
-    loading: boolean
-  }>({ feeds: [], errors: [], loading: false })
+  const address = useMemo(() => {
+    try { return parseResourceAddress(sourcePath) } catch { return undefined }
+  }, [sourcePath])
+  const shared = useAddressedResource(address, 'event-feed', id)
   useEffect(() => {
-    if (!linkedSources.length) {
-      setShared({ feeds: [], errors: [], loading: false })
-      return
-    }
-    if (linkedSources.length > 12) {
-      setShared({
-        feeds: [],
-        errors: [{
-          source: '',
-          error: Object.assign(new Error('Too many event sources'), { reason: 'invalid' }),
-        }],
-        loading: false,
-      })
-      return
-    }
-    const controller = new AbortController()
-    let restoredFeeds: LoadedFeed[] = []
-    setShared({ feeds: [], errors: [], loading: true })
-    void (async () => {
-      const cached = await Promise.all(
-        linkedSources.map((key) => loadCachedSharedResource(key, 'event-feed')),
-      )
-      if (controller.signal.aborted) return
-      restoredFeeds = cached.flatMap((resource) =>
-        resource?.kind === 'event-feed' ? [resource.feed] : [],
-      )
-      if (restoredFeeds.length || !navigator.onLine)
-        setShared({ feeds: restoredFeeds, errors: [], loading: false })
-      if (!navigator.onLine) return
-      const results = await Promise.allSettled(
-        linkedSources.map((key) => loadSharedResource(key, 'event-feed', controller.signal)),
-      )
-      if (controller.signal.aborted) return
-      const feeds = results.flatMap((result) =>
-          result.status === 'fulfilled' && result.value.kind === 'event-feed'
-            ? [result.value.feed]
-            : [],
-        )
-      setShared({
-        feeds: feeds.length ? feeds : restoredFeeds,
-        errors: results.flatMap((result, index) =>
-          result.status === 'rejected'
-            ? [{
-                source: linkedSources[index]!,
-                error: result.reason instanceof Error
-                  ? result.reason
-                  : new Error(String(result.reason)),
-              }]
-            : [],
-        ),
-        loading: false,
-      })
-    })().catch((error) => {
-      if (!controller.signal.aborted)
-        setShared({
-          feeds: restoredFeeds,
-          errors: [{ source: '', error: error instanceof Error ? error : new Error(String(error)) }],
-          loading: false,
-        })
-    })
-    return () => controller.abort()
-  }, [linkedSources, verified])
+    const nextAddress = shared.resource?.address
+    if (!id || !nextAddress || !address || addressKey(nextAddress) === addressKey(address)) return
+    navigate(resourcePath('event', nextAddress, id) + location.search + location.hash, { replace: true })
+  }, [shared.resource, address, id, navigate, location.search, location.hash])
+  const loadedFeed = shared.resource?.type === 'feed' ? shared.resource.feed : undefined
   const sharedEvent = useMemo(
     () => mergeEvents(
-      shared.feeds.flatMap((feed) =>
-        (feed.feed.events ?? [])
+      loadedFeed
+        ? (loadedFeed.feed.events ?? [])
           .filter((event) => event.id === id)
-          .map((event) => ({ event, sourceLocator: feed.sourceLocator })),
-      ),
+          .map((event) => ({ event, sourceLocator: loadedFeed.sourceLocator }))
+        : [],
     )[0],
-    [shared.feeds, id],
+    [loadedFeed, id],
   )
-  const localEvent = resolved.events.find((e) => e.id === id)
-  const event = linkedSources.length ? sharedEvent : localEvent
-  if (!hydrated || shared.loading || (!linkedSources.length && refreshing && !event))
+  const event = sharedEvent
+  if (!hydrated || shared.loading || (refreshing && !event))
     return <PageSkeleton variant="detail" />
-  if (!event && shared.errors.length)
-    return <ResourceFailure error={shared.errors[0]!.error as Error & { reason?: string }} />
+  if (!event && shared.error)
+    return <ResourceFailure error={shared.error} />
   if (!event)
     return (
       <div className="empty-view">
         {t('messages.event_not_found_it_may_have_been_removed_or_be_temporarily_unavailable')}
       </div>
     )
-  const own = event.sourceLocators.some((s) => s === 'personal:' + db?.active)
-  const countdown = countdownFor(event)
   const space = db?.spaces[db.active]
-  const shareSources = linkedSources.length
-    ? linkedSources
-    : event.sourceLocators.flatMap((value) => {
-        if (!value.startsWith('personal:')) return value.startsWith('github:') ? [value] : []
-        return space?.feed && !space.pending.length
-          ? [sourceKey({
-              locator: 'github:' + space.feed.owner + '/' + space.feed.repo,
-              manifestPath: space.feed.path,
-            })]
-          : []
-      })
-  const shareUrl = shareSources.length
-    ? '/events/' + encodeURIComponent(event.id) + '?' +
-      [...new Set(shareSources)].map((value) => 'source=' + encodeURIComponent(value)).join('&')
-    : undefined
-  const availableFeeds = linkedSources.length ? shared.feeds : feeds
+  const own = Boolean(
+    space &&
+    personalEvents(space.records).some((item) => item.id === event.id) &&
+    shared.resource &&
+    addressKey(localEventAddress(space, event.id)) === addressKey(shared.resource.address),
+  )
+  const countdown = countdownFor(event)
+  const shareUrl = resourcePath('event', shared.resource!.address, event.id)
+  const availableFeeds = loadedFeed?.sourceLocator.startsWith('github:') ? [loadedFeed] : feeds
   const primaryFeed = primaryFeedForEvent(event, availableFeeds)
   const poster = posterFor(event, {
     locator: primaryFeed?.locator,
@@ -193,10 +119,9 @@ export function EventDetail() {
         </div>
       </section>
       <div className="mx-auto w-[min(100%,760px)] px-6 pb-5 pt-9 max-[600px]:px-5 max-[600px]:pb-3 max-[600px]:pt-[30px] [&>h2]:mx-1 [&>h2]:mb-3 [&>h2]:mt-[30px] [&>h2]:text-base [&>h2]:font-semibold [&>.source-list]:mt-6">
-        {!!shared.errors.length && !!event && (
+        {!!shared.error && !!event && (
           <details className="feedback" role="status">
             <summary>{t('messages.some_event_sources_could_not_be_opened')}</summary>
-            <ul>{shared.errors.map((item) => <li key={item.source}>{item.source}</li>)}</ul>
           </details>
         )}
         {(pickText(event.description) || pickText(event.summary)) && (

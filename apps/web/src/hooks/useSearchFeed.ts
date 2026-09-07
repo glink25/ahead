@@ -1,4 +1,3 @@
-import { resolve } from '@ahead/resolver'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { LoadedFeed } from '../lib/feed-loader'
 import { searchFeedApi } from '../services/search'
@@ -12,6 +11,7 @@ import { useAuthSession } from '../stores'
 import { useFeedStore } from '../stores/feed'
 import { identityScope, viewStore } from '../data/storage'
 import { createValidator } from '@ahead/schema'
+import { marketApi } from '../services/market'
 
 type SearchFailure = { message: string; reason: SearchErrorReason }
 type SearchSnapshot = { feeds: LoadedFeed[]; storedAt: string }
@@ -135,7 +135,7 @@ export function useSearchFeed(request?: SearchRequest) {
     let timezone = profile.settings?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone
     try { new Intl.DateTimeFormat('en', { timeZone: timezone }) } catch { timezone = 'UTC' }
     const hidden = new Set(profile.hidden ?? [])
-    return resolve({ feeds, users: [profile], activeProfile: profile, now: new Date(), timezone }).events
+    return marketApi().events.resolve({ feeds, users: [], activeProfile: profile, now: new Date(), timezone }).events
       .filter((event) => !hidden.has(event.id) && event.status !== 'cancelled' && event.status !== 'archived')
   }, [feeds, profile])
 

@@ -12,6 +12,7 @@ import { EventEditorState } from '@ahead/editor'
 import { assertDurationFitsRecurrence } from '@ahead/resolver'
 import type { Event, Recurrence } from '@ahead/schema'
 import { pickLocalizedText } from '../../lib/format'
+import { resourcePath } from '../../services/resource-address'
 
 const OEF_DOCUMENTATION_URL =
   'https://github.com/glink25/ahead/blob/main/docs/protocol/README.md'
@@ -392,7 +393,7 @@ function StudioEditor({
       allowLeave.current = true
       if (leave && blocker.state === 'blocked') blocker.proceed()
       else {
-        const destination = '/events/' + encodeURIComponent(event.id)
+        const destination = resourcePath('event', { scheme: 'local', spaceId }, event.id)
         if (initial && previousUrl() === destination) navigate(-1)
         else navigate(destination, { replace: true })
       }

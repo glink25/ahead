@@ -184,9 +184,9 @@ export function App() {
           <Route path="/" element={<Landing />} />
           <Route path="/mine" element={null} />
           <Route path="/discover" element={null} />
-          <Route path="/events/:id" element={<EventDetail />} />
-          <Route path="/channels/view" element={<ChannelDetail />} />
-          <Route path="/people/view" element={<PersonDetail />} />
+          <Route path="/events/:id/*" element={<EventDetail />} />
+          <Route path="/channels/*" element={<ChannelDetail />} />
+          <Route path="/people/*" element={<PersonDetail />} />
           <Route path="/following" element={<FollowingView />} />
           <Route path="/search" element={<SearchView />} />
           <Route path="/studio" element={<StudioPage />} />

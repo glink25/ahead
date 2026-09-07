@@ -14,21 +14,40 @@ import { loadMarketPage, type MarketListing } from '../lib/market'
 import { ResourceCache } from '../lib/resource-cache'
 import type { LocalStore } from '../data/storage'
 import type { RepositoryAdapter } from '@ahead/core'
+import type { Space } from '@ahead/sync'
+import { resolve as resolveProfile, selectCurrentSchedule, type ResolvedEvent, type ResolvedProfile } from '@ahead/resolver'
 import {
   isAbort,
   PublicReadClient,
   PublicReadError,
 } from './public-read-client'
+import { database } from '../data/local'
+import { eventFeed, materializeProfile, personalEvents } from '../data/model'
+import { primaryFeedForEvent } from '../lib/primary-feed'
+import {
+  addressFromSourceKey,
+  addressFromTarget,
+  addressKey,
+  githubAddress,
+  localEventAddress,
+  localFeedAddress,
+  localUserAddress,
+  sourceFromAddress,
+  type ResourceAddress,
+} from './resource-address'
 
 type Source = Pick<Subscription, 'locator' | 'manifestPath' | 'kind'>
+export type ResourceVisibility = 'local' | 'public' | 'private'
+export type AddressedEvent = ResolvedEvent & { address: ResourceAddress }
 export type ReadEvent =
-  | { type: 'feed'; feed: LoadedFeed; cached: boolean }
-  | { type: 'user'; user: UserData; sourceLocator: string; cached: boolean }
+  | { type: 'feed'; feed: LoadedFeed; address: ResourceAddress; eventAddresses: Record<string, ResourceAddress>; visibility: ResourceVisibility; cached: boolean }
+  | { type: 'user'; user: UserData; sourceLocator: string; address: ResourceAddress; visibility: ResourceVisibility; cached: boolean }
   | {
       type: 'error'
       message: string
       limited: boolean
       authenticated?: boolean
+      reason?: 'auth' | 'missing' | 'unavailable' | 'local-missing'
     }
 export type MarketEvent =
   | ReadEvent
@@ -91,6 +110,24 @@ export class MarketApi {
       refresh?: boolean
       signal?: AbortSignal
     }) => this.readSources(options.sources, options),
+    open: (options: {
+      address: ResourceAddress
+      kind: 'event-feed' | 'user-data'
+      eventId?: string
+      refresh?: boolean
+      signal?: AbortSignal
+    }) => this.openResource(options),
+  }
+  readonly events = {
+    resolve: (options: {
+      feeds: LoadedFeed[]
+      users: { user: UserData; sourceLocator: string }[]
+      activeProfile: UserData
+      space?: Space
+      locale?: string
+      timezone?: string
+      now?: Date | string
+    }) => this.resolveEvents(options),
   }
   constructor(
     private options: {
@@ -103,12 +140,152 @@ export class MarketApi {
   ) {}
 
   private error(error: unknown, prefix: string): ReadEvent & { type: 'error' } {
+    const explicitStatus = (error as { status?: unknown })?.status
+    const status = error instanceof PublicReadError
+      ? error.status
+      : typeof explicitStatus === 'number'
+        ? explicitStatus
+        : Number(/HTTP (\d{3})/u.exec(String(error))?.[1]) || undefined
     return {
       type: 'error',
       message: `${prefix}：${String(error)}`,
       limited: error instanceof PublicReadError && error.limited,
       authenticated:
         error instanceof PublicReadError ? error.authenticated : undefined,
+      reason: status === 401 || status === 403
+        ? 'auth'
+        : status === 404
+          ? 'missing'
+          : 'unavailable',
+    }
+  }
+
+  private resolveEvents(options: {
+    feeds: LoadedFeed[]
+    users: { user: UserData; sourceLocator: string }[]
+    activeProfile: UserData
+    space?: Space
+    locale?: string
+    timezone?: string
+    now?: Date | string
+  }): Omit<ResolvedProfile, 'events'> & { events: AddressedEvent[] } {
+    const resolved = resolveProfile({
+      ...options,
+      users: [options.activeProfile, ...options.users],
+    })
+    const remote = resolved.events.flatMap((event) => {
+      const feed = primaryFeedForEvent(event, options.feeds)
+      return feed ? [{ ...event, address: addressFromSourceKey(feed.sourceLocator) }] : []
+    })
+    if (!options.space) return { ...resolved, events: remote }
+    const now = new Date(options.now ?? new Date())
+    const own = personalEvents(options.space.records).map((event) => ({
+      ...event,
+      currentSchedule: selectCurrentSchedule(event.schedule, now),
+      sourceLocators: [`local:${options.space!.id}`],
+      provenance: [],
+      address: localEventAddress(options.space!, event.id),
+    }))
+    const ownIds = new Set(own.map((event) => event.id))
+    return { ...resolved, events: [...remote.filter((event) => !ownIds.has(event.id)), ...own] }
+  }
+
+  private async *openResource(options: {
+    address: ResourceAddress
+    kind: 'event-feed' | 'user-data'
+    eventId?: string
+    refresh?: boolean
+    signal?: AbortSignal
+  }): AsyncGenerator<ReadEvent> {
+    if (options.address.scheme === 'github') {
+      const db = await database.query()
+      const local = Object.values(db.spaces).find((space) => {
+        const target = options.kind === 'event-feed' ? space.feed : space.remote
+        return target && addressKey(addressFromTarget(target)) === addressKey(options.address)
+      })
+      if (local) {
+        const source = sourceFromAddress(options.address, options.kind)
+        const key = sourceKey(source)
+        if (options.kind === 'event-feed') {
+          const canonical = options.eventId
+            ? localEventAddress(local, options.eventId)
+            : localFeedAddress(local)
+          if (canonical.scheme === 'github') {
+            const feed = eventFeed(local)
+            yield {
+              type: 'feed',
+              feed: {
+                sourceLocator: key,
+                manifestPath: source.manifestPath ?? 'ahead.yaml',
+                feed,
+                locator: {
+                  scheme: 'github',
+                  owner: options.address.owner,
+                  repo: options.address.repo,
+                },
+              },
+              address: options.address,
+              eventAddresses: Object.fromEntries(
+                (feed.events ?? []).map((event) => [event.id, localEventAddress(local, event.id)]),
+              ),
+              visibility: local.feed?.private ? 'private' : 'public',
+              cached: true,
+            }
+          }
+        } else if (localUserAddress(local).scheme === 'github') {
+          yield {
+            type: 'user',
+            user: materializeProfile(local.records),
+            sourceLocator: key,
+            address: options.address,
+            visibility: local.remote?.private ? 'private' : 'public',
+            cached: true,
+          }
+        }
+      }
+      yield* this.readSources(
+        [sourceFromAddress(options.address, options.kind)],
+        { refresh: options.refresh, signal: options.signal },
+      )
+      return
+    }
+    const space = (await database.query()).spaces[options.address.spaceId]
+    if (!space) {
+      yield {
+        type: 'error',
+        message: 'messages.local_resource_belongs_to_another_device',
+        reason: 'local-missing',
+        limited: false,
+      }
+      return
+    }
+    if (options.kind === 'event-feed') {
+      yield {
+        type: 'feed',
+        feed: {
+          sourceLocator: `local:${space.id}`,
+          manifestPath: 'ahead.yaml',
+          feed: eventFeed(space),
+          locator: { scheme: 'github', owner: '', repo: '' },
+        },
+        address: options.eventId
+          ? localEventAddress(space, options.eventId)
+          : localFeedAddress(space),
+        eventAddresses: Object.fromEntries(
+          personalEvents(space.records).map((event) => [event.id, localEventAddress(space, event.id)]),
+        ),
+        visibility: 'local',
+        cached: false,
+      }
+      return
+    }
+    yield {
+      type: 'user',
+      user: materializeProfile(space.records),
+      sourceLocator: `local:${space.id}`,
+      address: localUserAddress(space),
+      visibility: 'local',
+      cached: false,
     }
   }
 
@@ -164,7 +341,8 @@ export class MarketApi {
     const adapter = new CdnReadAdapter(fetcher)
     try {
       if (source.kind === 'user-data') {
-        const cached = await this.options.cache.readUser(key)
+        const cachedSnapshot = await this.options.cache.readUserSnapshot(key)
+        const cached = cachedSnapshot?.value
         if (cached && !validator.validate('user-data', cached).ok)
           await this.options.cache.deleteUser(key).catch(() => {})
         if (cached && validator.validate('user-data', cached).ok)
@@ -172,6 +350,8 @@ export class MarketApi {
             type: 'user',
             user: cached,
             sourceLocator: key,
+            address: githubAddress(source),
+            visibility: cachedSnapshot?.private ? 'private' : 'public',
             cached: true,
           }
         if (signal?.aborted || cachedOnly) return
@@ -192,7 +372,14 @@ export class MarketApi {
           throw new Error('messages.profile_validation_failed')
         await this.options.cache.writeUser(key, user, snapshot.private).catch(() => {})
         if (!signal?.aborted)
-          yield { type: 'user', user, sourceLocator: key, cached: false }
+          yield {
+            type: 'user',
+            user,
+            sourceLocator: key,
+            address: githubAddress(source),
+            visibility: snapshot.private ? 'private' : 'public',
+            cached: false,
+          }
       } else {
         let cached = await this.options.cache.readAny(key, path)
         if (cached) {
@@ -204,7 +391,16 @@ export class MarketApi {
           }
         }
         if (cached)
-          yield { type: 'feed', feed: { ...cached, locator }, cached: true }
+          yield {
+            type: 'feed',
+            feed: { ...cached, locator },
+            address: githubAddress(source),
+            eventAddresses: Object.fromEntries(
+              (cached.feed.events ?? []).map((event) => [event.id, githubAddress(source)]),
+            ),
+            visibility: cached.private ? 'private' : 'public',
+            cached: true,
+          }
         if (signal?.aborted || cachedOnly) return
         const authenticatedSnapshot = privateAccess && this.options.privateAdapter
           ? await this.options.privateAdapter.inspect(locator).catch(() => undefined)
@@ -223,11 +419,24 @@ export class MarketApi {
           cache: this.options.cache,
         })
         await this.remember(source)
-        if (!signal?.aborted) yield { type: 'feed', feed, cached: false }
+        if (!signal?.aborted) yield {
+          type: 'feed',
+          feed,
+          address: githubAddress(source),
+          eventAddresses: Object.fromEntries(
+            (feed.feed.events ?? []).map((event) => [event.id, githubAddress(source)]),
+          ),
+          visibility: snapshot.private ? 'private' : 'public',
+          cached: false,
+        }
       }
     } catch (error) {
-      if (!isAbort(error) && !signal?.aborted)
-        yield this.error(error, key + 'messages.update_failed_available_content_was_preserved')
+      if (!isAbort(error) && !signal?.aborted) {
+        const failure = this.error(error, key + 'messages.update_failed_available_content_was_preserved')
+        if (privateAccess && !this.options.privateAdapter && failure.reason === 'missing')
+          failure.reason = 'auth'
+        yield failure
+      }
     }
   }
 
@@ -312,7 +521,16 @@ export class MarketApi {
             } catch {
               continue
             }
-            yield { type: 'feed', feed: { ...feed, locator }, cached: true }
+            yield {
+              type: 'feed',
+              feed: { ...feed, locator },
+              address: githubAddress(listing.source),
+              eventAddresses: Object.fromEntries(
+                (feed.feed.events ?? []).map((event) => [event.id, githubAddress(listing.source)]),
+              ),
+              visibility: feed.private ? 'private' : 'public',
+              cached: true,
+            }
           }
         }
       }
@@ -469,7 +687,16 @@ export class MarketApi {
       } catch {
         continue
       }
-      yield { type: 'feed', feed: { ...feed, locator }, cached: true }
+      yield {
+        type: 'feed',
+        feed: { ...feed, locator },
+        address: githubAddress(listing.source),
+        eventAddresses: Object.fromEntries(
+          (feed.feed.events ?? []).map((event) => [event.id, githubAddress(listing.source)]),
+        ),
+        visibility: feed.private ? 'private' : 'public',
+        cached: true,
+      }
     }
   }
 

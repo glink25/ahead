@@ -1,5 +1,7 @@
 import { useCallback, useLayoutEffect } from 'react'
 import { useLocation, useNavigate, useNavigationType } from 'react-router'
+import { activeSpace } from '../data/local'
+import { resourcePath } from '../services/resource-address'
 
 const key = 'ahead-navigation'
 type Entry = { key: string; url: string }
@@ -27,7 +29,9 @@ export function fallbackFor(path: string, search: string): string {
   if (path === '/settings/experimental') return '/settings'
   if (path === '/studio') {
     const event = new URLSearchParams(search).get('event')
-    if (event) return '/events/' + encodeURIComponent(event)
+    const space = activeSpace()
+    if (event && space)
+      return resourcePath('event', { scheme: 'local', spaceId: space.id }, event)
   }
   return path === '/settings' || path === '/login' ? '/discover' : '/mine'
 }

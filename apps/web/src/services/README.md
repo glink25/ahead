@@ -2,6 +2,8 @@
 
 页面和 store 通过 [marketApi()](market.ts)读取市场与公开源。服务负责解析、校验、版本固定、缓存和请求调度，UI 不直接管理 GitHub 请求或源缓存。
 
+事件、频道和用户详情使用路径中的 `local` / `github` 资源地址，并统一通过 `MarketApi.sources.open()` 读取。本地工作区内容同步成功后由服务把 canonical address 提升为 GitHub 地址；IndexedDB 缓存只是 GitHub 资源的读取方式，不改变其地址身份。
+
 搜索独立于 Market。`SearchFeedApi` 在浏览器内负责编排，仓库检查与文件读取仍经 `OctokitAdapter` 直连 `api.github.com`。由于 GitHub Code Search 的实际 GET 响应并不稳定提供 CORS 头，只有 `/search/code` 通过 Ahead Auth Worker 的窄 relay 转发；本地随后完成协议校验和精确事件过滤。
 
 搜索命中独立 Event 时，只读取命中文件及仓库内候选 EventFeed manifest，校验 `eventsGlob` 后组装临时 feed，不遍历 repository tree，也不下载 glob 下的其他事件。`useSearchFeed()` 负责 feed 合并、resolve、取消、渐进分页，并按身份保存最近的已验证查询快照。GitHub 返回 `incomplete_results` 时，已验证结果仍会交付，同时产生结果不完整警告。

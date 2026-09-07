@@ -10,7 +10,8 @@ import { FavoriteButton } from '../discover/PosterCard'
 import { MonthView } from './MonthView'
 import { posterFor } from '../../lib/media'
 import { useFeedStore } from '../../stores/feed'
-import type { ResolvedEvent } from '@ahead/resolver'
+import type { AddressedEvent } from '../../services/market-api'
+import { eventPath } from '../../services/resource-address'
 import { partitionTimelineEvents } from './timeline'
 
 export function MineTab() {
@@ -37,7 +38,7 @@ export function MineTab() {
   }, [calendar])
   if (!hydrated) return <PageSkeleton variant="list" />
   const { history, current } = partitionTimelineEvents(mine)
-  const posterForEvent = (event: ResolvedEvent) => {
+  const posterForEvent = (event: AddressedEvent) => {
     const feed = feeds.find((item) =>
       event.sourceLocators.includes(item.sourceLocator),
     )
@@ -59,7 +60,7 @@ export function MineTab() {
       <Link to="/discover">{t('messages.explore')}</Link>
     </div>
   )
-  const renderEvents = (events: ResolvedEvent[]) => {
+  const renderEvents = (events: AddressedEvent[]) => {
     let previous = ''
     return events.map((event) => {
       const countdown = countdownFor(event)
@@ -73,7 +74,7 @@ export function MineTab() {
           <div className="ml-0.5 flex items-center gap-5 border-l border-line pb-6 pl-[18px] max-[600px]:gap-3 max-[600px]:pl-3 max-[600px]:[&_.icon-action]:min-w-8">
             <Link
               className="h-[124px] w-[180px] shrink-0 overflow-hidden rounded-xl max-[600px]:h-[106px] max-[600px]:w-28 max-[600px]:rounded-[10px] [&_img]:h-full [&_img]:w-full [&_img]:object-cover"
-              to={'/events/' + encodeURIComponent(event.id)}
+              to={eventPath(event)}
               tabIndex={-1}
               aria-hidden
               style={{ background: poster.gradient[1] }}
@@ -91,7 +92,7 @@ export function MineTab() {
             </Link>
             <Link
               className="min-w-0 flex-1 [&_h3]:my-1.5 [&_h3]:text-lg [&_h3]:font-semibold max-[600px]:[&_h3]:text-base [&_small]:text-[13px] [&_small]:text-[#849953] max-[600px]:[&_small]:text-[11px] [&_p]:line-clamp-2 [&_p]:text-[13px] [&_p]:leading-[1.6] [&_p]:text-muted max-[600px]:[&_p]:text-[11px]"
-              to={'/events/' + encodeURIComponent(event.id)}
+              to={eventPath(event)}
             >
               <small>{countdown.dateLabel || t('messages.date_tbd')}</small>
               <h3>{pickText(event.title)}</h3>
