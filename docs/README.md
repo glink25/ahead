@@ -7,4 +7,5 @@
 | [GitHub 集成](github/README.md) | 登录与仓库访问边界 |
 | [Market](market/README.md) | 发布、审核与下架事件源和公开资料 |
 | [资料与同步](profile-sync.md) | 本地保存、多资料隔离与同步冲突 |
+| [数据同步与缓存原则](data-sync-cache.md) | 可写工作区、远端基线、patch、缓存与离线语义 |
 | [浏览器服务](../apps/web/src/services/README.md) | 公开源读取的调用边界 |
