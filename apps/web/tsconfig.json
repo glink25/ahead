@@ -5,30 +5,6 @@
     "types": [
       "vite/client"
     ],
-    "baseUrl": ".",
-    "paths": {
-      "@ahead/editor": [
-        "../../packages/editor/src/index.ts"
-      ],
-      "@ahead/market": [
-        "../../packages/market/src/index.ts"
-      ],
-      "@ahead/protocol": [
-        "../../packages/protocol/src/index.ts"
-      ],
-      "@ahead/recommendation": [
-        "../../packages/recommendation/src/index.ts"
-      ],
-      "@ahead/resolver": [
-        "../../packages/resolver/src/index.ts"
-      ],
-      "@ahead/ui": [
-        "../../packages/ui/src/index.tsx"
-      ],
-      "@ahead/sync": [
-        "../../packages/sync/src/index.ts"
-      ]
-    },
     "noEmit": true
   },
   "include": [

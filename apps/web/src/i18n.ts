@@ -1,4 +1,4 @@
-import i18next from 'i18next'
+import i18next, { type i18n as I18nInstance } from 'i18next'
 import { useTranslation } from 'react-i18next'
 import { initReactI18next } from 'react-i18next'
 import LanguageDetector from 'i18next-browser-languagedetector'
@@ -33,7 +33,7 @@ export function browserLanguage(): AppLanguage {
   const detected = detector.detect()
   return resolveLanguage(Array.isArray(detected) ? detected : detected ? [detected] : [])
 }
-export const i18n = i18next.createInstance()
+export const i18n: I18nInstance = i18next.createInstance()
 const resourceUrls = import.meta.glob(['./locales/*/*.json', '!./locales/*/core.json'], {
   eager: true,
   import: 'default',
