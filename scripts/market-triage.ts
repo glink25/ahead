@@ -72,7 +72,7 @@ export async function main() {
     const result = createValidator().validate(source.resourceType, document)
     if (!result.ok) throw new Error(result.errors?.map((e) => e.instancePath + ' ' + e.message).join('; ') ?? 'Schema 校验失败')
     const metadata: MarketSourceMetadata = {
-      ...source, validatedSha: commit.sha, validatedAt: new Date().toISOString(),
+      ...source, validatedVersion: commit.sha, validatedAt: new Date().toISOString(),
       name: document.kind === 'event-feed' ? document.name : document.displayName,
       description: document.kind === 'event-feed' ? document.description : document.bio,
       ...(document.kind === 'event-feed' ? { tags: document.tags?.map((tag) => tag.id) } : {}),

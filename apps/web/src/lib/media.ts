@@ -1,6 +1,6 @@
 import { currentLanguage } from '../i18n'
-import type { ResourceLocator } from '@ahead/core'
-import { buildJsDelivrUrl } from '@ahead/github'
+import { parseSourceKey } from '@ahead/protocol'
+import { mediaUrl } from '../services/media'
 import type { Event, EventMedia } from '@ahead/schema'
 
 /** Deterministic gradients used when an event has no usable image. */
@@ -23,9 +23,9 @@ export interface PosterSource {
 }
 
 export interface PosterOptions {
-  locator?: ResourceLocator
+  sourceLocator?: string
   /** Pins repo-relative paths to a commit so the URL is immutable. */
-  headSha?: string
+  version?: string
   /** Branch used when no commit is known; only affects repo-relative paths. */
   ref?: string
   allowRemoteImages?: boolean
@@ -85,12 +85,12 @@ export function posterFor(event: Event, options: PosterOptions = {}): PosterSour
   if (/^[a-z][a-z0-9+.-]*:/iu.test(image.path)) {
     return { alt, gradient, suppressed: false }
   }
-  if (!options.locator) return { alt, gradient, suppressed: false }
+  if (!options.sourceLocator) return { alt, gradient, suppressed: false }
   if (image.path.startsWith('/') || image.path.includes('\\') || image.path.split('/').some((part) => !part || part === '.' || part === '..')) return { alt, gradient, suppressed: false }
 
-  const ref = options.headSha ?? options.ref ?? options.locator.ref ?? 'HEAD'
+  const ref = options.version ?? options.ref
   return {
-    url: buildJsDelivrUrl(options.locator, ref, image.path),
+    url: mediaUrl(parseSourceKey(options.sourceLocator), ref, image.path),
     alt,
     gradient,
     suppressed: false,

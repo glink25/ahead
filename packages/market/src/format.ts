@@ -16,7 +16,7 @@ function isSourceMetadata(value: unknown): value is MarketSourceMetadata {
     (candidate.resourceType === 'event-feed' || candidate.resourceType === 'user-data') &&
     localized(candidate.name) && localized(candidate.description) &&
     (candidate.tags === undefined || (Array.isArray(candidate.tags) && candidate.tags.every((tag) => typeof tag === 'string'))) &&
-    (candidate.validatedSha === undefined || (typeof candidate.validatedSha === 'string' && /^[a-f0-9]{40}$/iu.test(candidate.validatedSha))) &&
+    (candidate.validatedVersion === undefined || (typeof candidate.validatedVersion === 'string' && candidate.validatedVersion.length > 0)) &&
     (candidate.validatedAt === undefined || (typeof candidate.validatedAt === 'string' && Number.isFinite(Date.parse(candidate.validatedAt))))
   )
 }

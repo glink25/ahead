@@ -18,8 +18,7 @@
         "additionalProperties": false,
         "properties": {
           "locator": {
-            "type": "string",
-            "pattern": "^github:[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"
+            "$ref": "locator.json"
           },
           "manifestPath": {
             "type": "string",

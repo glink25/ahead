@@ -1,4 +1,4 @@
-import type { RepositoryAdapter, ResourceLocator } from '@ahead/core'
+import type { RepositoryAdapter, ResourceLocator, RepositorySnapshot } from '@ahead/core'
 import { parseLocator, parseYaml, sourceKey, manifestPath as safePath } from '@ahead/protocol'
 import { createValidator, type EventFeed, type Event, type OefValidator } from '@ahead/schema'
 import { ResourceCache } from './resource-cache'
@@ -17,8 +17,9 @@ export interface LoadedFeed {
    * Commit the content was read at. Absent for market-inlined manifests, which
    * are not pinned to a commit; media falls back to a branch URL in that case.
    */
-  headSha?: string
-  locator: ResourceLocator
+  version?: string
+  private?: boolean
+  complete?: boolean
 }
 
 export class FeedLoadError extends Error {
@@ -131,6 +132,7 @@ export interface FetchFeedOptions {
   adapter: RepositoryAdapter
   validator?: OefValidator
   ref?: string
+  snapshot?: RepositorySnapshot
   cache?: ResourceCache
   /** Authenticated, non-persistent reads may opt into private repositories. */
   allowPrivate?: boolean
@@ -147,12 +149,12 @@ export async function fetchFeed(options: FetchFeedOptions): Promise<LoadedFeed> 
   const locator = githubLocator(options.locator)
   const manifestPath = safePath(options.manifestPath ?? DEFAULT_MANIFEST_PATH)
 
-  const snapshot = await options.adapter.inspect({ ...locator, ref: options.ref ?? locator.ref })
+  const snapshot = options.snapshot ?? await options.adapter.inspect({ ...locator, ref: options.ref ?? locator.ref })
   if (snapshot.private && !options.allowPrivate)
     throw new FeedLoadError('messages.public_feeds_cannot_read_private_repositories', sourceLocator)
   const headSha = snapshot.headSha
   const cached = await options.cache?.read(sourceLocator, manifestPath, headSha)
-  if (cached) return { sourceLocator, manifestPath, feed: assertEventFeed(cached.feed, validator, sourceLocator), headSha, locator }
+  if (cached) return { sourceLocator, manifestPath, feed: assertEventFeed(cached.feed, validator, sourceLocator), version: headSha }
   const file = await options.adapter.readFile(locator, manifestPath, { ref: headSha })
   let feed = assertEventFeed(parseYaml<unknown>(file.content), validator, sourceLocator)
 
@@ -171,8 +173,8 @@ export async function fetchFeed(options: FetchFeedOptions): Promise<LoadedFeed> 
     sourceLocator,
     manifestPath,
     feed,
-    headSha,
+    version: headSha,
     private: Boolean(snapshot.private),
   })
-  return { sourceLocator, manifestPath, feed, headSha, locator }
+  return { sourceLocator, manifestPath, feed, version: headSha }
 }

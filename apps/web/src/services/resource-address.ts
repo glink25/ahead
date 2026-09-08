@@ -1,15 +1,10 @@
-import { manifestPath, parseLocator, parseSourceKey, sourceKey } from '@ahead/protocol'
+import { parseLocator, parseSourceKey, sourceKey } from '@ahead/protocol'
 import type { Subscription } from '@ahead/schema'
-import type { Space, Target } from '@ahead/sync'
+import { recordKey, type Space, type Target } from '@ahead/sync'
 
 export type ResourceAddress =
   | { scheme: 'local'; spaceId: string }
-  | {
-      scheme: 'github'
-      owner: string
-      repo: string
-      manifestPath?: string
-    }
+  | { scheme: 'remote'; locator: string; manifestPath?: string }
 
 export type ResourceKind = 'event' | 'event-feed' | 'user-data'
 
@@ -40,36 +35,28 @@ function parseLocalSegment(value: string) {
   return new TextDecoder().decode(bytes)
 }
 
-export function githubAddress(source: Pick<Subscription, 'locator' | 'manifestPath'>): ResourceAddress {
-  const locator = parseLocator(source.locator)
-  if (locator.scheme !== 'github' || !('owner' in locator))
-    throw new TypeError('Unsupported resource address')
-  const path = manifestPath(source.manifestPath)
-  return {
-    scheme: 'github',
-    owner: locator.owner.toLowerCase(),
-    repo: locator.repo.toLowerCase(),
-    ...(path === 'ahead.yaml' ? {} : { manifestPath: path }),
-  }
+export function remoteAddress(source: Pick<Subscription, 'locator' | 'manifestPath'>): ResourceAddress {
+  const normalized = parseSourceKey(sourceKey(source))
+  return { scheme: 'remote', ...normalized }
 }
 
 export function addressFromSourceKey(key: string): ResourceAddress {
-  return githubAddress(parseSourceKey(key))
+  return remoteAddress(parseSourceKey(key))
 }
 
 export function addressFromTarget(target: Target): ResourceAddress {
-  return githubAddress({
-    locator: `github:${target.owner}/${target.repo}`,
+  return remoteAddress({
+    locator: target.locator,
     manifestPath: target.path,
   })
 }
 
 export function sourceFromAddress(
-  address: Extract<ResourceAddress, { scheme: 'github' }>,
+  address: Extract<ResourceAddress, { scheme: 'remote' }>,
   kind: 'event-feed' | 'user-data',
 ): Subscription {
   return {
-    locator: `github:${address.owner}/${address.repo}`,
+    locator: address.locator,
     ...(address.manifestPath ? { manifestPath: address.manifestPath } : {}),
     kind,
   }
@@ -91,7 +78,10 @@ export function resourcePath(
   const path = address.manifestPath
     ? '/' + address.manifestPath.split('/').map(segment).join('/')
     : ''
-  return `${prefix}/github/${segment(address.owner)}/${segment(address.repo)}${path}`
+  const parsed = parseLocator(address.locator)
+  if (parsed.scheme === 'github' && 'owner' in parsed)
+    return `${prefix}/github/${segment(parsed.owner)}/${segment(parsed.repo)}${path}`
+  return `${prefix}/source/${localSegment(address.locator)}${path}`
 }
 
 export function eventPath(event: { id: string; address: ResourceAddress }) {
@@ -102,43 +92,25 @@ export function parseResourceAddress(value: string | undefined): ResourceAddress
   const parts = (value ?? '').split('/').filter(Boolean)
   if (parts[0] === 'local' && parts.length === 2 && parts[1])
     return { scheme: 'local', spaceId: parseLocalSegment(parts[1]) }
+  if (parts[0] === 'source' && parts[1]) return remoteAddress({ locator: parseLocalSegment(parts[1]), ...(parts.length > 2 ? { manifestPath: parts.slice(2).join('/') } : {}) })
   if (parts[0] !== 'github' || parts.length < 3 || !parts[1] || !parts[2])
     throw new TypeError('Invalid resource address')
-  return githubAddress({
+  return remoteAddress({
     locator: `github:${parts[1]}/${parts[2]}`,
     ...(parts.length > 3 ? { manifestPath: parts.slice(3).join('/') } : {}),
   })
 }
 
-function pendingEvent(space: Space, eventId: string) {
-  const record = Object.values(space.records).find(
-    (item) => item.collection === 'events' && item.key === eventId && !item.deleted,
-  )
-  return !record || space.pending.includes(record.operation)
-}
-
 export function localEventAddress(space: Space, eventId: string): ResourceAddress {
-  return space.feed && !pendingEvent(space, eventId)
+  return space.feed?.version && Boolean(space.baseRecords[recordKey('events', eventId)])
     ? addressFromTarget(space.feed)
     : { scheme: 'local', spaceId: space.id }
 }
 
 export function localFeedAddress(space: Space): ResourceAddress {
-  const pending = new Set(space.pending)
-  const feedPending = Object.values(space.records).some(
-    (item) => ['events', 'feed'].includes(item.collection) && pending.has(item.operation),
-  )
-  return space.feed && !feedPending
-    ? addressFromTarget(space.feed)
-    : { scheme: 'local', spaceId: space.id }
+  return space.feed?.version ? addressFromTarget(space.feed) : { scheme: 'local', spaceId: space.id }
 }
 
 export function localUserAddress(space: Space): ResourceAddress {
-  const pending = new Set(space.pending)
-  const profilePending = Object.values(space.records).some(
-    (item) => !['events', 'feed'].includes(item.collection) && pending.has(item.operation),
-  )
-  return space.remote && !profilePending
-    ? addressFromTarget(space.remote)
-    : { scheme: 'local', spaceId: space.id }
+  return space.remote?.version ? addressFromTarget(space.remote) : { scheme: 'local', spaceId: space.id }
 }

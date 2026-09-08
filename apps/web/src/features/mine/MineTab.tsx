@@ -43,8 +43,8 @@ export function MineTab() {
       event.sourceLocators.includes(item.sourceLocator),
     )
     return posterFor(event, {
-      locator: feed?.locator,
-      headSha: feed?.headSha,
+      sourceLocator: feed?.sourceLocator,
+      version: feed?.version,
       allowRemoteImages: !profile.settings?.privacyRemoteImages,
     })
   }

@@ -23,6 +23,10 @@ describe('OEF schema', () => {
     expect(result.ok, JSON.stringify(result.errors)).toBe(true)
   })
 
+  it('accepts subscriptions to other providers', () => {
+    expect(validator.validate('user-data', { oefVersion: '0.1', kind: 'user-data', id: 'me', displayName: { en: 'Me' }, subscriptions: [{ locator: 'cloud:feeds/music' }] }).ok).toBe(true)
+  })
+
   it('rejects invalid protocol data', () => {
     expect(validator.validate('event-feed', {
       oefVersion: '1',

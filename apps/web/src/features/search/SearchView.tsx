@@ -30,8 +30,8 @@ function SearchResultCard({
   const profile = useFeedStore((state) => state.profile)
   const feed = primaryFeedForEvent(event, feeds)
   const poster = posterFor(event, {
-    locator: feed?.locator,
-    headSha: feed?.headSha,
+    sourceLocator: feed?.sourceLocator,
+    version: feed?.version,
     allowRemoteImages: !profile.settings?.privacyRemoteImages,
   })
   const countdown = countdownFor(event)

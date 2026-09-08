@@ -6,18 +6,22 @@
 
 个人事件先保存到本机，再同步到关联的 Personal Feed 仓库。新建 Feed 与资料采用相同可见性；既有仓库的可见性不会被自动修改。协作编辑需要同时具有两个仓库的写权限。
 
+未登录或选择本机资料时，`LocalWorkspaceAdapter` 提供相同的读写能力，不创建云端同步任务。登录本身不会给访客工作区绑定同步；选择资料后才启用相应 SyncAdapter。
+
+已发布事件保持远端链接。后续未同步修改仍从本地业务记录读取，并携带同步状态；同步确认版本与地址映射原子保存，不因地址提升重新下载正文。外部 Feed 缓存与可写工作区独立，收藏、订阅只同步关系，不上传外部正文。
+
 ## 保存与合并
 
-[通用同步引擎](../packages/sync/src/index.ts)负责记录版本、合并、墓碑与历史；[本地数据层](../apps/web/src/data/local.ts)在同一事务中保存记录和待同步操作。[资料管理](../apps/web/src/data/profiles.ts)负责仓库关联，[调度器](../apps/web/src/data/scheduler.ts)负责触发同步、取消与重试，具体类型和参数以源码为准。
+[通用同步引擎](../packages/sync/src/index.ts)保存最近读取的远端基线与本地 patch；[本地数据层](../apps/web/src/data/local.ts)将页面修改合并为按字段或事件 ID 索引的 patch。[资料管理](../apps/web/src/data/profiles.ts)负责仓库关联，[调度器](../apps/web/src/data/scheduler.ts)负责触发同步、取消与重试。
 
 本地修改可离线完成，跨标签页更新通过通知重新读取。同步请求绑定账号和资料，切换身份后不会继续旧任务的后续请求。
 
-标准 OEF manifest 与同步元数据在同一 Git commit 中写入。远端直接编辑会转换为记录版本；提交冲突时重新读取合并，响应丢失时通过重读识别已提交结果。并发结果由版本顺序确定，删除以墓碑参与合并，保留历史供恢复。实现见[远端同步](../apps/web/src/data/remote.ts)。
+GitHub 仓库只以 `ahead.yaml` 作为同步数据。同步先拉取最新 YAML，再将本地 patch 覆盖到对应资料字段或事件；未被 patch 涉及的内容完全采用远端版本。提交冲突时重新读取并重放同一批 patch。仓库中的 `.ahead`、README、媒体及其他文件均不读取、不修改。实现见[远端同步](../apps/web/src/adapters/github-document.ts)。
 
-## 失败与兼容
+## 失败
 
 网络或限流失败保留本地修改并退避重试；认证、权限、数据或可见性问题需要处理后重试。设置提供同步状态与控制入口；退出登录不删除本机资料。
 
-个人事件当前写入内嵌 events 的 Feed。已有 eventsGlob Personal Feed、外部改变 Feed 关联等不支持的状态会停止写入，避免覆盖。旧客户端可读取标准 OEF 当前状态，但不能参与同步历史合并。
+个人事件当前写入内嵌 events 的 Feed。已有 eventsGlob Personal Feed、外部改变 Feed 关联等不支持的状态会停止写入，避免覆盖。不提供旧本地数据库或同步元数据兼容。
 
 应用外壳的离线条件见 [Web 开发](../apps/web/README.md)。

@@ -1,6 +1,7 @@
 import type { AuthSession } from '@ahead/core'
 import { authStore } from './storage'
 import { database, initializeData, selectProfile } from './local'
+import { defaultSyncProvider } from '../adapters/sync'
 import { setSyncSession, startScheduler } from './scheduler'
 import { useAuthSession } from '../stores'
 export async function restoreCachedIdentity() {
@@ -26,13 +27,15 @@ export async function activateSession(
     await selectProfile(db.selected[account]!, account)
   else await selectProfile('guest')
   // Without a selection, do not bootstrap/sync newly discovered profiles.
-  setSyncSession(verified && !explicit && db.selected[account] ? session : null)
+  setSyncSession(verified && !explicit && db.spaces[db.selected[account] ?? '']?.syncProvider ? session : null)
 }
 export async function chooseProfile(id: string, session: AuthSession | null) {
   await selectProfile(
     id,
     session ? String(session.identity.id) : undefined,
     Boolean(session),
+    session ? defaultSyncProvider : undefined,
   )
-  setSyncSession(useAuthSession.getState().verified ? session : null)
+  const selected = (await database.query()).spaces[id]
+  setSyncSession(useAuthSession.getState().verified && selected?.syncProvider ? session : null)
 }

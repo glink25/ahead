@@ -35,10 +35,10 @@ export function ChannelDetail() {
     return <ResourceFailure error={state.error} />
   const resource = state.resource
   const resourceAddress = resource.address
-  const source = resourceAddress.scheme === 'github'
+  const source = resourceAddress.scheme === 'remote'
     ? sourceFromAddress(resourceAddress, 'event-feed')
     : undefined
-  const canonical = resourceAddress.scheme === 'github'
+  const canonical = resourceAddress.scheme === 'remote'
     ? sourceKey(source!)
     : `local:${resourceAddress.spaceId}`
   const subscribed = source && profile.subscriptions?.some((item) => sourceKey(item) === canonical)

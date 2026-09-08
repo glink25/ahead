@@ -1,5 +1,4 @@
 import type { AuthSession } from '@ahead/core'
-import type { UserData } from '@ahead/schema'
 import { create } from 'zustand'
 
 interface AuthSessionStore {
@@ -22,16 +21,6 @@ export const useAuthSession = create<AuthSessionStore>((set) => ({
   setLoading: (loading) => set({ loading }),
   setVerified: (verified) => set({ verified }),
   setRestoreError: (restoreError) => set({ restoreError }),
-}))
-
-interface ActiveProfileStore {
-  profile: UserData | null
-  setProfile: (profile: UserData | null) => void
-}
-
-export const useActiveProfile = create<ActiveProfileStore>((set) => ({
-  profile: null,
-  setProfile: (profile) => set({ profile }),
 }))
 
 interface UiStore {

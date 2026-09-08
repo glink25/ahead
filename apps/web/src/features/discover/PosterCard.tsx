@@ -3,7 +3,7 @@ import { ArrowUpRight, Ellipsis, Heart } from 'lucide-react'
 import { useLayoutEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import { Poster, Countdown, TagChip, IconButton } from '@ahead/ui'
-import { sourceKey } from '@ahead/protocol'
+import { sourceKey, parseSourceKey } from '@ahead/protocol'
 import type { Evidence } from '@ahead/schema'
 import type { ResolvedEvent } from '@ahead/resolver'
 import { useFeedStore } from '../../stores/feed'
@@ -66,7 +66,7 @@ export function FeedSourceBar({ event, availableFeeds, subscribedTone = 'poster'
     <div className="source-list">
       {sources.map((feed) => {
         const source = {
-          locator: 'github:' + feed.locator.owner + '/' + feed.locator.repo,
+          ...parseSourceKey(feed.sourceLocator),
           manifestPath: feed.manifestPath,
           kind: 'event-feed' as const,
         }
@@ -174,8 +174,8 @@ export function PosterCard({
   const visibleFeeds = availableFeeds ?? feeds
   const feed = primaryFeedForEvent(event, visibleFeeds)
   const poster = posterFor(event, {
-    locator: feed?.locator,
-    headSha: feed?.headSha,
+    sourceLocator: feed?.sourceLocator,
+    version: feed?.version,
     allowRemoteImages: !profile.settings?.privacyRemoteImages,
   })
   const countdown = countdownFor(event)

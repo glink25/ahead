@@ -40,7 +40,6 @@
     "the_sync_destination_changed_select_your_profile_again": "The sync destination changed. Select your profile again.",
     "profile_file_not_found_nothing_was_written": "Profile file not found. Nothing was written.",
     "invalid_remote_content_nothing_was_written": "Invalid remote content. Nothing was written.",
-    "sync_metadata_contains_mismatched_collections": "Sync metadata contains mismatched collections",
     "invalid_merged_content_nothing_was_written": "Invalid merged content. Nothing was written.",
     "version_conflict_please_retry_later": "Version conflict. Please retry later.",
     "a_repository_with_this_name_already_exists_choose_another_name": "A repository with this name already exists. Choose another name.",

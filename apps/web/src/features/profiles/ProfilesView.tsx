@@ -8,20 +8,18 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { useAuthSession } from '../../stores'
 import {
-  useData,
+  useWorkspace,
   createLocalProfile,
-  database,
-  changed,
-} from '../../data/local'
-import { connectProfile, discoverProfiles } from '../../data/profiles'
-import { chooseProfile } from '../../data/session'
-import { syncNow } from '../../data/scheduler'
+  renamePendingTarget,
+} from '../../services/workspace'
+import { connectProfile, discoverProfiles } from '../../services/workspace'
+import { chooseProfile } from '../../services/workspace'
 export function ProfilesView() {
   useFeatureTranslations('profiles')
   const { t, i18n } = useTranslation()
 
   const { session } = useAuthSession(),
-    { db, ready } = useData()
+    { db, ready } = useWorkspace()
   const navigate = useNavigate()
   const [name, setName] = useState(''),
     [privateRepo, setPrivate] = useState(true)
@@ -80,7 +78,7 @@ export function ProfilesView() {
                 <small className="mt-1.5 block text-xs font-normal text-muted">
                   {space.private ? t('messages.private') : t('messages.public')}
                   {space.remote
-                    ? ' · ' + space.remote.owner + '/' + space.remote.repo
+                    ? ' · ' + space.remote.locator
                     : t('messages.local')}
                 </small>
               </span>
@@ -95,17 +93,7 @@ export function ProfilesView() {
                     onSubmit={(e) => {
                       e.preventDefault()
                       const form = new FormData(e.currentTarget)
-                      void database
-                        .transaction((value) => {
-                          const s = value.spaces[space.id]!
-                          const key = s.remote ? 'feedProvision' : 'provision'
-                          if (s[key])
-                            s[key]!.repo = String(form.get('repo')).trim()
-                        })
-                        .then(() => {
-                          changed()
-                          void syncNow(space.id)
-                        })
+                      void renamePendingTarget(space.id, String(form.get('repo'))).catch(() => setMessage('messages.could_not_sync_please_retry'))
                     }}
                   >
                     <input
@@ -114,7 +102,7 @@ export function ProfilesView() {
                       pattern="[A-Za-z0-9_.-]+"
                       defaultValue={
                         (space.remote ? space.feedProvision : space.provision)
-                          ?.repo
+                          ?.name
                       }
                     />
                     <button className="primary-link">{t('messages.retry_creation')}</button>

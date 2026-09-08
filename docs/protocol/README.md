@@ -14,6 +14,7 @@ Schema 是结构约束的权威源；TypeScript 类型用于程序接入，[sche
 
 ## 核心语义
 
+- locator 使用 `scheme:reference`，订阅复用通用 locator Schema，例如 `github:alice/events` 或 `cloud:feeds/music`；具体来源由客户端 Provider 支持情况决定。内部 source key 是应用索引，不能替代 OEF locator。
 - **Event** 是一件具体的事；**EventFeed** 汇集事件；**UserData** 保存个人订阅、收藏和偏好。
 - `oefSearch: oef-search-v1` 是可选的全局搜索召回标记。缺少它不影响协议有效性，但文件不会被 Ahead 的 GitHub Code Search 搜索召回；使用 `eventsGlob` 的独立 Event 文件需要分别标记。
 - Feed 可以内嵌 `events`，或用 `eventsGlob` 引用同仓库文件，不组合其他 Feed。UserData 可以订阅事件流或其他用户资料；关注用户在 Ahead 中参考其公开收藏，不继承其订阅。

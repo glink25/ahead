@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { useState } from 'react'
 import { useLocation } from 'react-router'
 import { ChevronRight, Trash2 } from 'lucide-react'
-import { useData } from '../../data/local'
+import { useWorkspace } from '../../services/workspace'
 import { useFeedStore } from '../../stores/feed'
 
 export function ExperimentalView() {
@@ -12,7 +12,7 @@ export function ExperimentalView() {
   const { t, i18n } = useTranslation()
 
   const { errors, hydrated } = useFeedStore()
-  const space = useData((s) => s.db?.spaces[s.db.active])
+  const space = useWorkspace((s) => s.db?.spaces[s.db.active])
   const location = useLocation()
   const [clearing, setClearing] = useState(false)
   if (!hydrated) return <PageSkeleton variant="settings" />

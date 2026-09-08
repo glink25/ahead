@@ -13,6 +13,7 @@ import {
   type Change,
   type Records,
   type Space,
+  workspaceRecords,
 } from '@ahead/sync'
 import { emptyProfile } from '../lib/local-profile'
 export const PERSONAL_FEED = 'io.ahead.personal-feed'
@@ -67,11 +68,10 @@ export function diffRecords(
   const after = new Map(values.map((v) => [recordKey(v.collection, v.key), v]))
   const changes = values.filter((v) => {
     const old = records[recordKey(v.collection, v.key)]
-    return !old || old.deleted || !equal(old.value, v.value)
+    return !old || !equal(old.value, v.value)
   })
   for (const [id, old] of Object.entries(records))
     if (
-      !old.deleted &&
       (!collections || collections.has(old.collection)) &&
       !after.has(id)
     )
@@ -116,13 +116,13 @@ export function personalEvents(records: Records): Event[] {
     return value
   })
 }
-export function eventFeed(space: Space, records = space.records): EventFeed {
+export function eventFeed(space: Space, records = workspaceRecords(space)): EventFeed {
   const metadata = Object.fromEntries(entries(records, 'feed'))
   return {
     oefVersion: '0.1',
     kind: 'event-feed',
     id: 'personal-' + space.id.replace(/[^a-z0-9._-]/gi, '-').slice(0, 90),
-    name: materializeProfile(space.records).displayName ?? { en: space.name },
+    name: materializeProfile(workspaceRecords(space)).displayName ?? { en: space.name },
     ...metadata,
     events: personalEvents(records),
   } as EventFeed

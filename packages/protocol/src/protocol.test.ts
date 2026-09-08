@@ -23,6 +23,11 @@ describe('OEF protocol helpers', () => {
     })
   })
 
+  it('round trips opaque provider references', () => {
+    const source = { locator: 'cloud:account/items#one', manifestPath: 'profile.json' }
+    expect(parseSourceKey(sourceKey(source))).toEqual(source)
+  })
+
   it('rejects unsafe repository paths', () => {
     expect(() => manifestPath('../ahead.yaml')).toThrow(TypeError)
     expect(() => parseLocator('github:owner')).toThrow(TypeError)

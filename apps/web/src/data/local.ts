@@ -1,13 +1,13 @@
+import { LocalWorkspaceAdapter } from '../adapters/local-workspace'
 import { create } from 'zustand'
 import {
-  LocalDatabase,
   applyChanges,
   newSpace,
+  workspaceRecords,
   type Database,
   type Records,
   type Space,
 } from '@ahead/sync'
-import { workspaceStore } from './storage'
 import {
   emptyProfile,
   changeProfile,
@@ -18,39 +18,18 @@ import {
   diffRecords,
   materializeProfile,
   profileCollections,
-  validEvent,
-  personalEvents,
 } from './model'
 import type { Event, UserData } from '@ahead/schema'
-export const database = new LocalDatabase({
-  read: () => workspaceStore.get<Database>('root'),
-  update: (fn) => workspaceStore.update('root', fn),
-})
-for (const name of [...profileCollections, 'feed'])
-  database.register(name, () => true)
-database.register('events', validEvent)
-database.validateWith((records) => {
-  materializeProfile(records)
-  personalEvents(records)
-})
+export const database = new LocalWorkspaceAdapter()
 export const useData = create<{
   db?: Database
   ready: boolean
   error?: string
 }>(() => ({ ready: false }))
-const broadcast =
-  typeof BroadcastChannel === 'undefined'
-    ? undefined
-    : new BroadcastChannel('ahead-data')
-database.subscribe((db) =>
-  useData.setState({ db, ready: true, error: undefined }),
-)
-broadcast?.addEventListener('message', () => {
-  void database.reload().catch(() => {})
+database.subscribe((db) => {
+  useData.setState({ db, ready: true, error: undefined })
 })
-export function changed() {
-  broadcast?.postMessage('changed')
-}
+database.onReadError = () => useData.setState({ error: 'messages.cannot_open_local_profiles_check_browser_storage_permissions' })
 let initialization: Promise<void> | undefined
 export function initializeData() {
   initialization ??= database.reload().then(() => undefined).catch((error) => {
@@ -68,20 +47,25 @@ export async function mutateProfile(id: string, action: ProfileAction) {
   let previous: UserData | undefined
   await database.mutate(id, (records) => {
     previous = materializeProfile(records)
-    return diffRecords(
+    const next = changeProfile(previous, action)
+    const changes = diffRecords(
       records,
-      profileChanges(changeProfile(previous, action)),
+      profileChanges(next),
       profileCollections,
     )
+    if (changes.some((change) => change.collection === 'profile' && change.key === 'displayName'))
+      changes.push({ collection: 'feed', key: 'name', value: next.displayName })
+    return changes
   })
-  changed()
   return previous!
 }
 export async function replaceLocalProfile(id: string, profile: UserData) {
-  await database.mutate(id, (records) =>
-    diffRecords(records, profileChanges(profile), profileCollections),
-  )
-  changed()
+  await database.mutate(id, (records) => {
+    const changes = diffRecords(records, profileChanges(profile), profileCollections)
+    if (changes.some((change) => change.collection === 'profile' && change.key === 'displayName'))
+      changes.push({ collection: 'feed', key: 'name', value: profile.displayName })
+    return changes
+  })
 }
 export async function saveEvent(id: string, event: Event, originalId?: string) {
   if (originalId && event.id !== originalId)
@@ -96,13 +80,11 @@ export async function saveEvent(id: string, event: Event, originalId?: string) {
       throw new Error('messages.this_event_id_already_exists')
     return [{ collection: 'events', key: event.id, value: event }]
   })
-  changed()
 }
 export async function deleteEvent(id: string, eventId: string) {
   await database.mutate(id, [
     { collection: 'events', key: eventId, deleted: true },
   ])
-  changed()
 }
 export async function createLocalProfile(
   name: string,
@@ -110,13 +92,15 @@ export async function createLocalProfile(
   account?: string,
   bio?: string,
   language = 'zh-CN',
+  syncProvider?: string,
 ) {
   const id = crypto.randomUUID()
   await database.transaction((db) => {
     const space = newSpace(id, name, privateRepo)
     space.account = account
+    if (account) space.syncProvider = syncProvider
     if (account)
-      space.provision = { repo: 'ahead-user-' + id.slice(0, 8), marker: id }
+      space.provision = { name: 'ahead-user-' + id.slice(0, 8) }
     db.spaces[id] = space
     applyChanges(
       db,
@@ -129,32 +113,34 @@ export async function createLocalProfile(
       }),
     )
   })
-  changed()
   return id
 }
 export async function selectProfile(
   id: string,
   account?: string,
   importGuest = false,
+  syncProvider?: string,
 ) {
   await database.transaction((db) => {
     const space = db.spaces[id]
     if (!space || (space.account && space.account !== account))
       throw new Error('messages.cannot_use_this_profile')
-    if (account && !space.account) {
+    if (account && !space.account && id !== 'guest') {
       space.account = account
-      space.provision ??= { repo: 'ahead-user-' + id.slice(0, 8), marker: id }
+      space.syncProvider = syncProvider
+      space.provision ??= { name: 'ahead-user-' + id.slice(0, 8) }
     }
     if (importGuest && id !== 'guest') {
       const guest = db.spaces.guest!
-      const data = Object.values(guest.records).filter(
+      const guestRecords = workspaceRecords(guest)
+      const data = Object.values(guestRecords).filter(
         (r) =>
-          !r.deleted && r.collection !== 'profile' && r.collection !== 'feed',
+          r.collection !== 'profile' && r.collection !== 'feed',
       )
       if (data.length) {
         db.guestBackups = [
           ...(db.guestBackups ?? []),
-          structuredClone(guest.records),
+          structuredClone(guestRecords),
         ]
         applyChanges(
           db,
@@ -172,11 +158,11 @@ export async function selectProfile(
     db.active = id
     if (account) db.selected[account] = id
   })
-  changed()
 }
 export function profileFromSpace(space?: Space) {
-  return space ? materializeProfile(space.records) : emptyProfile()
+  return space ? materializeProfile(workspaceRecords(space)) : emptyProfile()
 }
 export function activeRecords(): Records {
-  return activeSpace()?.records ?? {}
+  const space = activeSpace()
+  return space ? workspaceRecords(space) : {}
 }

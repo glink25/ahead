@@ -40,7 +40,6 @@
     "the_sync_destination_changed_select_your_profile_again": "同步位置已改变，请重新选择资料",
     "profile_file_not_found_nothing_was_written": "资料文件不存在，未写入",
     "invalid_remote_content_nothing_was_written": "远端内容格式不正确，未写入",
-    "sync_metadata_contains_mismatched_collections": "同步元数据包含不匹配的数据集合",
     "invalid_merged_content_nothing_was_written": "合并后的内容不合法，未写入",
     "version_conflict_please_retry_later": "版本冲突，请稍后重试",
     "a_repository_with_this_name_already_exists_choose_another_name": "同名仓库已存在，请更改待创建的仓库名称",

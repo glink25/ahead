@@ -5,8 +5,8 @@ import { useTranslation } from 'react-i18next'
 import { previousUrl } from '../../app/navigation'
 import { Check, Copy, ExternalLink, Plus } from 'lucide-react'
 import { useNavigate, useSearchParams, useBlocker } from 'react-router'
-import { useData, saveEvent } from '../../data/local'
-import { personalEvents } from '../../data/model'
+import { useWorkspace, saveEvent } from '../../services/workspace'
+import { workspaceEvents } from '../../services/workspace'
 import { useEffect, useRef, useState } from 'react'
 import { EventEditorState } from '@ahead/editor'
 import { assertDurationFitsRecurrence } from '@ahead/resolver'
@@ -238,12 +238,12 @@ export function validateEventForm(fields: EventFormFields): Record<string, strin
 export function StudioPage() {
   useFeatureTranslations('studio')
   const { t } = useTranslation()
-  const { db, ready } = useData()
+  const { db, ready } = useWorkspace()
   const [params] = useSearchParams()
   if (!ready || !db) return <PageSkeleton variant="editor" />
   const space = db.spaces[db.active]!
   const id = params.get('event')
-  const event = id ? personalEvents(space.records).find((item) => item.id === id) : undefined
+  const event = id ? workspaceEvents(space.id).find((item) => item.id === id) : undefined
   if (id && !event)
     return <div className="empty-view">{t('messages.no_editable_personal_event_found')}</div>
   return (

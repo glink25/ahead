@@ -1,7 +1,7 @@
 /** The only IndexedDB database used by the application. */
 const DATABASE_NAME = 'ahead'
-const DATABASE_VERSION = 1
-const STORE_NAMES = ['workspace', 'auth', 'resources', 'views'] as const
+const DATABASE_VERSION = 3
+const STORE_NAMES = ['workspace-v3', 'auth', 'resources-v2', 'views-v2'] as const
 type StoreName = (typeof STORE_NAMES)[number]
 
 export interface LocalStore {
@@ -44,7 +44,7 @@ function openDatabase(): Promise<IDBDatabase> {
   return connection
 }
 
-function store(name: StoreName): LocalStore {
+function rawStore(name: StoreName): LocalStore {
   async function transact<T>(
     mode: IDBTransactionMode,
     operation: (target: IDBObjectStore) => IDBRequest<T>,
@@ -83,7 +83,8 @@ function store(name: StoreName): LocalStore {
         read.onsuccess = () => {
           try {
             value = change(read.result)
-            target.put(value, key)
+            if (value === undefined) target.delete(key)
+            else target.put(value, key)
           } catch (error) {
             cause = error
             transaction.abort()
@@ -97,6 +98,26 @@ function store(name: StoreName): LocalStore {
     async keys() {
       return (await transact<IDBValidKey[]>('readonly', (target) => target.getAllKeys())).map(String)
     },
+  }
+}
+
+const evictions = new Map<string, () => Promise<void>>()
+export function registerCacheEviction(identity: string, evict: () => Promise<void>) { evictions.set(identity, evict) }
+async function withQuotaRecovery<T>(operation: () => Promise<T>): Promise<T> {
+  try { return await operation() } catch (error) {
+    if (!(error instanceof DOMException) || error.name !== 'QuotaExceededError') throw error
+    await Promise.all([...evictions.values()].map((evict) => evict()))
+    const disposable = rawStore('views-v2')
+    await Promise.all((await disposable.keys()).map((key) => disposable.delete(key)))
+    return operation()
+  }
+}
+function store(name: StoreName): LocalStore {
+  const base = rawStore(name)
+  return {
+    ...base,
+    set: (key, value) => withQuotaRecovery(() => base.set(key, value)),
+    update: (key, change) => withQuotaRecovery(() => base.update(key, change)),
   }
 }
 
@@ -117,10 +138,10 @@ function scoped(base: LocalStore, prefix: string): LocalStore {
   }
 }
 
-export const workspaceStore = store('workspace')
+export const workspaceStore = store('workspace-v3')
 export const authStore = store('auth')
-const resources = store('resources')
-const views = store('views')
+const resources = store('resources-v2')
+const views = store('views-v2')
 
 export const resourceStore = (identity: string, namespace = 'content') =>
   scoped(resources, `${identity}\0${namespace}`)
@@ -147,10 +168,7 @@ export function viewStore(
     async get<T>(key: string) {
       const snapshot = await target.get<ViewSnapshot<T>>(key)
       if (!snapshot) return undefined
-      void target.set(key, {
-        ...snapshot,
-        lastAccessedAt: new Date().toISOString(),
-      }).catch(() => {})
+      void target.update<ViewSnapshot<T> | undefined>(key, (current) => current ? { ...current, lastAccessedAt: new Date().toISOString() } : undefined).catch(() => {})
       return snapshot.value
     },
     async set(key, value) {

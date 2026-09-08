@@ -8,8 +8,8 @@ import { useState } from 'react'
 import { Link, Navigate, useLocation } from 'react-router'
 import { useAuthSession } from '../../stores'
 import { useFeedStore } from '../../stores/feed'
-import { useData } from '../../data/local'
-import { setPaused, syncNow } from '../../data/scheduler'
+import { useWorkspace } from '../../services/workspace'
+import { setPaused, syncNow } from '../../services/workspace'
 import { localUserAddress, resourcePath } from '../../services/resource-address'
 export function ProfileView() {
   useFeatureTranslations('settings')
@@ -33,7 +33,7 @@ export function ProfileView() {
     profile.settings?.weekStartsOn === 'monday'
       ? profile.settings.weekStartsOn
       : 'auto'
-  const { db, ready } = useData(),
+  const { db, ready } = useWorkspace(),
     location = useLocation()
   const space = db?.spaces[db.active]
   const [message, setMessage] = useState('')
@@ -170,11 +170,11 @@ export function ProfileView() {
             </summary>
             <div className="settings-body">
               <p>
-                {space.remote.owner}/{space.remote.repo}
+                {space.remote.locator}
               </p>
               {space.feed && (
                 <p>
-                   {t('messages.personal_events')}{space.feed.owner}/{space.feed.repo}
+                   {t('messages.personal_events')}{space.feed.locator}
                 </p>
               )}
             </div>

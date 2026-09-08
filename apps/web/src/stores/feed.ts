@@ -7,6 +7,7 @@ import {
 } from '../data/local'
 import { materializeProfile, PERSONAL_FEED } from '../data/model'
 import { create } from 'zustand'
+import { workspaceRecords } from '@ahead/sync'
 import { useAuthSession } from '../stores'
 import { sourceKey } from '@ahead/protocol'
 import type { Subscription, UserData } from '@ahead/schema'
@@ -54,6 +55,7 @@ let initializing: Promise<void> | undefined
 let sourcesController: AbortController | undefined
 let generation = 0
 let undoGeneration = 0
+let unsubscribeResources: (() => void) | undefined
 let marketSession: DiscoverMarketSession | undefined
 const sessionSeen = new Set<string>()
 const localWriteError = 'messages.could_not_save_check_browser_storage_permissions_and_retry'
@@ -63,6 +65,8 @@ export const useFeedStore = create<FeedStore>((set, get) => {
     refreshing: Boolean(sourcesController) || state.marketStatus === 'initial' || state.marketStatus === 'appending',
   }))
   const receive = (event: ReadEvent) => {
+    // Local workspace events are projected from useData, never inserted into external source collections.
+    if (event.type !== 'error' && event.address.scheme === 'local') return
     if (event.type === 'feed')
       set((s) => {
         const feeds = [
@@ -74,6 +78,9 @@ export const useFeedStore = create<FeedStore>((set, get) => {
         const market = new Set(s.listings.filter((item) => item.source.resourceType === 'event-feed').map((item) => sourceKey(item.source)))
         const retainedMarket = feeds.filter((feed) => market.has(feed.sourceLocator)).slice(-40)
         const retained = new Set(retainedMarket.map((feed) => feed.sourceLocator))
+        const protectedSources = new Set((s.profile.subscriptions ?? []).map(sourceKey))
+        const protectedEvents = new Set([...(s.profile.favorites ?? []), ...(s.profile.pins ?? [])])
+        for (const feed of feeds) if (protectedSources.has(feed.sourceLocator) || feed.feed.events?.some((event) => protectedEvents.has(event.id))) retained.add(feed.sourceLocator)
         return { feeds: feeds.filter((feed) => !market.has(feed.sourceLocator) || retained.has(feed.sourceLocator)) }
       })
     if (event.type === 'user')
@@ -92,10 +99,14 @@ export const useFeedStore = create<FeedStore>((set, get) => {
   }
   const receiveMarket = (event: MarketEvent) => {
     if (event.type === 'listings') set((state) => ({
-      listings: [...new Map([...state.listings, ...event.listings].map((item) => [sourceKey(item.source), item])).values()].slice(-60),
+      listings: [...new Map([...(event.replace ? [] : state.listings), ...event.listings].map((item) => [sourceKey(item.source), item])).values()].slice(-60),
     }))
     else if (event.type === 'progress') set({ marketLoaded: event.loaded })
     else receive(event)
+  }
+  const observeResources = () => {
+    unsubscribeResources?.()
+    unsubscribeResources = marketApi().subscribe(receive)
   }
   const ensureMarketSession = () => marketSession ??= marketApi().market.openSession({
     receive: receiveMarket,
@@ -124,10 +135,11 @@ export const useFeedStore = create<FeedStore>((set, get) => {
       initializing ??= (async () => {
         await initializeData()
         const initial = await database.query()
-        const profile = materializeProfile(initial.spaces[initial.active]!.records)
+        const profile = materializeProfile(workspaceRecords(initial.spaces[initial.active]!))
         set({
           profile,
         })
+        observeResources()
         const api = marketApi()
         const [exposures, listings] = await Promise.all([
           discoverHistory().snapshot(),
@@ -148,8 +160,9 @@ export const useFeedStore = create<FeedStore>((set, get) => {
             !current.loading &&
             (previous.loading ||
               current.session?.identity.id !== previous.session?.identity.id ||
-              current.session?.providerId !== previous.session?.providerId)
+              current.session?.providerId !== previous.session?.providerId || current.verified !== previous.verified)
           ) {
+            observeResources()
             undoGeneration++
             marketSession?.close()
             marketSession = undefined
@@ -157,6 +170,7 @@ export const useFeedStore = create<FeedStore>((set, get) => {
             set({
               feeds: [],
               users: [],
+              listings: [],
               discoverAvailable: 0,
               undoProfile: undefined,
               undoOperation: undefined,
@@ -172,12 +186,13 @@ export const useFeedStore = create<FeedStore>((set, get) => {
           const space = db.spaces[db.active]
           if (space)
             set({
-              profile: materializeProfile(space.records),
+              profile: materializeProfile(workspaceRecords(space)),
               ...(changedProfile
                 ? {
                     undoProfile: undefined,
                     undoOperation: undefined,
                     users: [],
+                    feeds: [],
                   }
                 : {}),
             })

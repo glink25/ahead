@@ -1,5 +1,6 @@
-import { CdnReadAdapter } from '@ahead/github'
-import { parseLocator, parseYaml, sourceKey } from '@ahead/protocol'
+import type { ContentProvider, MarketProvider } from './providers'
+import { ResourceQuery } from './resource-query'
+import { parseLocator, sourceKey } from '@ahead/protocol'
 import {
   createValidator,
   type Subscription,
@@ -7,28 +8,26 @@ import {
 } from '@ahead/schema'
 import {
   assertEventFeed,
-  fetchFeed,
   type LoadedFeed,
 } from '../lib/feed-loader'
-import { loadMarketPage, type MarketListing } from '../lib/market'
+import type { MarketListing } from './providers'
 import { ResourceCache } from '../lib/resource-cache'
 import type { LocalStore } from '../data/storage'
-import type { RepositoryAdapter } from '@ahead/core'
 import type { Space } from '@ahead/sync'
+import { workspaceRecords } from '@ahead/sync'
 import { resolve as resolveProfile, selectCurrentSchedule, type ResolvedEvent, type ResolvedProfile } from '@ahead/resolver'
 import {
   isAbort,
-  PublicReadClient,
   PublicReadError,
 } from './public-read-client'
-import { database } from '../data/local'
+import { database, useData } from '../data/local'
 import { eventFeed, materializeProfile, personalEvents } from '../data/model'
 import { primaryFeedForEvent } from '../lib/primary-feed'
 import {
   addressFromSourceKey,
   addressFromTarget,
   addressKey,
-  githubAddress,
+  remoteAddress,
   localEventAddress,
   localFeedAddress,
   localUserAddress,
@@ -39,9 +38,10 @@ import {
 type Source = Pick<Subscription, 'locator' | 'manifestPath' | 'kind'>
 export type ResourceVisibility = 'local' | 'public' | 'private'
 export type AddressedEvent = ResolvedEvent & { address: ResourceAddress }
+export interface WorkspaceInfo { spaceId: string; status: Space['status']; pending: number; editable: boolean }
 export type ReadEvent =
-  | { type: 'feed'; feed: LoadedFeed; address: ResourceAddress; eventAddresses: Record<string, ResourceAddress>; visibility: ResourceVisibility; cached: boolean }
-  | { type: 'user'; user: UserData; sourceLocator: string; address: ResourceAddress; visibility: ResourceVisibility; cached: boolean }
+  | { type: 'feed'; feed: LoadedFeed; address: ResourceAddress; eventAddresses: Record<string, ResourceAddress>; visibility: ResourceVisibility; cached: boolean; workspace?: WorkspaceInfo }
+  | { type: 'user'; user: UserData; sourceLocator: string; address: ResourceAddress; visibility: ResourceVisibility; cached: boolean; workspace?: WorkspaceInfo }
   | {
       type: 'error'
       message: string
@@ -51,7 +51,7 @@ export type ReadEvent =
     }
 export type MarketEvent =
   | ReadEvent
-  | { type: 'listings'; listings: MarketListing[]; cached: boolean }
+  | { type: 'listings'; listings: MarketListing[]; cached: boolean; replace?: boolean }
   | { type: 'progress'; cursor: string; loaded: number; complete: boolean }
 export type DiscoverMarketStatus = 'idle' | 'restoring' | 'expanding' | 'paused' | 'complete' | 'failed'
 export interface DiscoverMarketSession {
@@ -62,25 +62,70 @@ export interface DiscoverMarketSession {
   close(): void
 }
 interface Session {
-  page: number
-  nextPage?: number
+  page: string
+  nextPage?: string
   entries?: MarketListing[]
   done: Set<string>
   listings: Map<string, MarketListing>
   refresh: boolean
   loaded: number
   complete: boolean
-  fetcher: typeof fetch
 }
 const validator = createValidator()
 
 /** Browser-side business API. GitHub, storage and scheduling stay behind this boundary. */
 export class MarketApi {
+  private closed = false
+  close() { this.closed = true; this.listeners.clear(); this.queries.forEach((query) => query.close()) }
+  revalidate(force = false) { this.queries.forEach((query) => query.revalidate(force)) }
+  workspaceFeed(source: string): LoadedFeed | undefined {
+    const db = useData.getState().db
+    const space = Object.values(db?.spaces ?? {}).find((space) =>
+      (!space.account || space.account === this.options.account) && space.feed &&
+      sourceKey({ locator: space.feed.locator, manifestPath: space.feed.path }) === source,
+    )
+    return space ? { sourceLocator: source, manifestPath: space.feed!.path, feed: eventFeed(space), version: space.feed!.version, complete: true } : undefined
+  }
+  private queries = new Map<string, ResourceQuery>()
+  private listeners = new Set<(event: ReadEvent) => void>()
+  subscribe(listener: (event: ReadEvent) => void) {
+    this.listeners.add(listener)
+    return () => { this.listeners.delete(listener) }
+  }
+  invalidateWorkspace() {
+    for (const [key, query] of this.queries) if (key.includes('workspace:') || query.snapshot().resource?.workspace) query.invalidate()
+  }
+  invalidateSource(source: string) {
+    for (const [key, query] of this.queries) if (key.includes(JSON.stringify(source).slice(1, -1))) {
+      query.invalidate()
+      if (this.listeners.size) void query.read()
+    }
+  }
+  query(options: { address: ResourceAddress; kind: 'event-feed' | 'user-data'; eventId?: string }) {
+    const db = useData.getState().db
+    const local = Object.values(db?.spaces ?? {}).find((space) => {
+      if (space.account && space.account !== this.options.account) return false
+      if (options.address.scheme === 'local') return space.id === options.address.spaceId
+      const target = options.kind === 'event-feed' ? space.feed : space.remote
+      return target && addressKey(addressFromTarget(target)) === addressKey(options.address)
+    })
+    const key = JSON.stringify([options.kind, local ? `workspace:${local.id}` : addressKey(options.address), options.eventId ?? ''])
+    let query = this.queries.get(key)
+    if (!query) {
+      query = new ResourceQuery((signal, refresh) => this.openResource({ ...options, signal, refresh }), (event) => { if (!this.closed) this.listeners.forEach((listener) => listener(event)) })
+      this.queries.set(key, query)
+      for (const [oldKey, old] of this.queries) {
+        if (this.queries.size <= 200) break
+        if (oldKey !== key && !old.active) { old.close(); this.queries.delete(oldKey) }
+      }
+    }
+    return query
+  }
   private sessions = new Map<string, Session>()
   readonly market = {
     snapshot: async () => {
       const listings = await this.options.storage
-        .get<MarketListing[]>('market:' + this.options.repository)
+        .get<MarketListing[]>('market:' + this.options.marketProvider.id)
         .catch(() => undefined)
       return listings?.slice(-60)
     },
@@ -116,7 +161,7 @@ export class MarketApi {
       eventId?: string
       refresh?: boolean
       signal?: AbortSignal
-    }) => this.openResource(options),
+    }) => this.query(options).stream(options.refresh, options.signal),
   }
   readonly events = {
     resolve: (options: {
@@ -131,11 +176,11 @@ export class MarketApi {
   }
   constructor(
     private options: {
-      repository: string
-      client: PublicReadClient
+      account?: string
       storage: LocalStore
       cache: ResourceCache
-      privateAdapter?: RepositoryAdapter
+      content: ContentProvider[]
+      marketProvider: MarketProvider
     },
   ) {}
 
@@ -171,6 +216,7 @@ export class MarketApi {
   }): Omit<ResolvedProfile, 'events'> & { events: AddressedEvent[] } {
     const resolved = resolveProfile({
       ...options,
+      feeds: options.feeds.map((feed) => this.workspaceFeed(feed.sourceLocator) ?? feed),
       users: [options.activeProfile, ...options.users],
     })
     const remote = resolved.events.flatMap((event) => {
@@ -179,7 +225,7 @@ export class MarketApi {
     })
     if (!options.space) return { ...resolved, events: remote }
     const now = new Date(options.now ?? new Date())
-    const own = personalEvents(options.space.records).map((event) => ({
+    const own = personalEvents(workspaceRecords(options.space)).map((event) => ({
       ...event,
       currentSchedule: selectCurrentSchedule(event.schedule, now),
       sourceLocators: [`local:${options.space!.id}`],
@@ -197,96 +243,35 @@ export class MarketApi {
     refresh?: boolean
     signal?: AbortSignal
   }): AsyncGenerator<ReadEvent> {
-    if (options.address.scheme === 'github') {
-      const db = await database.query()
-      const local = Object.values(db.spaces).find((space) => {
-        const target = options.kind === 'event-feed' ? space.feed : space.remote
-        return target && addressKey(addressFromTarget(target)) === addressKey(options.address)
-      })
-      if (local) {
-        const source = sourceFromAddress(options.address, options.kind)
-        const key = sourceKey(source)
-        if (options.kind === 'event-feed') {
-          const canonical = options.eventId
-            ? localEventAddress(local, options.eventId)
-            : localFeedAddress(local)
-          if (canonical.scheme === 'github') {
-            const feed = eventFeed(local)
-            yield {
-              type: 'feed',
-              feed: {
-                sourceLocator: key,
-                manifestPath: source.manifestPath ?? 'ahead.yaml',
-                feed,
-                locator: {
-                  scheme: 'github',
-                  owner: options.address.owner,
-                  repo: options.address.repo,
-                },
-              },
-              address: options.address,
-              eventAddresses: Object.fromEntries(
-                (feed.events ?? []).map((event) => [event.id, localEventAddress(local, event.id)]),
-              ),
-              visibility: local.feed?.private ? 'private' : 'public',
-              cached: true,
-            }
-          }
-        } else if (localUserAddress(local).scheme === 'github') {
-          yield {
-            type: 'user',
-            user: materializeProfile(local.records),
-            sourceLocator: key,
-            address: options.address,
-            visibility: local.remote?.private ? 'private' : 'public',
-            cached: true,
-          }
-        }
-      }
-      yield* this.readSources(
-        [sourceFromAddress(options.address, options.kind)],
-        { refresh: options.refresh, signal: options.signal },
-      )
-      return
-    }
-    const space = (await database.query()).spaces[options.address.spaceId]
-    if (!space) {
-      yield {
-        type: 'error',
-        message: 'messages.local_resource_belongs_to_another_device',
-        reason: 'local-missing',
-        limited: false,
+    const db = await database.query()
+    const local = Object.values(db.spaces).find((space) => {
+      if (space.account && space.account !== this.options.account) return false
+      if (options.address.scheme === 'local') return space.id === options.address.spaceId
+      const target = options.kind === 'event-feed' ? space.feed : space.remote
+      return target && addressKey(addressFromTarget(target)) === addressKey(options.address)
+    })
+    if (local) {
+      const address = options.kind === 'user-data' ? localUserAddress(local)
+        : options.eventId ? localEventAddress(local, options.eventId) : localFeedAddress(local)
+      const target = options.kind === 'event-feed' ? local.feed : local.remote
+      const sourceLocator = target ? sourceKey({ locator: target.locator, manifestPath: target.path }) : `local:${local.id}`
+      const visibility = address.scheme === 'local' ? 'local' : target?.private ? 'private' : 'public'
+      const workspace = { spaceId: local.id, status: local.status, pending: local.syncProvider ? Object.keys(local.patches).length : 0, editable: local.id === db.active }
+      if (options.kind === 'event-feed') {
+        const feed = eventFeed(local)
+        yield { type: 'feed', feed: { sourceLocator, manifestPath: target?.path ?? 'ahead.yaml', feed, version: target?.version },
+          address, eventAddresses: Object.fromEntries((feed.events ?? []).map((event) => [event.id, localEventAddress(local, event.id)])),
+          visibility, cached: true, workspace }
+      } else {
+        yield { type: 'user', user: materializeProfile(workspaceRecords(local)), sourceLocator, address, visibility, cached: true, workspace }
       }
       return
     }
-    if (options.kind === 'event-feed') {
-      yield {
-        type: 'feed',
-        feed: {
-          sourceLocator: `local:${space.id}`,
-          manifestPath: 'ahead.yaml',
-          feed: eventFeed(space),
-          locator: { scheme: 'github', owner: '', repo: '' },
-        },
-        address: options.eventId
-          ? localEventAddress(space, options.eventId)
-          : localFeedAddress(space),
-        eventAddresses: Object.fromEntries(
-          personalEvents(space.records).map((event) => [event.id, localEventAddress(space, event.id)]),
-        ),
-        visibility: 'local',
-        cached: false,
-      }
+    if (options.address.scheme === 'local') {
+      yield { type: 'error', message: 'messages.local_resource_belongs_to_another_device', reason: 'local-missing', limited: false }
       return
     }
-    yield {
-      type: 'user',
-      user: materializeProfile(space.records),
-      sourceLocator: `local:${space.id}`,
-      address: localUserAddress(space),
-      visibility: 'local',
-      cached: false,
-    }
+    yield* this.readOne(sourceFromAddress(options.address, options.kind), { signal: options.signal, privateAccess: true, refresh: options.refresh, eventId: options.eventId })
   }
 
   /** Favorites store event IDs; resolve their source association from local content only. */
@@ -295,148 +280,52 @@ export class MarketApi {
     for (const source of profile.subscriptions ?? [])
       sources.set(sourceKey(source), source)
     const ids = new Set([...(profile.favorites ?? []), ...(profile.pins ?? [])])
-    if (ids.size) {
-      const known =
-        (await this.options.storage
-          .get<Source[]>('known')
-          .catch(() => undefined)) ?? []
-      for (const source of known) {
-        const cached = await this.options.cache.readAny(
-          sourceKey(source),
-          source.manifestPath ?? 'ahead.yaml',
-        )
-        if (cached?.feed.events?.some((event) => ids.has(event.id)))
-          sources.set(sourceKey(source), source)
-      }
-    }
+    if (ids.size) for (const source of await this.options.cache.relatedSources(ids)) sources.set(sourceKey(source), source)
     return [...sources.values()]
-  }
-
-  private async remember(source: Source) {
-    await this.options.storage
-      .update<Source[]>('known', (previous) => {
-        const key = sourceKey(source)
-        return [
-          ...(previous ?? []).filter((item) => sourceKey(item) !== key),
-          source,
-        ]
-      })
-      .catch(() => {})
   }
 
   private async *readOne(
     source: Source,
-    fetcher: typeof fetch,
     options: {
       signal?: AbortSignal
       cachedOnly?: boolean
       privateAccess?: boolean
+      refresh?: boolean
+      eventId?: string
     } = {},
   ): AsyncGenerator<ReadEvent> {
-    const { signal, cachedOnly = false, privateAccess = false } = options
-    const key = sourceKey(source),
-      path = source.manifestPath ?? 'ahead.yaml'
-    const locator = parseLocator(source.locator)
-    if (!('owner' in locator)) return
-    const adapter = new CdnReadAdapter(fetcher)
+    const { signal, cachedOnly = false } = options
+    const key = sourceKey(source), path = source.manifestPath ?? 'ahead.yaml'
     try {
-      if (source.kind === 'user-data') {
-        const cachedSnapshot = await this.options.cache.readUserSnapshot(key)
-        const cached = cachedSnapshot?.value
-        if (cached && !validator.validate('user-data', cached).ok)
-          await this.options.cache.deleteUser(key).catch(() => {})
-        if (cached && validator.validate('user-data', cached).ok)
-          yield {
-            type: 'user',
-            user: cached,
-            sourceLocator: key,
-            address: githubAddress(source),
-            visibility: cachedSnapshot?.private ? 'private' : 'public',
-            cached: true,
-          }
-        if (signal?.aborted || cachedOnly) return
-        const authenticatedSnapshot = privateAccess && this.options.privateAdapter
-          ? await this.options.privateAdapter.inspect(locator).catch(() => undefined)
-          : undefined
-        const privateSnapshot = authenticatedSnapshot?.private
-          ? authenticatedSnapshot
-          : undefined
-        const snapshot = privateSnapshot ?? await adapter.inspect(locator)
-        const reader = snapshot.private ? this.options.privateAdapter : adapter
-        if (!reader) throw new Error('messages.sign_in_to_view_this_resource')
-        const file = await reader.readFile(locator, path, {
-          ref: snapshot.headSha,
-        })
-        const user = parseYaml<UserData>(file.content)
-        if (!validator.validate('user-data', user).ok)
-          throw new Error('messages.profile_validation_failed')
-        await this.options.cache.writeUser(key, user, snapshot.private).catch(() => {})
-        if (!signal?.aborted)
-          yield {
-            type: 'user',
-            user,
-            sourceLocator: key,
-            address: githubAddress(source),
-            visibility: snapshot.private ? 'private' : 'public',
-            cached: false,
-          }
-      } else {
-        let cached = await this.options.cache.readAny(key, path)
-        if (cached) {
-          try {
-            assertEventFeed(cached.feed, validator, key)
-          } catch {
-            await this.options.cache.deleteFeed(key, path).catch(() => {})
-            cached = undefined
-          }
-        }
-        if (cached)
-          yield {
-            type: 'feed',
-            feed: { ...cached, locator },
-            address: githubAddress(source),
-            eventAddresses: Object.fromEntries(
-              (cached.feed.events ?? []).map((event) => [event.id, githubAddress(source)]),
-            ),
-            visibility: cached.private ? 'private' : 'public',
-            cached: true,
-          }
-        if (signal?.aborted || cachedOnly) return
-        const authenticatedSnapshot = privateAccess && this.options.privateAdapter
-          ? await this.options.privateAdapter.inspect(locator).catch(() => undefined)
-          : undefined
-        const privateSnapshot = authenticatedSnapshot?.private
-          ? authenticatedSnapshot
-          : undefined
-        const snapshot = privateSnapshot ?? await adapter.inspect(locator)
-        const reader = snapshot.private ? this.options.privateAdapter : adapter
-        if (!reader) throw new Error('messages.sign_in_to_view_this_resource')
-        const feed = await fetchFeed({
-          ...source,
-          adapter: reader,
-          ref: snapshot.headSha,
-          allowPrivate: snapshot.private,
-          cache: this.options.cache,
-        })
-        await this.remember(source)
-        if (!signal?.aborted) yield {
-          type: 'feed',
-          feed,
-          address: githubAddress(source),
-          eventAddresses: Object.fromEntries(
-            (feed.feed.events ?? []).map((event) => [event.id, githubAddress(source)]),
-          ),
-          visibility: snapshot.private ? 'private' : 'public',
-          cached: false,
-        }
-      }
+      const user = source.kind === 'user-data'
+      const feedCache = user ? undefined : await this.options.cache.readAny(key, path, options.eventId)
+      const userCache = user ? await this.options.cache.readUserSnapshot(key) : undefined
+      let document = user ? userCache?.value : feedCache?.feed
+      const complete = user || feedCache?.complete !== false
+      const usable = complete || cachedOnly || Boolean(options.eventId && feedCache?.feed.events?.some((event) => event.id === options.eventId))
+      const emit = (value: UserData | import('@ahead/schema').EventFeed, privateResource: boolean, cached: boolean): ReadEvent => value.kind === 'user-data'
+        ? { type: 'user', user: value, sourceLocator: key, address: remoteAddress(source), visibility: privateResource ? 'private' : 'public', cached }
+        : { type: 'feed', feed: { sourceLocator: key, manifestPath: path, feed: value, complete, version: feedCache?.version }, address: remoteAddress(source), eventAddresses: Object.fromEntries((value.events ?? []).map((event) => [event.id, remoteAddress(source)])), visibility: privateResource ? 'private' : 'public', cached }
+      if (document && !validator.validate(user ? 'user-data' : 'event-feed', document).ok) throw new Error('messages.profile_validation_failed')
+      if (document && usable) yield emit(document, Boolean(userCache?.private ?? feedCache?.private), true)
+      if (signal?.aborted || cachedOnly) return
+      const checked = userCache?.storedAt ?? feedCache?.storedAt
+      if (document && usable && !options.refresh && checked && Date.now() - Date.parse(checked) < 300_000) return
+      if (!navigator.onLine && document && usable) return
+      const scheme = parseLocator(source.locator).scheme
+      const provider = this.options.content.find((item) => item.scheme === scheme)
+      if (!provider) throw new Error('Unsupported content provider: ' + scheme)
+      const result = await provider.read(source, { version: complete ? userCache?.version ?? feedCache?.version : undefined, signal, refresh: options.refresh })
+      if (signal?.aborted) return
+      document = result.document ?? document
+      if (!document) throw new Error('messages.could_not_read_the_market')
+      if (document.kind === 'user-data') await this.options.cache.writeUser(key, document, result.private, result.version)
+      else await this.options.cache.write({ sourceLocator: key, manifestPath: path, feed: document, version: result.version, private: result.private, complete: true })
+      const event = emit(document, result.private, false)
+      if (event.type === 'feed') { event.feed.version = result.version; event.feed.complete = true }
+      yield event
     } catch (error) {
-      if (!isAbort(error) && !signal?.aborted) {
-        const failure = this.error(error, key + 'messages.update_failed_available_content_was_preserved')
-        if (privateAccess && !this.options.privateAdapter && failure.reason === 'missing')
-          failure.reason = 'auth'
-        yield failure
-      }
+      if (!isAbort(error) && !signal?.aborted) yield this.error(error, 'messages.update_failed_available_content_was_preserved')
     }
   }
 
@@ -444,20 +333,14 @@ export class MarketApi {
     sources: Source[],
     options: { refresh?: boolean; signal?: AbortSignal; cachedOnly?: boolean },
   ): AsyncGenerator<ReadEvent> {
-    const fetcher = this.options.client.fetch({ ...options, priority: 1 })
     for (const source of new Map(
       sources.map((source) => [sourceKey(source), source]),
     ).values()) {
       if (options.signal?.aborted) return
-      for await (const event of this.readOne(
-        source,
-        fetcher,
-        {
-          signal: options.signal,
-          cachedOnly: options.cachedOnly,
-          privateAccess: true,
-        },
-      )) {
+      const stream = options.cachedOnly
+        ? this.readOne(source, { signal: options.signal, cachedOnly: true })
+        : this.query({ address: remoteAddress(source), kind: source.kind ?? 'event-feed' }).stream(options.refresh, options.signal)
+      for await (const event of stream) {
         yield event
         if (event.type === 'error' && event.limited) return
       }
@@ -474,17 +357,13 @@ export class MarketApi {
     let session = this.sessions.get(cursor)
     if (!session) {
       if (options.cursor) throw new Error('messages.the_market_session_expired_please_refresh')
-      const savedPage = options.refresh ? undefined : await this.options.storage
-        .get<number>('market-page:' + this.options.repository)
-        .catch(() => undefined)
       session = {
-        page: savedPage && savedPage > 0 ? savedPage : 1,
+        page: '',
         done: new Set(),
         listings: new Map(),
         loaded: 0,
         complete: false,
         refresh: Boolean(options.refresh),
-        fetcher: this.options.client.fetch({ refresh: options.refresh }),
       }
       this.sessions.clear()
       this.sessions.set(cursor, session)
@@ -497,12 +376,9 @@ export class MarketApi {
       complete: state.complete,
     })
     yield progress()
-    // Bind cancellation per subscription; the refresh context survives pause/resume.
-    const fetcher: typeof fetch = (input, init) =>
-      state.fetcher(input, { ...init, signal: options.signal })
-    if (!state.entries && state.page === 1 && !state.listings.size) {
+    if (!state.entries && state.page === '' && !state.listings.size) {
       const cached = await this.options.storage
-        .get<MarketListing[]>('market:' + this.options.repository)
+        .get<MarketListing[]>('market:' + this.options.marketProvider.id)
         .catch(() => undefined)
       if (cached?.length) {
         yield { type: 'listings', listings: cached, cached: true }
@@ -510,12 +386,11 @@ export class MarketApi {
         for (const listing of cached.slice(0, 20)) {
           if (options.signal?.aborted) return
           if (listing.source.resourceType !== 'event-feed') continue
-          const locator = parseLocator(listing.source.locator)
-          const feed = await this.options.cache.readAny(
+                    const feed = await this.options.cache.readAny(
             sourceKey(listing.source),
             listing.source.manifestPath ?? 'ahead.yaml',
           )
-          if (feed && 'owner' in locator) {
+          if (feed) {
             try {
               assertEventFeed(feed.feed, validator, sourceKey(listing.source))
             } catch {
@@ -523,10 +398,10 @@ export class MarketApi {
             }
             yield {
               type: 'feed',
-              feed: { ...feed, locator },
-              address: githubAddress(listing.source),
+              feed: { ...feed },
+              address: remoteAddress(listing.source),
               eventAddresses: Object.fromEntries(
-                (feed.feed.events ?? []).map((event) => [event.id, githubAddress(listing.source)]),
+                (feed.feed.events ?? []).map((event) => [event.id, remoteAddress(listing.source)]),
               ),
               visibility: feed.private ? 'private' : 'public',
               cached: true,
@@ -539,17 +414,12 @@ export class MarketApi {
     while (!state.complete && !options.signal?.aborted) {
       if (!state.entries) {
         try {
-          const page = await loadMarketPage({
-            repository: this.options.repository,
-            page: state.page,
-            perPage: 20,
-            fetcher,
-          })
+          const page = await this.options.marketProvider.list({ cursor: state.page || undefined, signal: options.signal, refresh: state.refresh })
           if (options.signal?.aborted) return
           state.entries = page.listings.filter(
             (listing) => !state.listings.has(sourceKey(listing.source)),
           )
-          state.nextPage = page.nextPage
+          state.nextPage = page.cursor
           pagesRead++
           for (const listing of state.entries)
             state.listings.set(sourceKey(listing.source), listing)
@@ -560,7 +430,7 @@ export class MarketApi {
           }
           await this.options.storage
             .update<MarketListing[]>(
-              'market:' + this.options.repository,
+              'market:' + this.options.marketProvider.id,
               (old) => [
                 ...new Map(
                   [...(old ?? []), ...state.listings.values()].map((item) => [
@@ -611,11 +481,7 @@ export class MarketApi {
           ) {
             const listing = entries[position++]!,
               key = sourceKey(listing.source)
-            const iterator = this.readOne(
-              { ...listing.source, kind: 'event-feed' },
-              fetcher,
-              { signal: options.signal },
-            )
+            const iterator = this.query({ address: remoteAddress(listing.source), kind: 'event-feed' }).stream(state.refresh, options.signal)
             running.set(key, { iterator, next: next(key, iterator) })
           }
           if (!running.size) break
@@ -652,15 +518,13 @@ export class MarketApi {
       if (state.nextPage) {
         state.page = state.nextPage
         state.entries = undefined
-        await this.options.storage.set('market-page:' + this.options.repository, state.page).catch(() => {})
         yield progress()
         if (options.maxPages !== undefined && pagesRead >= options.maxPages) return
       } else {
         state.complete = true
-        await this.options.storage.update<MarketListing[]>(
-          'market:' + this.options.repository,
-          (old) => [...new Map([...(old ?? []), ...state.listings.values()].map((item) => [sourceKey(item.source), item])).values()].slice(-60),
-        ).catch(() => {})
+        const listings = [...state.listings.values()].slice(0, 60)
+        await this.options.storage.set('market:' + this.options.marketProvider.id, listings)
+        yield { type: 'listings', listings, cached: false, replace: true }
         yield progress()
       }
     }
@@ -668,7 +532,7 @@ export class MarketApi {
 
   private async *restoreMarket(limit: number, signal?: AbortSignal): AsyncGenerator<MarketEvent> {
     const cached = await this.options.storage
-      .get<MarketListing[]>('market:' + this.options.repository)
+      .get<MarketListing[]>('market:' + this.options.marketProvider.id)
       .catch(() => undefined)
     if (!cached?.length || signal?.aborted) return
     const window = cached.slice(-limit)
@@ -676,12 +540,11 @@ export class MarketApi {
     for (const listing of window) {
       if (signal?.aborted) return
       if (listing.source.resourceType !== 'event-feed') continue
-      const locator = parseLocator(listing.source.locator)
-      const feed = await this.options.cache.readAny(
+            const feed = await this.options.cache.readAny(
         sourceKey(listing.source),
         listing.source.manifestPath ?? 'ahead.yaml',
       )
-      if (!feed || !('owner' in locator)) continue
+      if (!feed) continue
       try {
         assertEventFeed(feed.feed, validator, sourceKey(listing.source))
       } catch {
@@ -689,10 +552,10 @@ export class MarketApi {
       }
       yield {
         type: 'feed',
-        feed: { ...feed, locator },
-        address: githubAddress(listing.source),
+        feed: { ...feed },
+        address: remoteAddress(listing.source),
         eventAddresses: Object.fromEntries(
-          (feed.feed.events ?? []).map((event) => [event.id, githubAddress(listing.source)]),
+          (feed.feed.events ?? []).map((event) => [event.id, remoteAddress(listing.source)]),
         ),
         visibility: feed.private ? 'private' : 'public',
         cached: true,
@@ -701,17 +564,12 @@ export class MarketApi {
   }
 
   private async probeMarketHead(signal?: AbortSignal): Promise<MarketListing[] | undefined> {
-    const stateKey = 'market-probe:' + this.options.repository
+    const stateKey = 'market-probe:' + this.options.marketProvider.id
     const previous = await this.options.storage.get<{ checkedAt: number }>(stateKey).catch(() => undefined)
     if (previous && Date.now() - previous.checkedAt < 6 * 60 * 60_000) return undefined
-    const result = await loadMarketPage({
-      repository: this.options.repository,
-      page: 1,
-      perPage: 20,
-      fetcher: this.options.client.fetch({ signal }),
-    })
+    const result = await this.options.marketProvider.list({ signal })
     if (signal?.aborted) return undefined
-    const key = 'market:' + this.options.repository
+    const key = 'market:' + this.options.marketProvider.id
     const merged = await this.options.storage.update<MarketListing[]>(key, (old) => {
       const incoming = new Set(result.listings.map((item) => sourceKey(item.source)))
       return [

@@ -1,7 +1,7 @@
 import { PageSkeleton } from '../../app/PageSkeleton'
 import { displayMessage, useFeatureTranslations } from '../../i18n'
 import { useTranslation } from 'react-i18next'
-import { useData, deleteEvent } from '../../data/local'
+import { useWorkspace, deleteEvent } from '../../services/workspace'
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router'
 import { useFeedStore } from '../../stores/feed'
@@ -23,12 +23,10 @@ import { posterFor } from '../../lib/media'
 import { primaryFeedForEvent } from '../../lib/primary-feed'
 import {
   addressKey,
-  localEventAddress,
   parseResourceAddress,
   resourcePath,
 } from '../../services/resource-address'
 import { useAddressedResource } from '../share/useAddressedResource'
-import { personalEvents } from '../../data/model'
 export function EventDetail() {
   useFeatureTranslations('event')
   const { t, i18n } = useTranslation()
@@ -36,9 +34,9 @@ export function EventDetail() {
   const { id, '*': sourcePath } = useParams()
   const location = useLocation()
   const navigate = useNavigate()
-  const { db } = useData()
+  const { db } = useWorkspace()
   const [error, setError] = useState('')
-  const { refreshing, hydrated, feeds, profile } = useFeedStore()
+  const { profile } = useFeedStore()
   const address = useMemo(() => {
     try { return parseResourceAddress(sourcePath) } catch { return undefined }
   }, [sourcePath])
@@ -60,7 +58,7 @@ export function EventDetail() {
     [loadedFeed, id],
   )
   const event = sharedEvent
-  if (!hydrated || shared.loading || (refreshing && !event))
+  if (shared.loading)
     return <PageSkeleton variant="detail" />
   if (!event && shared.error)
     return <ResourceFailure error={shared.error} />
@@ -70,20 +68,14 @@ export function EventDetail() {
         {t('messages.event_not_found_it_may_have_been_removed_or_be_temporarily_unavailable')}
       </div>
     )
-  const space = db?.spaces[db.active]
-  const own = Boolean(
-    space &&
-    personalEvents(space.records).some((item) => item.id === event.id) &&
-    shared.resource &&
-    addressKey(localEventAddress(space, event.id)) === addressKey(shared.resource.address),
-  )
+  const own = Boolean(shared.resource?.workspace?.editable)
   const countdown = countdownFor(event)
   const shareUrl = resourcePath('event', shared.resource!.address, event.id)
-  const availableFeeds = loadedFeed?.sourceLocator.startsWith('github:') ? [loadedFeed] : feeds
+  const availableFeeds = loadedFeed && shared.resource?.address.scheme === 'remote' ? [loadedFeed] : []
   const primaryFeed = primaryFeedForEvent(event, availableFeeds)
   const poster = posterFor(event, {
-    locator: primaryFeed?.locator,
-    headSha: primaryFeed?.headSha,
+    sourceLocator: primaryFeed?.sourceLocator,
+    version: primaryFeed?.version,
     allowRemoteImages: !profile.settings?.privacyRemoteImages,
   })
   return (

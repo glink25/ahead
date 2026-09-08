@@ -1,3 +1,4 @@
+import { startDataRefresh } from '../services/refresh'
 import { activateSession, restoreCachedIdentity } from '../data/session'
 import { useData } from '../data/local'
 import { lazy, Suspense, useEffect } from 'react'
@@ -135,19 +136,7 @@ export function App() {
       .catch((error) => setRestoreError(String(error)))
       .finally(() => setLoading(false))
   }, [setSession, setLoading, setVerified, setRestoreError])
-  useEffect(() => {
-    const refresh = () => {
-      const state = useFeedStore.getState()
-      if (state.hydrated && !useAuthSession.getState().loading)
-        void state.refresh({ force: false, restart: false })
-    }
-    window.addEventListener('online', refresh)
-    window.addEventListener('focus', refresh)
-    return () => {
-      window.removeEventListener('online', refresh)
-      window.removeEventListener('focus', refresh)
-    }
-  }, [])
+  useEffect(() => startDataRefresh(), [])
   return (
     <TabShell>
       <div

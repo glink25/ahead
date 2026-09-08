@@ -8,7 +8,7 @@ export interface MarketSourceMetadata {
   name?: Record<string, string>
   description?: Record<string, string>
   tags?: string[]
-  validatedSha?: string
+  validatedVersion?: string
   validatedAt?: string
 }
 
