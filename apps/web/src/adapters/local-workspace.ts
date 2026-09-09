@@ -1,6 +1,7 @@
-import { LocalDatabase, type Database } from '@ahead/sync'
+import { LocalDatabase, type Database, type Space } from '@ahead/sync'
 import { workspaceStore } from '../data/storage'
 import { materializeProfile, personalEvents, profileCollections, validEvent } from '../data/model'
+import type { ProfileAction } from './sync'
 
 /** Durable workspace storage. Has no authentication, transport, or network dependency. */
 export class LocalWorkspaceAdapter extends LocalDatabase {
@@ -20,5 +21,23 @@ export class LocalWorkspaceAdapter extends LocalDatabase {
     const db = await super.transaction(change)
     this.channel?.postMessage('changed')
     return db
+  }
+  profileActions(space: Space, activeSpaceId: string): ProfileAction[] {
+    if (space.id === 'guest') return []
+    return [{
+      type: 'delete',
+      mode: 'execute',
+      ...(space.id === activeSpaceId ? { disabledReason: 'active-profile' as const } : {}),
+      execute: () => this.deleteProfile(space.id),
+    }]
+  }
+  private async deleteProfile(id: string) {
+    await this.transaction((db) => {
+      if (id === 'guest' || db.active === id) throw new Error('messages.cannot_delete_the_current_profile')
+      if (!db.spaces[id]) throw new Error('messages.profile_not_found')
+      delete db.spaces[id]
+      for (const [account, selected] of Object.entries(db.selected))
+        if (selected === id) delete db.selected[account]
+    })
   }
 }

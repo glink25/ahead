@@ -6,6 +6,7 @@ import { materializeProfile, PERSONAL_FEED, profileCollections } from '../data/m
 import { sourceKey, manifestPath } from '@ahead/protocol'
 import { checkedTarget, feedCollections, httpStatus, locatorFor, readDocument, syncDocument } from './github-document'
 import { connectProfile, discoverProfiles } from './github-profiles'
+import type { ProfileAction, ProfileActionTarget } from './sync'
 
 async function updateSpace(id: string, update: (space: Space) => void) {
   await database.transaction((db) => { const space = db.spaces[id]; if (space) update(space) })
@@ -130,4 +131,36 @@ function classifySyncError(error: unknown) {
   }
 }
 
-export const githubSyncAdapter = { id: 'github', synchronize, connect: connectProfile, discover: discoverProfiles, classify: classifySyncError }
+function repositoryActions(space: Space, operation: 'share' | 'delete'): ProfileActionTarget[] {
+  return ([
+    ['profile', space.remote],
+    ['events', space.feed],
+  ] as const).flatMap(([kind, target]) => {
+    if (!target) return []
+    const locator = locatorFor(target)
+    const repository = `https://github.com/${encodeURIComponent(locator.owner)}/${encodeURIComponent(locator.repo)}`
+    return [{
+      kind,
+      locator: target.locator,
+      url: operation === 'share' ? `${repository}/settings/access` : `${repository}/settings#danger-zone`,
+    }]
+  })
+}
+
+function profileActions(space: Space): ProfileAction[] {
+  const share = repositoryActions(space, 'share')
+  if (!share.length) return []
+  return [
+    { type: 'share', mode: 'external', targets: share },
+    { type: 'delete', mode: 'external', targets: repositoryActions(space, 'delete') },
+  ]
+}
+
+export const githubSyncAdapter = {
+  id: 'github',
+  synchronize,
+  connect: connectProfile,
+  discover: discoverProfiles,
+  classify: classifySyncError,
+  profileActions,
+}

@@ -18,6 +18,24 @@
     "repository_address": "Repository address",
     "profile_file_path": "Profile file path",
     "add_and_use": "Add and use",
-    "continue_with_local_profile": "Continue with local profile"
+    "continue_with_local_profile": "Continue with local profile",
+    "more_profile_actions": "More profile actions",
+    "share_profile": "Share",
+    "delete_profile": "Delete",
+    "switch_profiles_before_deleting": "Switch to another profile before deleting this one",
+    "share_profile_name": "Share “{{name}}”",
+    "delete_profile_name": "Delete “{{name}}”",
+    "github_share_guidance": "Ahead does not change repository permissions. Open GitHub and add collaborators to each repository you want to share.",
+    "github_delete_guidance": "Ahead does not delete GitHub repositories. Open each repository's settings and delete it from the Danger Zone. The local profile record in Ahead will remain.",
+    "profile_repository": "Profile repository",
+    "personal_events_repository": "Personal events repository",
+    "local_profile_delete_confirmation": "This permanently deletes the profile and its local events. This cannot be undone.",
+    "delete_permanently": "Delete permanently",
+    "deleting": "Deleting…",
+    "could_not_delete_profile": "Could not delete the profile. Retry.",
+    "cannot_delete_the_current_profile": "Cannot delete the current profile. Switch to another profile first.",
+    "profile_not_found": "Profile not found",
+    "close": "Close",
+    "cancel": "Cancel"
   }
 }

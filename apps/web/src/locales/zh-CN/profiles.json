@@ -18,6 +18,24 @@
     "repository_address": "仓库地址",
     "profile_file_path": "资料文件路径",
     "add_and_use": "添加并使用",
-    "continue_with_local_profile": "继续使用本机资料"
+    "continue_with_local_profile": "继续使用本机资料",
+    "more_profile_actions": "更多资料操作",
+    "share_profile": "分享",
+    "delete_profile": "删除",
+    "switch_profiles_before_deleting": "请先切换到其他资料再删除",
+    "share_profile_name": "分享“{{name}}”",
+    "delete_profile_name": "删除“{{name}}”",
+    "github_share_guidance": "Ahead 不会代为修改仓库权限。请前往 GitHub，为需要共享的仓库添加协作者。",
+    "github_delete_guidance": "Ahead 不会代为删除 GitHub 仓库。请前往各仓库设置，在 Danger Zone 中自行删除。Ahead 中的本机资料记录会保留。",
+    "profile_repository": "资料仓库",
+    "personal_events_repository": "个人事件仓库",
+    "local_profile_delete_confirmation": "此操作会永久删除该资料及其中的本机事件，无法撤销。",
+    "delete_permanently": "永久删除",
+    "deleting": "正在删除…",
+    "could_not_delete_profile": "未能删除资料，请重试",
+    "cannot_delete_the_current_profile": "无法删除当前资料，请先切换到其他资料",
+    "profile_not_found": "找不到该资料",
+    "close": "关闭",
+    "cancel": "取消"
   }
 }
