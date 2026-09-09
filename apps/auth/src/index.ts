@@ -1,5 +1,12 @@
 import { corsHeaders, isAllowedOrigin, preflightResponse } from './cors.js'
-import { decryptState, encryptState, type PendingGitHubToken } from './state.js'
+import {
+  decryptAuthorizationGrant,
+  decryptState,
+  encryptAuthorizationGrant,
+  encryptState,
+  type OAuthState,
+  type PendingGitHubToken,
+} from './state.js'
 
 export interface Env {
   GITHUB_CLIENT_ID: string
@@ -30,6 +37,35 @@ interface InstallationsResponse {
 const OAUTH_STATE_TTL_MS = 5 * 60 * 1000
 /** Longer TTL so the user can finish App installation before Setup URL returns. */
 const INSTALL_STATE_TTL_MS = 30 * 60 * 1000
+/** Brief window for the initiating client to redeem the encrypted grant. */
+const AUTHORIZATION_GRANT_TTL_MS = 2 * 60 * 1000
+const encoder = new TextEncoder()
+
+function toBase64Url(bytes: Uint8Array): string {
+  let binary = ''
+  for (const byte of bytes) binary += String.fromCharCode(byte)
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+}
+
+function randomVerifier(): string {
+  return toBase64Url(crypto.getRandomValues(new Uint8Array(32)))
+}
+
+async function pkceChallenge(verifier: string): Promise<string> {
+  return toBase64Url(new Uint8Array(await crypto.subtle.digest('SHA-256', encoder.encode(verifier))))
+}
+
+function isValidState(value: string): boolean {
+  return /^[A-Za-z0-9_-]{43}$/u.test(value)
+}
+
+function isValidChallenge(value: string): boolean {
+  return /^[A-Za-z0-9_-]{43}$/u.test(value)
+}
+
+function isValidVerifier(value: string): boolean {
+  return /^[A-Za-z0-9._~-]{43,128}$/u.test(value)
+}
 
 function jsonResponse(
   request: Request,
@@ -110,14 +146,27 @@ function toPendingToken(payload: GitHubTokenPayload): PendingGitHubToken {
   }
 }
 
-function redirectWithAuthorizedToken(redirectUri: string, payload: GitHubTokenPayload | PendingGitHubToken): Response {
+async function redirectWithAuthorizationCode(
+  state: OAuthState,
+  payload: PendingGitHubToken,
+  env: Env,
+): Promise<Response> {
+  const code = await encryptAuthorizationGrant({
+    state: state.client_state,
+    challenge: state.client_challenge,
+    token: payload,
+    exp: Date.now() + AUTHORIZATION_GRANT_TTL_MS,
+  }, env.STATE_SECRET)
+  const redirectUri = state.redirect_uri
   const location = new URL(redirectUri)
-  location.searchParams.set('github_authorized', JSON.stringify(payload))
+  location.searchParams.set('code', code)
+  location.searchParams.set('state', state.client_state)
   return new Response(null, {
     status: 302,
     headers: {
       Location: location.toString(),
       'Cache-Control': 'no-store',
+      'Referrer-Policy': 'no-referrer',
     },
   })
 }
@@ -125,14 +174,26 @@ function redirectWithAuthorizedToken(redirectUri: string, payload: GitHubTokenPa
 async function login(request: Request, env: Env): Promise<Response> {
   const requestUrl = new URL(request.url)
   const redirectUri = requestUrl.searchParams.get('redirect_uri')
+  const clientState = requestUrl.searchParams.get('state')
+  const clientChallenge = requestUrl.searchParams.get('code_challenge')
   if (!redirectUri || !isAllowedRedirect(redirectUri, env.REDIRECT_URI_ALLOWLIST)) {
     return new Response('Invalid redirect_uri', { status: 400 })
+  }
+  if (!clientState || !isValidState(clientState) || !clientChallenge || !isValidChallenge(clientChallenge)) {
+    return new Response('Invalid state or code_challenge', { status: 400 })
   }
   if (!env.GITHUB_APP_SLUG) {
     return new Response('GITHUB_APP_SLUG is not configured', { status: 500 })
   }
+  const githubVerifier = randomVerifier()
   const state = await encryptState(
-    { redirect_uri: redirectUri, exp: Date.now() + OAUTH_STATE_TTL_MS },
+    {
+      redirect_uri: redirectUri,
+      client_state: clientState,
+      client_challenge: clientChallenge,
+      github_verifier: githubVerifier,
+      exp: Date.now() + OAUTH_STATE_TTL_MS,
+    },
     env.STATE_SECRET,
   )
   const callbackUrl = `${requestUrl.origin}/api/github/callback`
@@ -141,7 +202,16 @@ async function login(request: Request, env: Env): Promise<Response> {
   githubUrl.searchParams.set('redirect_uri', callbackUrl)
   githubUrl.searchParams.set('scope', 'repo')
   githubUrl.searchParams.set('state', state)
-  return Response.redirect(githubUrl.toString(), 302)
+  githubUrl.searchParams.set('code_challenge', await pkceChallenge(githubVerifier))
+  githubUrl.searchParams.set('code_challenge_method', 'S256')
+  return new Response(null, {
+    status: 302,
+    headers: {
+      Location: githubUrl.toString(),
+      'Cache-Control': 'no-store',
+      'Referrer-Policy': 'no-referrer',
+    },
+  })
 }
 
 async function handleOAuthCodeCallback(
@@ -155,7 +225,7 @@ async function handleOAuthCodeCallback(
     return new Response('Invalid redirect_uri', { status: 400 })
   }
 
-  const params = new URLSearchParams({ code })
+  const params = new URLSearchParams({ code, code_verifier: state.github_verifier })
   params.set('redirect_uri', `${requestUrl.origin}/api/github/callback`)
   const payload = await exchangeToken(params, env)
 
@@ -163,6 +233,9 @@ async function handleOAuthCodeCallback(
     const installState = await encryptState(
       {
         redirect_uri: state.redirect_uri,
+        client_state: state.client_state,
+        client_challenge: state.client_challenge,
+        github_verifier: state.github_verifier,
         exp: Date.now() + INSTALL_STATE_TTL_MS,
         pending_token: toPendingToken(payload),
       },
@@ -175,11 +248,12 @@ async function handleOAuthCodeCallback(
       headers: {
         Location: installUrl.toString(),
         'Cache-Control': 'no-store',
+        'Referrer-Policy': 'no-referrer',
       },
     })
   }
 
-  return redirectWithAuthorizedToken(state.redirect_uri, payload)
+  return redirectWithAuthorizationCode(state, toPendingToken(payload), env)
 }
 
 async function handleSetupCallback(encryptedState: string, env: Env): Promise<Response> {
@@ -190,8 +264,10 @@ async function handleSetupCallback(encryptedState: string, env: Env): Promise<Re
   if (!state.pending_token?.access_token) {
     return new Response('Missing pending_token for installation return', { status: 400 })
   }
-  // Trust encrypted pending_token, not the spoofable installation_id query param.
-  return redirectWithAuthorizedToken(state.redirect_uri, state.pending_token)
+  if (!(await hasAppInstallation(state.pending_token.access_token, env))) {
+    return new Response('GitHub App installation is required', { status: 400 })
+  }
+  return redirectWithAuthorizationCode(state, state.pending_token, env)
 }
 
 async function callback(request: Request, env: Env): Promise<Response> {
@@ -219,6 +295,31 @@ async function callback(request: Request, env: Env): Promise<Response> {
     return await handleOAuthCodeCallback(url, code, encryptedState, env)
   } catch {
     return new Response('GitHub OAuth callback failed', { status: 400 })
+  }
+}
+
+async function exchangeAuthorizationCode(request: Request, env: Env): Promise<Response> {
+  let body: { code?: string, state?: string, code_verifier?: string }
+  try {
+    body = await request.json() as { code?: string, state?: string, code_verifier?: string }
+  } catch {
+    return jsonResponse(request, env, { error: 'invalid_body' }, 400)
+  }
+  const code = body.code?.trim()
+  const state = body.state?.trim()
+  const verifier = body.code_verifier?.trim()
+  if (!code || !state || !isValidState(state) || !verifier || !isValidVerifier(verifier)) {
+    return jsonResponse(request, env, { error: 'invalid_exchange' }, 400, { 'Cache-Control': 'no-store' })
+  }
+
+  try {
+    const grant = await decryptAuthorizationGrant(code, env.STATE_SECRET)
+    if (grant.state !== state || await pkceChallenge(verifier) !== grant.challenge) {
+      return jsonResponse(request, env, { error: 'invalid_exchange' }, 400, { 'Cache-Control': 'no-store' })
+    }
+    return jsonResponse(request, env, grant.token, 200, { 'Cache-Control': 'no-store' })
+  } catch {
+    return jsonResponse(request, env, { error: 'invalid_exchange' }, 400, { 'Cache-Control': 'no-store' })
   }
 }
 
@@ -329,6 +430,9 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
   }
   if (url.pathname === '/api/github/callback' && request.method === 'GET') {
     return callback(request, env)
+  }
+  if (url.pathname === '/api/github/exchange' && request.method === 'POST') {
+    return exchangeAuthorizationCode(request, env)
   }
   if (url.pathname === '/api/github/refresh' && request.method === 'POST') {
     return refresh(request, env)

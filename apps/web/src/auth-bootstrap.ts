@@ -9,13 +9,17 @@ export interface AuthBootstrapResult {
 function resolveOAuthReturnUrl(
   href = globalThis.location?.href ?? '',
 ): string | null {
-  return href.includes('github_authorized=') ? href : null
+  if (!href) return null
+  const url = new URL(href)
+  return url.searchParams.has('code') && url.searchParams.has('state') ? href : null
 }
 
 function clearOAuthReturnParams(href = globalThis.location?.href ?? ''): void {
-  if (!href.includes('github_authorized=') || !globalThis.history?.replaceState) return
+  if (!href || !globalThis.history?.replaceState) return
   const cleaned = new URL(href)
-  cleaned.searchParams.delete('github_authorized')
+  if (!cleaned.searchParams.has('code') && !cleaned.searchParams.has('state')) return
+  cleaned.searchParams.delete('code')
+  cleaned.searchParams.delete('state')
   const next = `${cleaned.pathname}${cleaned.search}${cleaned.hash}`
   globalThis.history.replaceState(null, '', next)
 }
@@ -33,7 +37,8 @@ export async function bootstrapAuthSession(options: {
       clearOAuthReturnParams(pendingUrl)
       if (session) return { session, error: null }
     } catch (error) {
-      clearOAuthReturnParams(pendingUrl)
+      if (!(error instanceof GitHubOAuthError) ||
+        (error.kind !== 'network' && error.kind !== 'http')) clearOAuthReturnParams(pendingUrl)
       return {
         session: null,
         error: describeOAuthError(error),

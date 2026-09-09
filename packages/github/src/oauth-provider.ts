@@ -4,6 +4,27 @@ import { probeCapabilities } from './capabilities.js'
 import type { OAuthCredentialStore, StoredOAuthCredential } from './oauth-credential-store.js'
 
 type Fetch = typeof globalThis.fetch
+const OAUTH_TRANSACTION_KEY = 'ahead-github-oauth-transaction'
+const encoder = new TextEncoder()
+
+interface OAuthTransaction {
+  state: string
+  verifier: string
+}
+
+function toBase64Url(bytes: Uint8Array): string {
+  let binary = ''
+  for (const byte of bytes) binary += String.fromCharCode(byte)
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+}
+
+function randomPkceValue(): string {
+  return toBase64Url(crypto.getRandomValues(new Uint8Array(32)))
+}
+
+async function pkceChallenge(verifier: string): Promise<string> {
+  return toBase64Url(new Uint8Array(await crypto.subtle.digest('SHA-256', encoder.encode(verifier))))
+}
 
 interface OAuthTokenResponse {
   accessToken?: string
@@ -74,10 +95,10 @@ export function isUnauthenticatedOAuthError(error: unknown): boolean {
 export function describeOAuthError(error: unknown): string {
   if (error instanceof GitHubOAuthError) {
     if (error.kind === 'network') {
-      return '无法刷新 GitHub OAuth 令牌：Auth 服务不可达。请确认本地已启动 pnpm dev:auth，或检查 CSP / CORS。'
+      return 'GitHub OAuth 服务不可达。请确认本地已启动 pnpm dev:auth，或检查 CSP / CORS。'
     }
     if (error.kind === 'http') {
-      return `GitHub OAuth 令牌刷新失败（HTTP ${error.status ?? 'unknown'}）。`
+      return `GitHub OAuth 请求失败（HTTP ${error.status ?? 'unknown'}）。`
     }
     if (error.kind === 'invalid_response') {
       return error.message
@@ -92,14 +113,14 @@ export function parseAuthorizedPayload(raw: string, now = Date.now()): StoredOAu
   try {
     body = JSON.parse(raw) as OAuthTokenResponse
   } catch (cause) {
-    throw new GitHubOAuthError('github_authorized payload is not valid JSON', {
+    throw new GitHubOAuthError('GitHub OAuth token response is not valid JSON', {
       kind: 'invalid_response',
       cause,
     })
   }
   const accessToken = body.accessToken ?? body.access_token
   if (!accessToken) {
-    throw new GitHubOAuthError('github_authorized payload did not include an access token', {
+    throw new GitHubOAuthError('GitHub OAuth token response did not include an access token', {
       kind: 'invalid_response',
     })
   }
@@ -116,9 +137,9 @@ export function parseAuthorizedPayload(raw: string, now = Date.now()): StoredOAu
   }
 }
 
-export function extractAuthorizedParam(url: string | URL): string | null {
+export function extractAuthorizationCode(url: string | URL): string | null {
   const parsed = typeof url === 'string' ? new URL(url) : url
-  return parsed.searchParams.get('github_authorized')
+  return parsed.searchParams.get('code')
 }
 
 export interface GitHubOAuthProviderOptions {
@@ -149,20 +170,71 @@ export class GitHubOAuthProvider implements AuthProvider {
     this.available = this.authBaseUrl.length > 0
   }
 
-  authenticate(): Promise<AuthSession> {
+  async authenticate(): Promise<AuthSession> {
     if (!this.available) {
       throw new Error('GitHub OAuth is not configured')
     }
-    const url = `${this.authBaseUrl}/api/github/login?redirect_uri=${encodeURIComponent(this.redirectUri)}`
-    this.navigate(url)
+    const state = randomPkceValue()
+    const verifier = randomPkceValue()
+    globalThis.sessionStorage.setItem(OAUTH_TRANSACTION_KEY, JSON.stringify({ state, verifier }))
+    const url = new URL(`${this.authBaseUrl}/api/github/login`)
+    url.searchParams.set('redirect_uri', this.redirectUri)
+    url.searchParams.set('state', state)
+    url.searchParams.set('code_challenge', await pkceChallenge(verifier))
+    this.navigate(url.toString())
     return new Promise<AuthSession>(() => undefined)
   }
 
   async consumeRedirect(url: string | URL = globalThis.location?.href ?? ''): Promise<AuthSession | null> {
     if (!url) return null
-    const authorized = extractAuthorizedParam(url)
-    if (!authorized) return null
-    const stored = parseAuthorizedPayload(authorized)
+    const parsed = typeof url === 'string' ? new URL(url) : url
+    const code = extractAuthorizationCode(parsed)
+    if (!code) return null
+    const returnedState = parsed.searchParams.get('state')
+    let transaction: OAuthTransaction
+    try {
+      transaction = JSON.parse(globalThis.sessionStorage.getItem(OAUTH_TRANSACTION_KEY) ?? '') as OAuthTransaction
+    } catch (cause) {
+      throw new GitHubOAuthError('GitHub OAuth transaction is missing or invalid', {
+        kind: 'invalid_response',
+        cause,
+      })
+    }
+    if (!transaction.state || !transaction.verifier || returnedState !== transaction.state) {
+      globalThis.sessionStorage.removeItem(OAUTH_TRANSACTION_KEY)
+      throw new GitHubOAuthError('GitHub OAuth state did not match', { kind: 'invalid_response' })
+    }
+
+    let response: Response
+    try {
+      response = await this.fetcher(`${this.authBaseUrl}/api/github/exchange`, {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          code,
+          state: returnedState,
+          code_verifier: transaction.verifier,
+        }),
+      })
+    } catch (cause) {
+      throw new GitHubOAuthError('GitHub OAuth exchange request failed to reach the Auth service', {
+        kind: 'network',
+        cause,
+      })
+    }
+    if (!response.ok) {
+      if (response.status === 400) globalThis.sessionStorage.removeItem(OAUTH_TRANSACTION_KEY)
+      throw new GitHubOAuthError(`GitHub OAuth exchange failed with HTTP ${response.status}`, {
+        kind: response.status === 400 ? 'invalid_response' : 'http',
+        status: response.status,
+      })
+    }
+    const raw = await response.text()
+    globalThis.sessionStorage.removeItem(OAUTH_TRANSACTION_KEY)
+    const stored = parseAuthorizedPayload(raw)
     await this.persist(stored)
 
     try {

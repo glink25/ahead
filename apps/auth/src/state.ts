@@ -51,9 +51,19 @@ export interface PendingGitHubToken {
 
 export interface OAuthState {
   redirect_uri: string
+  client_state: string
+  client_challenge: string
+  github_verifier: string
   exp: number
   /** Present only while diverting the user through App installation. */
   pending_token?: PendingGitHubToken
+}
+
+export interface AuthorizationGrant {
+  state: string
+  challenge: string
+  token: PendingGitHubToken
+  exp: number
 }
 
 export function encryptState(state: OAuthState, secret: string): Promise<string> {
@@ -66,10 +76,28 @@ export async function decryptState(
   now = Date.now(),
 ): Promise<OAuthState> {
   const state = await decryptJson<OAuthState>(encrypted, secret)
-  if (!state.redirect_uri || !Number.isFinite(state.exp)) throw new Error('Invalid OAuth state')
+  if (!state.redirect_uri || !state.client_state || !state.client_challenge ||
+    !state.github_verifier || !Number.isFinite(state.exp)) throw new Error('Invalid OAuth state')
   if (state.exp <= now) throw new Error('OAuth state has expired')
   if (state.pending_token && !state.pending_token.access_token) {
     throw new Error('Invalid OAuth pending_token')
   }
   return state
+}
+
+export function encryptAuthorizationGrant(grant: AuthorizationGrant, secret: string): Promise<string> {
+  return encryptJson(grant, secret)
+}
+
+export async function decryptAuthorizationGrant(
+  encrypted: string,
+  secret: string,
+  now = Date.now(),
+): Promise<AuthorizationGrant> {
+  const grant = await decryptJson<AuthorizationGrant>(encrypted, secret)
+  if (!grant.state || !grant.challenge || !grant.token?.access_token || !Number.isFinite(grant.exp)) {
+    throw new Error('Invalid authorization code')
+  }
+  if (grant.exp <= now) throw new Error('Authorization code has expired')
+  return grant
 }

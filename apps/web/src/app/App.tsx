@@ -87,8 +87,9 @@ export function App() {
     setRestoreError
   } = useAuthSession()
   useEffect(() => {
+    const query = new URLSearchParams(location.search)
     const explicit =
-      location.search.includes('github_authorized=') ||
+      (query.has('code') && query.has('state')) ||
       sessionStorage.getItem('ahead-login-choice') === '1'
     sessionStorage.removeItem('ahead-login-choice')
     const initializeFeed = async () => {

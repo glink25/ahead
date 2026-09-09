@@ -14,7 +14,7 @@ cp apps/auth/.env.example apps/auth/.dev.vars
 pnpm dev:auth
 ```
 
-Web 的 Auth 地址见 [Web 环境模板](../../apps/web/.env.example)，App 凭证与允许的前端 Origin 见 [Auth 环境模板](../../apps/auth/.env.example)。自托管时部署 Worker，并按实际前后端地址设置 GitHub App 回调及允许的 Origin；回调与安装流程见 [Auth 实现](../../apps/auth/src/index.ts)。
+Web 的 Auth 地址见 [Web 环境模板](../../apps/web/.env.example)，Web 与 App 的允许回跳地址及前端 Origin 见 [Auth 环境模板](../../apps/auth/.env.example)。两端共用 Worker 的登录、回调和 PKCE 兑换流程；自托管时部署 Worker，并按实际前后端地址设置 GitHub App 回调及允许的回跳地址和 Origin。回调与安装流程见 [Auth 实现](../../apps/auth/src/index.ts)。
 
 ## 访问边界
 
