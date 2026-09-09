@@ -186,6 +186,7 @@
     "clear_all_profiles_sign_in_information_and_caches_for_this_site_in_this_bro": "清除本站在此浏览器中的所有资料、登录状态和缓存。未同步的修改将永久丢失，云端仓库不受影响。",
     "clear_all_local_data_for_this_site_all_local_profiles_unsynced_changes_cred": "确定清空本站的全部本机数据吗？\n\n所有本地资料、未同步修改、登录凭据和缓存将被永久删除，并退出登录。其他打开的本站标签页也会重置。\n\n此操作不可撤销，不会删除云端仓库。",
     "clearing": "正在清空…",
+    "could_not_clear_local_data_please_retry": "未能清空本机数据，请重试。",
     "clear_data": "清空数据",
     "on_this_device_only": "仅在本机",
     "waiting_to_sync": "等待同步",

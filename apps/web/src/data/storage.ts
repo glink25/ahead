@@ -26,8 +26,10 @@ function result<T>(request: IDBRequest<T>): Promise<T> {
 }
 
 let connection: Promise<IDBDatabase> | undefined
+let storageSuspended = false
 
 function openDatabase(): Promise<IDBDatabase> {
+  if (storageSuspended) return Promise.reject(new Error('Local storage is suspended'))
   connection ??= new Promise((resolve, reject) => {
     const request = indexedDB.open(DATABASE_NAME, DATABASE_VERSION)
     request.onupgradeneeded = () => {
@@ -42,6 +44,16 @@ function openDatabase(): Promise<IDBDatabase> {
     request.onerror = () => reject(request.error)
   })
   return connection
+}
+
+/** Prevent new writes and release this document's connection before a full reset. */
+export async function suspendStorage(): Promise<void> {
+  storageSuspended = true
+  const active = connection
+  connection = undefined
+  if (!active) return
+  const database = await active
+  database.close()
 }
 
 function rawStore(name: StoreName): LocalStore {

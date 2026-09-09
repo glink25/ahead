@@ -18,13 +18,12 @@ export function offlinePlugin(): Plugin {
             const language = match[1]!
             languageAssets[language] = [...new Set([
               ...(languageAssets[language] ?? []), '/' + file,
-              '/reset-locales/' + language + '.js',
             ])]
           }
         }
         const lazyAssets = Object.values(languageAssets).flat()
         const assets = [
-          '/', '/icon.svg', '/manifest.webmanifest', '/reset.html', '/reset.js',
+          '/', '/icon.svg', '/manifest.webmanifest',
           ...Object.keys(bundle).filter((p) => p.startsWith('assets/') && !lazyAssets.includes('/' + p)).map((p) => '/' + p),
         ]
         const version = 'ahead-shell-' + Date.now()
@@ -55,9 +54,7 @@ self.addEventListener('message', event => {
 self.addEventListener('fetch', event => {
   const request = event.request, url = new URL(request.url);
   if (request.method !== 'GET' || url.origin !== self.location.origin || /^\\/(api|auth)(\\/|$)/.test(url.pathname)) return;
-  if (url.pathname === '/reset.html') {
-    event.respondWith(fetch(request).catch(() => caches.open(CACHE).then(cache => cache.match('/reset.html'))));
-  } else if (request.mode === 'navigate') {
+  if (request.mode === 'navigate') {
     const cache = caches.open(CACHE);
     const update = cache.then(target => fetch(request).then(response => {
       if (response.ok) return target.put('/', response.clone()).then(() => response);

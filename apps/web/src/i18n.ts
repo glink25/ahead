@@ -90,7 +90,6 @@ export async function cacheLoadedLanguages() {
   const registration = await navigator.serviceWorker.ready
   const active = registration.active
   for (const path of loadedPaths) active?.postMessage({ type: 'CACHE_TRANSLATION', path })
-  active?.postMessage({ type: 'CACHE_TRANSLATION', path: `/reset-locales/${currentLanguage()}.js` })
 }
 function updateDocument() {
   if (typeof document === 'undefined') return

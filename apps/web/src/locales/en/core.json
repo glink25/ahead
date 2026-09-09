@@ -186,6 +186,7 @@
     "clear_all_profiles_sign_in_information_and_caches_for_this_site_in_this_bro": "Clear all profiles, sign-in information, and caches for this site in this browser. Unsynced changes will be permanently lost. Cloud repositories are unaffected.",
     "clear_all_local_data_for_this_site_all_local_profiles_unsynced_changes_cred": "Clear all local data for this site?\n\nAll local profiles, unsynced changes, credentials, and caches will be permanently deleted and you will be signed out. Other tabs for this site will also reset.\n\nThis cannot be undone. Cloud repositories will not be deleted.",
     "clearing": "Clearing…",
+    "could_not_clear_local_data_please_retry": "Could not clear local data. Please retry.",
     "clear_data": "Clear data",
     "on_this_device_only": "On this device only",
     "waiting_to_sync": "Waiting to sync",

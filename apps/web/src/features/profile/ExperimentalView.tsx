@@ -6,10 +6,11 @@ import { useLocation } from 'react-router'
 import { ChevronRight, Trash2 } from 'lucide-react'
 import { useWorkspace } from '../../services/workspace'
 import { useFeedStore } from '../../stores/feed'
+import { clearLocalData } from '../../lib/clear-local-data'
 
 export function ExperimentalView() {
   useFeatureTranslations('settings')
-  const { t, i18n } = useTranslation()
+  const { t } = useTranslation()
 
   const { errors, hydrated } = useFeedStore()
   const space = useWorkspace((s) => s.db?.spaces[s.db.active])
@@ -52,7 +53,10 @@ export function ExperimentalView() {
             )
               return
             setClearing(true)
-            window.location.replace('/reset.html?lang=' + i18n.resolvedLanguage)
+            void clearLocalData().catch(() => {
+              window.alert(t('messages.could_not_clear_local_data_please_retry'))
+              window.location.reload()
+            })
           }}
         >
           {clearing ? t('messages.clearing') : t('messages.clear_data')}

@@ -11,6 +11,7 @@ import { useFeedStore } from '../../stores/feed'
 import { useWorkspace } from '../../services/workspace'
 import { setPaused, syncNow } from '../../services/workspace'
 import { localUserAddress, resourcePath } from '../../services/resource-address'
+import { clearLocalData } from '../../lib/clear-local-data'
 export function ProfileView() {
   useFeatureTranslations('settings')
   const { t, i18n } = useTranslation()
@@ -37,6 +38,7 @@ export function ProfileView() {
     location = useLocation()
   const space = db?.spaces[db.active]
   const [message, setMessage] = useState('')
+  const [clearing, setClearing] = useState(false)
   if (location.hash === '#diagnostics')
     return <Navigate to="/settings/experimental#diagnostics" replace />
   if (!ready || authLoading) return <PageSkeleton variant="settings" />
@@ -78,13 +80,18 @@ export function ProfileView() {
         {session && (
           <button
             className="setting-row text-[#b64e45]"
+            disabled={clearing}
             onClick={() => {
               if (!window.confirm(t('messages.clear_all_local_data_for_this_site_all_local_profiles_unsynced_changes_cred')))
                 return
-              window.location.replace('/reset.html?lang=' + i18n.resolvedLanguage)
+              setClearing(true)
+              void clearLocalData().catch(() => {
+                window.alert(t('messages.could_not_clear_local_data_please_retry'))
+                window.location.reload()
+              })
             }}
           >
-             {t('messages.sign_out_and_clear_data')} </button>
+             {clearing ? t('messages.clearing') : t('messages.sign_out_and_clear_data')} </button>
         )}
       </div>
       <h2>{t('messages.display_and_privacy')}</h2>

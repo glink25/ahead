@@ -18,29 +18,6 @@ export default defineConfig(({ mode }) => {
       tailwindcss(),
       headHtmlPlugin(buildEnv.AHEAD_HEAD_HTML),
       offlinePlugin(),
-      {
-        name: 'local-data-reset-headers',
-        configureServer(server) {
-          server.middlewares.use((req, res, next) => {
-            if (req.url?.split('?')[0] === '/clear-site-data.txt') {
-              res.setHeader('Clear-Site-Data', '"cache", "cookies"')
-              res.setHeader('X-Ahead-Reset', 'clear-cache-and-cookies')
-              res.setHeader('Cache-Control', 'no-store')
-            }
-            next()
-          })
-        },
-        configurePreviewServer(server) {
-          server.middlewares.use((req, res, next) => {
-            if (req.url?.split('?')[0] === '/clear-site-data.txt') {
-              res.setHeader('Clear-Site-Data', '"cache", "cookies"')
-              res.setHeader('X-Ahead-Reset', 'clear-cache-and-cookies')
-              res.setHeader('Cache-Control', 'no-store')
-            }
-            next()
-          })
-        },
-      },
     ],
     resolve: {
       alias: {
